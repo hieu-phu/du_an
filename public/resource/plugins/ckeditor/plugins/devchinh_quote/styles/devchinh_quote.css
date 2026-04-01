@@ -1,0 +1,417 @@
+/* Reset và biến CSS */
+:root {
+    --primary: #2c3e50;
+    --accent: #e74c3c;
+    --light: #ecf0f1;
+    --dark: #2c3e50;
+    --success: #2ecc71;
+    --warning: #f39c12;
+    --info: #3498db;
+    --purple: #9b59b6;
+    --pink: #e91e63;
+    --orange: #ff5722;
+    --teal: #009688;
+    --gradient-primary: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+    --gradient-warm: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 100%);
+    --gradient-sunset: linear-gradient(
+        135deg,
+        #ff057c 0%,
+        #8d0b93 50%,
+        #321575 100%
+    );
+    --gradient-ocean: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --gradient-forest: linear-gradient(135deg, #134e5e 0%, #71b280 100%);
+    --gradient-fire: linear-gradient(135deg, #ff512f 0%, #dd2476 100%);
+    --gradient-cyber: linear-gradient(135deg, #00c9ff 0%, #92fe9d 100%);
+    --gradient-aurora: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+    --shadow-sm: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 10px 20px rgba(0, 0, 0, 0.12);
+    --shadow-lg: 0 15px 30px rgba(0, 0, 0, 0.15);
+    --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.2);
+    --radius: 12px;
+    --radius-lg: 20px;
+    --transition: all 0.3s ease;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    color: #333;
+    line-height: 1.6;
+    min-height: 100vh;
+    padding: 2rem;
+}
+
+.devchinh__container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.devchinh__title {
+    text-align: center;
+    margin-bottom: 1rem;
+    color: var(--dark);
+    font-size: 2.5rem;
+    font-weight: 700;
+    position: relative;
+    padding-bottom: 1rem;
+}
+
+.devchinh__title::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 4px;
+    background: var(--accent);
+    border-radius: 2px;
+}
+
+.devchinh__subtitle {
+    text-align: center;
+    margin-bottom: 3rem;
+    color: #666;
+    font-size: 1.2rem;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.devchinh__cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 2.5rem;
+    margin-bottom: 3rem;
+    width: 500px;
+    height: auto;
+}
+
+/* Card Style 7 - Glassmorphism */
+.devchinh__card--glass {
+    background: rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: var(--radius-lg);
+    padding: 2.5rem 2rem;
+    box-shadow: var(--shadow-lg);
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.devchinh__card--glass:hover {
+    transform: translateY(-10px) scale(1.02);
+    box-shadow: var(--shadow-xl);
+    background: rgba(255, 255, 255, 0.35);
+}
+
+.devchinh__card--glass::before {
+    content: "";
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(
+        circle,
+        rgba(255, 255, 255, 0.1) 0%,
+        transparent 70%
+    );
+    transform: rotate(45deg);
+    pointer-events: none;
+}
+
+/* Card Style 8 - Split Design */
+.devchinh__card--split {
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md);
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.devchinh__card--split:hover {
+    transform: translateY(-8px);
+    box-shadow: var(--shadow-xl);
+}
+
+.devchinh__card--split .devchinh__card-header {
+    background: var(--gradient-ocean);
+    padding: 2rem;
+    color: white;
+    position: relative;
+}
+
+.devchinh__card--split .devchinh__card-body {
+    padding: 2rem;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+/* Card Style 9 - Floating Avatar */
+.devchinh__card--floating {
+    background: white;
+    border-radius: var(--radius-lg);
+    padding: 3rem 2rem 2rem;
+    box-shadow: var(--shadow-md);
+    transition: var(--transition);
+    position: relative;
+    overflow: visible;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    margin-top: 2rem;
+}
+
+.devchinh__card--floating:hover {
+    transform: translateY(-10px);
+    box-shadow: var(--shadow-xl);
+}
+
+.devchinh__card--floating .devchinh__floating-avatar {
+    position: absolute;
+    top: -2rem;
+    left: 2rem;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid white;
+    box-shadow: var(--shadow-md);
+    transition: var(--transition);
+}
+
+.devchinh__card--floating:hover .devchinh__floating-avatar {
+    transform: scale(1.1);
+}
+
+/* Card Style 10 - Neon Glow */
+.devchinh__card--neon {
+    background: #1a1a2e;
+    border-radius: var(--radius);
+    padding: 2.5rem 2rem;
+    color: white;
+    box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #00ffff;
+}
+
+.devchinh__card--neon:hover {
+    box-shadow: 0 0 50px rgba(0, 255, 255, 0.5);
+    transform: scale(1.02);
+}
+
+.devchinh__card--neon::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(0, 255, 255, 0.1),
+        transparent
+    );
+    transition: left 0.5s;
+}
+
+.devchinh__card--neon:hover::before {
+    left: 100%;
+}
+
+/* Card Style 11 - Magazine Style */
+.devchinh__card--magazine {
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md);
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+    display: flex;
+}
+
+.devchinh__card--magazine:hover {
+    transform: translateX(5px);
+    box-shadow: var(--shadow-lg);
+}
+
+.devchinh__card--magazine .devchinh__magazine-image {
+    width: 120px;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.devchinh__card--magazine .devchinh__magazine-content {
+    padding: 2rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+/* Card Style 12 - 3D Perspective */
+.devchinh__card--3d {
+    background: white;
+    border-radius: var(--radius);
+    padding: 2.5rem 2rem;
+    box-shadow: var(--shadow-md);
+    transition: var(--transition);
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    transform-style: preserve-3d;
+    perspective: 1000px;
+}
+
+.devchinh__card--3d:hover {
+    transform: rotateY(10deg) rotateX(5deg);
+    box-shadow: 20px 20px 50px rgba(0, 0, 0, 0.2);
+}
+
+/* Shared styles */
+.devchinh__quote {
+    font-size: 1.1rem;
+    font-style: italic;
+    margin-bottom: 2rem;
+    position: relative;
+    z-index: 1;
+    flex-grow: 1;
+}
+
+.devchinh__author {
+    display: flex;
+    align-items: center;
+    margin-top: auto;
+}
+
+.devchinh__author-avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-right: 1rem;
+    border: 3px solid white;
+    box-shadow: var(--shadow-sm);
+}
+
+.devchinh__magazine-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.devchinh__author-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.devchinh__author-name {
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-bottom: 0.2rem;
+}
+
+.devchinh__author-title {
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+
+.devchinh__icon {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    font-size: 1.5rem;
+    opacity: 0.2;
+}
+
+/* Color variations */
+.devchinh__card--glass .devchinh__quote,
+.devchinh__card--glass .devchinh__author-name {
+    color: #333;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.devchinh__card--glass .devchinh__author-title {
+    color: #666;
+}
+
+.devchinh__card--split .devchinh__card-header .devchinh__quote {
+    color: white;
+    margin-bottom: 1rem;
+}
+
+.devchinh__card--neon .devchinh__quote {
+    color: #00ffff;
+}
+
+.devchinh__card--neon .devchinh__author-name {
+    color: #ff00ff;
+}
+
+.devchinh__card--neon .devchinh__author-title {
+    color: #ffff00;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .devchinh__cards-container {
+        grid-template-columns: 1fr;
+    }
+
+    .devchinh__card--magazine {
+        flex-direction: column;
+    }
+
+    .devchinh__card--magazine .devchinh__magazine-image {
+        width: 100%;
+        height: 150px;
+    }
+
+    .devchinh__title {
+        font-size: 2rem;
+    }
+
+    body {
+        padding: 1rem;
+    }
+
+    .devchinh__container {
+        padding: 1rem;
+    }
+}
+
+/* Footer */
+.devchinh__footer {
+    text-align: center;
+    margin-top: 4rem;
+    color: #666;
+    font-size: 0.9rem;
+}
