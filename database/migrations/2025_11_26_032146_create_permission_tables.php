@@ -19,50 +19,50 @@ return new class extends Migration {
         throw_if(empty($tableNames), Exception::class, 'Error: config/permission.php not loaded. Run [php artisan config:clear] and try again.');
         throw_if($teams && empty($columnNames['team_foreign_key'] ?? null), Exception::class, 'Error: team_foreign_key on config/permission.php not loaded. Run [php artisan config:clear] and try again.');
 
+        // Bang dinh nghia quyen he thong.
         Schema::create($tableNames['permissions'], static function (Blueprint $table) {
-            // $table->engine('InnoDB');
-            $table->bigIncrements('id'); // permission id
-            $table->string('name');       // For MyISAM use string('name', 225); // (or 166 for InnoDB with Redundant/Compact row format)
-            $table->string('guard_name'); // For MyISAM use string('guard_name', 25);
-            $table->text('description')->comment("Mô tả quyền");
-            $table->timestamps();
-            $table->unique(['name', 'guard_name']);
-            $table->comment('bảng lưu quyền trên phần mềm');
+            $table->bigIncrements('id'); // Khoa chinh cua quyen.
+            $table->string('name'); // Ma/ten quyen, vi du: users.create.
+            $table->string('guard_name'); // Guard ap dung, vi du: web, api.
+            $table->text('description')->comment('Mo ta muc dich cua quyen.');
+            $table->timestamps(); // created_at, updated_at.
+            $table->unique(['name', 'guard_name']); // Moi quyen duy nhat trong tung guard.
+            $table->comment('Bang luu danh sach quyen trong he thong.');
         });
 
+        // Bang dinh nghia vai tro.
         Schema::create($tableNames['roles'], static function (Blueprint $table) use ($teams, $columnNames) {
-            // $table->engine('InnoDB');
-            $table->bigIncrements('id'); // role id
-            if ($teams || config('permission.testing')) { // permission.testing is a fix for sqlite testing
-                $table->unsignedBigInteger($columnNames['team_foreign_key'])->nullable();
+            $table->bigIncrements('id'); // Khoa chinh cua vai tro.
+            if ($teams || config('permission.testing')) {
+                $table->unsignedBigInteger($columnNames['team_foreign_key'])->nullable(); // Team so huu vai tro neu bat team mode.
                 $table->index($columnNames['team_foreign_key'], 'roles_team_foreign_key_index');
             }
-            $table->string('name');       // For MyISAM use string('name', 225); // (or 166 for InnoDB with Redundant/Compact row format)
-            $table->string('guard_name'); // For MyISAM use string('guard_name', 25);
-            $table->text('description')->comment("Mô tả vai chò");
-            $table->timestamps();
+            $table->string('name'); // Ten vai tro, vi du: admin, hr_manager.
+            $table->string('guard_name'); // Guard ap dung cho vai tro.
+            $table->text('description')->comment('Mo ta vai tro va pham vi su dung.');
+            $table->timestamps(); // created_at, updated_at.
             if ($teams || config('permission.testing')) {
-                $table->unique([$columnNames['team_foreign_key'], 'name', 'guard_name']);
+                $table->unique([$columnNames['team_foreign_key'], 'name', 'guard_name']); // Khong trung vai tro trong cung team + guard.
             } else {
-                $table->unique(['name', 'guard_name']);
+                $table->unique(['name', 'guard_name']); // Khong trung vai tro trong cung guard.
             }
-            $table->comment('bảng lưu vai trò dùng để phân quyền');
+            $table->comment('Bang luu vai tro de phan quyen theo nhom.');
         });
 
+        // Bang gan truc tiep quyen cho model.
         Schema::create($tableNames['model_has_permissions'], static function (Blueprint $table) use ($tableNames, $columnNames, $pivotPermission, $teams) {
-            $table->unsignedBigInteger($pivotPermission);
-
-            $table->string('model_type');
-            $table->unsignedBigInteger($columnNames['model_morph_key']);
+            $table->unsignedBigInteger($pivotPermission); // ID quyen duoc gan.
+            $table->string('model_type'); // Lop model nhan quyen, vi du App\\Models\\User.
+            $table->unsignedBigInteger($columnNames['model_morph_key']); // ID cua model nhan quyen.
             $table->index([$columnNames['model_morph_key'], 'model_type'], 'model_has_permissions_model_id_model_type_index');
 
-
             $table->foreign($pivotPermission)
-                ->references('id') // permission id
+                ->references('id')
                 ->on($tableNames['permissions'])
                 ->onDelete('cascade');
+
             if ($teams) {
-                $table->unsignedBigInteger($columnNames['team_foreign_key']);
+                $table->unsignedBigInteger($columnNames['team_foreign_key']); // Team scope cua quyen duoc gan.
                 $table->index($columnNames['team_foreign_key'], 'model_has_permissions_team_foreign_key_index');
 
                 $table->primary(
@@ -75,21 +75,23 @@ return new class extends Migration {
                     'model_has_permissions_permission_model_type_primary'
                 );
             }
-            $table->comment("bảng lưu quyền cho tài khoản");
+            $table->comment('Bang pivot gan quyen truc tiep cho tung model.');
         });
 
+        // Bang gan vai tro cho model.
         Schema::create($tableNames['model_has_roles'], static function (Blueprint $table) use ($tableNames, $columnNames, $pivotRole, $teams) {
-            $table->unsignedBigInteger($pivotRole);
-
-            $table->string('model_type');
-            $table->unsignedBigInteger($columnNames['model_morph_key']);
+            $table->unsignedBigInteger($pivotRole); // ID vai tro duoc gan.
+            $table->string('model_type'); // Lop model nhan vai tro.
+            $table->unsignedBigInteger($columnNames['model_morph_key']); // ID cua model nhan vai tro.
             $table->index([$columnNames['model_morph_key'], 'model_type'], 'model_has_roles_model_id_model_type_index');
+
             $table->foreign($pivotRole)
-                ->references('id') // role id
+                ->references('id')
                 ->on($tableNames['roles'])
                 ->onDelete('cascade');
+
             if ($teams) {
-                $table->unsignedBigInteger($columnNames['team_foreign_key']);
+                $table->unsignedBigInteger($columnNames['team_foreign_key']); // Team scope cua vai tro duoc gan.
                 $table->index($columnNames['team_foreign_key'], 'model_has_roles_team_foreign_key_index');
 
                 $table->primary(
@@ -102,24 +104,26 @@ return new class extends Migration {
                     'model_has_roles_role_model_type_primary'
                 );
             }
-            $table->comment('bảng lưu vai trò của tài khoản');
+            $table->comment('Bang pivot gan vai tro cho tung model.');
         });
 
+        // Bang xac dinh vai tro nao so huu nhung quyen nao.
         Schema::create($tableNames['role_has_permissions'], static function (Blueprint $table) use ($tableNames, $pivotRole, $pivotPermission) {
-            $table->unsignedBigInteger($pivotPermission);
-            $table->unsignedBigInteger($pivotRole);
+            $table->unsignedBigInteger($pivotPermission); // ID quyen.
+            $table->unsignedBigInteger($pivotRole); // ID vai tro.
+
             $table->foreign($pivotPermission)
-                ->references('id') // permission id
+                ->references('id')
                 ->on($tableNames['permissions'])
                 ->onDelete('cascade');
 
             $table->foreign($pivotRole)
-                ->references('id') // role id
+                ->references('id')
                 ->on($tableNames['roles'])
                 ->onDelete('cascade');
 
-            $table->primary([$pivotPermission, $pivotRole], 'role_has_permissions_permission_id_role_id_primary');
-            $table->comment('bảng lưu quyền của vai trò');
+            $table->primary([$pivotPermission, $pivotRole], 'role_has_permissions_permission_id_role_id_primary'); // Moi cap quyen-vai tro chi ton tai mot lan.
+            $table->comment('Bang pivot xac dinh quyen thuoc ve vai tro nao.');
         });
 
         app('cache')

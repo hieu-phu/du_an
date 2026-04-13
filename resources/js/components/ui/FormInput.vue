@@ -39,7 +39,7 @@ const props = defineProps({
     // Hỗ trợ :value
     value: [String, Number],
     placeholder: String,
-    error: Array,
+    error: [String, Array],
     required: {
         type: Boolean,
         default: false

@@ -17,7 +17,7 @@ defineProps({ title: String });
 <script>
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import { Head } from '@inertiajs/vue3';
-import Pagination from '../Components/Pagination.vue';
+import Pagination from '@/components/tables/Pagination.vue';
 
 export default {
     layout: AdminLayout,

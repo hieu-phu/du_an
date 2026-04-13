@@ -16,6 +16,7 @@ class RepositoryServiceProvider extends ServiceProvider
     protected array $repositories = [
         UserRepository::class,
         NotificationRepository::class,
+        \App\Repositories\DepartmentRepository::class,
     ];
 
     public function register(): void

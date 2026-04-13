@@ -61,6 +61,20 @@ class AppServiceProvider extends ServiceProvider
                 'name' => 'Dashboard',
                 'path' => '/dashboard',
             ],
+            [
+                'icon' => 'UserGroupIcon',
+                'name' => 'Cơ cấu tổ chức',
+                'subItems' => [
+                    [
+                        'name' => 'Phòng ban',
+                        'path' => '/departments',
+                    ],
+                    [
+                        'name' => 'Chức vụ',
+                        'path' => '/positions',
+                    ],
+                ],
+            ],
         ];
 
         return [

@@ -14,7 +14,7 @@
 import { Head } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
-import Pagination from '@/components/Pagination.vue';
+import Pagination from '@/components/tables/Pagination.vue';
 import { LayoutDashboardIcon, UserGroupIcon, BoxIcon, BarChartIcon } from '@/icons'
 
 </script>

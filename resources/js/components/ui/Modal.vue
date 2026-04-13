@@ -1,5 +1,5 @@
 <template>
-  <div class="fixed inset-0 flex items-center justify-center overflow-y-auto z-99999 p-4">
+  <div v-if="show" class="fixed inset-0 flex items-center justify-center overflow-y-auto z-99999 p-4">
     <!-- Backdrop -->
     <div
       v-if="fullScreenBackdrop"
@@ -9,7 +9,6 @@
     
     <!-- Default slot content (modal body) -->
     <div 
-      v-if="show" 
       class="relative bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] mx-auto transform transition-all duration-300 scale-100 opacity-100"
       role="dialog"
       aria-modal="true"
@@ -25,6 +24,9 @@ interface ModalProps {
   fullScreenBackdrop?: boolean
 }
 
-const props = defineProps<ModalProps>()
+withDefaults(defineProps<ModalProps>(), {
+  show: false,
+  fullScreenBackdrop: true
+})
 defineEmits(['close'])
 </script>

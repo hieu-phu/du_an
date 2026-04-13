@@ -11,16 +11,19 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Bang cache key-value cua Laravel.
         Schema::create('cache', function (Blueprint $table) {
-            $table->string('key')->primary();
-            $table->mediumText('value');
-            $table->integer('expiration');
+            $table->string('key')->primary(); // Khoa cache duy nhat.
+            $table->mediumText('value'); // Gia tri cache da duoc serialize.
+            $table->integer('expiration'); // Moc het han dang unix timestamp.
         });
 
+        // Bang lock cho cache.
+        // Dung de tranh tranh chap khi xu ly cac tac vu can khoa.
         Schema::create('cache_locks', function (Blueprint $table) {
-            $table->string('key')->primary();
-            $table->string('owner');
-            $table->integer('expiration');
+            $table->string('key')->primary(); // Ten khoa lock.
+            $table->string('owner'); // Dinh danh tien trinh/worker dang so huu lock.
+            $table->integer('expiration'); // Moc het han cua lock.
         });
     }
 
