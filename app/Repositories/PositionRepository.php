@@ -10,4 +10,15 @@ class PositionRepository extends BaseRepository
     {
         parent::__construct($model);
     }
+
+    public function getAllWithEmployeeCount(?string $search = null, ?string $status = null)
+    {
+        return $this->model
+            ->withCount('employeeProfiles')
+            ->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%"))
+            ->when($status === 'active', fn ($q) => $q->where('is_active', true))
+            ->when($status === 'inactive', fn ($q) => $q->where('is_active', false))
+            ->latest()
+            ->get();
+    }
 }

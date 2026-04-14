@@ -9,4 +9,14 @@ class ActivityLog extends Model
 {
     /** @use HasFactory<\Database\Factories\ActivityLogFactory> */
     use HasFactory;
+
+    protected $fillable = [
+        'user_id',
+        'module',
+        'action',
+        'description',
+        'reference_table',
+        'reference_id',
+        'ip_address',
+    ];
 }

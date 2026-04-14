@@ -3,28 +3,36 @@
 namespace App\Http\Controllers\WEB;
 
 use App\Http\Controllers\Controller;
-use App\Services\DepartmentService;
+use App\Models\Department;
 use App\Models\User;
+use App\Services\DepartmentApprovalService;
+use App\Services\DepartmentService;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class DepartmentController extends Controller
 {
     public function __construct(
-        protected DepartmentService $departmentService
+        protected DepartmentService $departmentService,
+        protected DepartmentApprovalService $departmentApprovalService,
+        protected NotificationService $notificationService,
     ) {}
 
     /**
      * Display a listing of departments.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $departments = $this->departmentService->index();
-        $users = User::all(['id', 'name']); // For manager selection
+        $filters = $request->only(['search', 'status']);
+        $departments = $this->departmentService->index($filters);
+        $users = User::query()->orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('Departments/Index', [
             'departments' => $departments,
-            'users' => $users
+            'users' => $users,
+            'filters' => $filters,
         ]);
     }
 
@@ -33,21 +41,22 @@ class DepartmentController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:departments,name',
-            'description' => 'nullable|string',
-            'manager_user_id' => 'nullable|exists:users,id',
-            'is_active' => 'boolean'
-        ], [
-            'name.required' => 'Tên phòng ban là bắt buộc.',
-            'name.max' => 'Tên phòng ban không được vượt quá 255 ký tự.',
-            'name.unique' => 'Tên phòng ban này đã tồn tại.',
-            'manager_user_id.exists' => 'Trưởng phòng không hợp lệ.',
-        ]);
+        $validated = $this->validateDepartment($request);
 
-        $this->departmentService->store($validated);
+        if ($request->user()?->hasRole('admin')) {
+            $this->departmentService->store($validated);
 
-        return redirect()->back()->with('success', 'Phòng ban đã được tạo thành công.');
+            return redirect()->back()->with('success', 'Phòng ban đã được tạo thành công.');
+        }
+
+        $approvalRequest = $this->departmentApprovalService->submitCreateRequest($validated);
+        $this->notifyAdmins(
+            'Yêu cầu tạo phòng ban mới',
+            ($request->user()?->name ?? 'HR') . ' vừa gửi yêu cầu tạo phòng ban "' . ($validated['name'] ?? '-') . '".',
+            $approvalRequest->id
+        );
+
+        return redirect()->back()->with('success', 'Yêu cầu tạo phòng ban đã được gửi đến Admin để duyệt.');
     }
 
     /**
@@ -55,29 +64,23 @@ class DepartmentController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $department = \App\Models\Department::withCount('employeeProfiles')->findOrFail($id);
+        $department = Department::query()->findOrFail($id);
+        $validated = $this->validateDepartment($request, $department->id);
 
-        if ($department->employee_profiles_count > 0) {
-            return redirect()->back()->withErrors([
-                'department' => "Phòng ban \"{$department->name}\" đang có {$department->employee_profiles_count} nhân viên. Không thể chỉnh sửa khi đang được sử dụng."
-            ]);
+        if ($request->user()?->hasRole('admin')) {
+            $this->departmentService->update($department->id, $validated);
+
+            return redirect()->back()->with('success', 'Phòng ban đã được cập nhật thành công.');
         }
 
-        $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:departments,name,' . $id,
-            'description' => 'nullable|string',
-            'manager_user_id' => 'nullable|exists:users,id',
-            'is_active' => 'boolean'
-        ], [
-            'name.required' => 'Tên phòng ban là bắt buộc.',
-            'name.max' => 'Tên phòng ban không được vượt quá 255 ký tự.',
-            'name.unique' => 'Tên phòng ban này đã tồn tại.',
-            'manager_user_id.exists' => 'Trưởng phòng không hợp lệ.',
-        ]);
+        $approvalRequest = $this->departmentApprovalService->submitUpdateRequest($department, $validated);
+        $this->notifyAdmins(
+            'Yêu cầu cập nhật phòng ban',
+            ($request->user()?->name ?? 'HR') . ' vừa gửi yêu cầu cập nhật phòng ban "' . $department->name . '".',
+            $approvalRequest->id
+        );
 
-        $this->departmentService->update($id, $validated);
-
-        return redirect()->back()->with('success', 'Phòng ban đã được cập nhật thành công.');
+        return redirect()->back()->with('success', 'Yêu cầu cập nhật phòng ban đã được gửi đến Admin để duyệt.');
     }
 
     /**
@@ -87,6 +90,77 @@ class DepartmentController extends Controller
     {
         $this->departmentService->delete($id);
 
-        return redirect()->back()->with('success', 'Phòng ban đã được xóa thành công.');
+        return redirect()->back()->with('success', 'Phong ban da duoc xoa thanh cong.');
+    }
+
+    /**
+     * Toggle active status for the specified department.
+     */
+    public function toggleStatus(Department $department)
+    {
+        $wasActive = (bool) $department->is_active;
+
+        if (request()->user()?->hasRole('admin')) {
+            $this->departmentService->toggleStatus($department->id);
+
+            return redirect()->back()->with(
+                'success',
+                $wasActive
+                    ? 'Phòng ban đã được tạm khóa thành công.'
+                    : 'Phòng ban đã được kích hoạt lại thành công.'
+            );
+        }
+
+        $approvalRequest = $this->departmentApprovalService->submitToggleRequest($department);
+        $this->notifyAdmins(
+            $wasActive ? 'Yêu cầu khóa phòng ban' : 'Yêu cầu mở lại phòng ban',
+            (request()->user()?->name ?? 'HR') . ' vừa gửi yêu cầu ' . ($wasActive ? 'khóa' : 'mở lại') . ' phòng ban "' . $department->name . '".',
+            $approvalRequest->id
+        );
+
+        return redirect()->back()->with(
+            'success',
+            $wasActive
+                ? 'Yêu cầu khóa phòng ban đã được gửi đến Admin để duyệt.'
+                : 'Yêu cầu mở lại phòng ban đã được gửi đến Admin để duyệt.'
+        );
+    }
+
+    private function validateDepartment(Request $request, ?int $ignoreDepartmentId = null): array
+    {
+        return $request->validate([
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('departments', 'name')->ignore($ignoreDepartmentId),
+            ],
+            'description' => 'nullable|string',
+            'manager_user_id' => 'nullable|exists:users,id',
+            'is_active' => 'boolean',
+        ], [
+            'name.required' => 'Tên phòng ban là bắt buộc.',
+            'name.max' => 'Tên phòng ban không được vượt quá 255 ký tự.',
+            'name.unique' => 'Tên phòng ban này đã tồn tại.',
+            'manager_user_id.exists' => 'Trưởng phòng không hợp lệ.',
+        ]);
+    }
+
+    private function notifyAdmins(string $title, string $message, int $approvalRequestId): void
+    {
+        $adminIds = User::role('admin')->pluck('id')->all();
+
+        if (empty($adminIds)) {
+            return;
+        }
+
+        $this->notificationService->createForUsers(
+            $adminIds,
+            $title,
+            $message,
+            ['approval_request_id' => $approvalRequestId, 'type' => 'department'],
+            route('web.department-approvals.index'),
+            category: 'department'
+        );
     }
 }

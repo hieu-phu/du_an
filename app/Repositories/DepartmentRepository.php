@@ -14,8 +14,27 @@ class DepartmentRepository extends BaseRepository
     /**
      * Get all departments with their manager.
      */
-    public function getAllWithManager()
+    public function getAllWithManager(array $filters = [])
     {
-        return $this->model->with('manager')->withCount('employeeProfiles')->latest()->get();
+        return $this->model
+            ->with('manager:id,name,email')
+            ->withCount('employeeProfiles')
+            ->when(!empty($filters['search']), function ($query) use ($filters) {
+                $query->where('name', 'like', '%' . trim($filters['search']) . '%');
+            })
+            ->when(isset($filters['status']) && $filters['status'] !== '', function ($query) use ($filters) {
+                $query->where('is_active', $filters['status'] === 'active');
+            })
+            ->latest()
+            ->get();
+    }
+
+    public function toggleStatus(int $id): bool
+    {
+        $department = $this->getByIdOrFail($id);
+
+        return $department->update([
+            'is_active' => !$department->is_active,
+        ]);
     }
 }

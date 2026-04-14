@@ -11,8 +11,18 @@ import { setupProgress } from './plugins/progress'
 import './bootstrap'
 import './echo'
 
+import { router } from '@inertiajs/vue3'
+
 // Setup NProgress
 setupProgress()
+
+// Global Inertia error handling
+router.on('error', (event) => {
+  // Handle 419 (Page Expired) - automatically reload to refresh CSRF token
+  if (event.detail?.errors?.status === 419 || event.detail?.status === 419) {
+    window.location.reload()
+  }
+})
 
 createInertiaApp({
   // ✅ Hiện tại: eager: true → load ALL pages ngay khi vào app (tăng bundle size)

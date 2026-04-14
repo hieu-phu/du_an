@@ -13,12 +13,14 @@ class UserRepository extends BaseRepository
         parent::__construct($model);
     }
 
-    /**
-     * Lấy danh sách user có phân trang + filter.
-     */
     public function getListPaginated(array $filters, int $perPage = 15): LengthAwarePaginator
     {
-        $query = $this->query();
+        $query = $this->query()
+            ->with($this->detailRelations());
+
+        if (!empty($filters['scope']) && $filters['scope'] === 'employees') {
+            $query->whereHas('employeeProfile');
+        }
 
         if (!empty($filters['search'])) {
             $search = $filters['search'];
@@ -34,54 +36,129 @@ class UserRepository extends BaseRepository
             $query->where('status', $filters['status']);
         }
 
-        return $query->with('roles:id,name')->latest()->paginate($perPage);
+        if (!empty($filters['department_id'])) {
+            $departmentId = $filters['department_id'];
+            $query->whereHas('employeeProfile', fn ($q) => $q->where('department_id', $departmentId));
+        }
+
+        if (!empty($filters['hire_date'])) {
+            $hireDate = $filters['hire_date'];
+            $query->whereHas('employeeProfile', fn ($q) => $q->whereDate('hire_date', $hireDate));
+        }
+
+        if (!empty($filters['role'])) {
+            $role = $filters['role'];
+            $query->role($role);
+        }
+
+        return $query->latest()->paginate($perPage)->through(fn (User $user) => $this->transformUser($user));
     }
 
-    /**
-     * Tạo user mới.
-     */
+    public function findDetailedById(int $id): ?array
+    {
+        $user = $this->query()
+            ->with($this->detailRelations())
+            ->find($id);
+
+        return $user ? $this->transformUser($user) : null;
+    }
+
     public function createUser(array $data): User
     {
         return $this->query()->create($data);
     }
 
-    /**
-     * Cập nhật user.
-     */
     public function updateUser(User $user, array $data): bool
     {
         return $user->update($data);
     }
 
-    /**
-     * Cập nhật trạng thái user.
-     */
     public function updateStatus(User $user, string $status): bool
     {
         return $user->update(['status' => $status]);
     }
 
-    /**
-     * Tìm user theo email.
-     */
     public function findByEmail(string $email): ?User
     {
         return $this->query()->where('email', $email)->first();
     }
 
-    /**
-     * Tìm user theo username.
-     */
     public function findByUsername(string $username): ?User
     {
         return $this->query()->where('username', $username)->first();
     }
 
-    /**
-     * Lấy danh sách user đang hoạt động.
-     */
     public function getActiveUsers(array $columns = ['*']): Collection
     {
         return $this->query()->where('status', 'active')->get($columns);
+    }
+
+    private function detailRelations(): array
+    {
+        return [
+            'roles:id,name',
+            'creator:id,name',
+            'employeeProfile.department:id,name',
+            'employeeProfile.position:id,name',
+            'employeeProfile.province:id,name',
+            'employeeProfile.district:id,name',
+            'employeeProfile.ward:id,name',
+        ];
+    }
+
+    private function transformUser(User $user): array
+    {
+        $profile = $user->employeeProfile;
+
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'username' => $user->username,
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'address' => $user->address,
+            'status' => $user->status,
+            'avatar' => $user->avatar,
+            'thumbnail' => $user->thumbnail,
+            'last_login_at' => $user->last_login_at,
+            'is_employee' => (bool) $user->is_employee,
+            'has_employee_profile' => (bool) $profile,
+            'role_name' => $user->roles->first()?->name,
+            'creator_name' => $user->creator?->name,
+            'employee_code' => $profile?->employee_code,
+            'date_of_birth' => $profile?->date_of_birth?->format('Y-m-d'),
+            'hire_date' => $profile?->hire_date?->format('Y-m-d'),
+            'termination_date' => $profile?->termination_date?->format('Y-m-d'),
+            'base_salary' => $profile?->base_salary,
+            'employment_status' => $profile?->employment_status,
+            'employment_type' => $profile?->employment_type,
+            'department_id' => $profile?->department_id,
+            'position_id' => $profile?->position_id,
+            'province_id' => $profile?->province_id,
+            'district_id' => $profile?->district_id,
+            'ward_id' => $profile?->ward_id,
+            'address_line' => $profile?->address_line,
+            'department' => $profile?->department ? [
+                'id' => $profile->department->id,
+                'name' => $profile->department->name,
+            ] : null,
+            'position' => $profile?->position ? [
+                'id' => $profile->position->id,
+                'name' => $profile->position->name,
+            ] : null,
+            'province' => $profile?->province ? [
+                'id' => $profile->province->id,
+                'name' => $profile->province->name,
+            ] : null,
+            'district' => $profile?->district ? [
+                'id' => $profile->district->id,
+                'name' => $profile->district->name,
+            ] : null,
+            'ward' => $profile?->ward ? [
+                'id' => $profile->ward->id,
+                'name' => $profile->ward->name,
+            ] : null,
+            'companies' => [],
+        ];
     }
 }

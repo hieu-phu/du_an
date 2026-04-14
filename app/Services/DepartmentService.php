@@ -13,9 +13,9 @@ class DepartmentService extends BaseService
     /**
      * Get all departments for display.
      */
-    public function index()
+    public function index(array $filters = [])
     {
-        return $this->departmentRepository->getAllWithManager();
+        return $this->departmentRepository->getAllWithManager($filters);
     }
 
     /**
@@ -40,5 +40,10 @@ class DepartmentService extends BaseService
     public function delete($id)
     {
         return $this->departmentRepository->delete($id);
+    }
+
+    public function toggleStatus(int $id): bool
+    {
+        return $this->departmentRepository->toggleStatus($id);
     }
 }

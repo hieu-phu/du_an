@@ -2,9 +2,12 @@
 
 namespace App\Models;
 
+use App\Support\AccessMatrix;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -20,10 +23,10 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'email',
+        'email_verified_at',
         'username',
         'phone',
         'password',
-        'google_id',
         'address',
         'avatar',
         'thumbnail',
@@ -80,6 +83,11 @@ class User extends Authenticatable
         return $this->hasMany(SocialAccount::class);
     }
 
+    public function socialProviders(): HasMany
+    {
+        return $this->hasMany(SocialAccount::class);
+    }
+
     /**
      * Get the creator of the user.
      */
@@ -102,6 +110,11 @@ class User extends Authenticatable
     public function sessions()
     {
         return $this->hasMany(Session::class);
+    }
+
+    public function employeeProfile(): HasOne
+    {
+        return $this->hasOne(EmployeeProfile::class);
     }
 
     /**
@@ -150,5 +163,36 @@ class User extends Authenticatable
     public function isBlocked(): bool
     {
         return $this->status === 'blocked';
+    }
+
+    public function primaryRole(): ?string
+    {
+        return AccessMatrix::primaryRole($this);
+    }
+
+    /**
+     * Kiểm tra xem user có quyền hạn nghiệp vụ này không,
+     * dựa theo chức vụ của nhân viên đó.
+     * Admin luôn có mọi quyền.
+     */
+    public function hasPositionCapability(string $capability): bool
+    {
+        if ($this->hasRole('admin')) {
+            return true;
+        }
+
+        $profile = $this->employeeProfile;
+
+        if (!$profile) {
+            return false;
+        }
+
+        $position = $profile->position;
+
+        if (!$position || !$position->is_active) {
+            return false;
+        }
+
+        return in_array($capability, $position->capabilities ?? [], true);
     }
 }

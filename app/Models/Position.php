@@ -14,7 +14,15 @@ class Position extends Model
     protected $fillable = [
         'name',
         'description',
+        'authority_level',
+        'capabilities',
         'is_active'
+    ];
+
+    protected $casts = [
+        'authority_level' => 'integer',
+        'capabilities'    => 'array',
+        'is_active'       => 'boolean',
     ];
 
     /**

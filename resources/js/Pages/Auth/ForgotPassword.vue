@@ -10,7 +10,7 @@
                     </svg>
                 </div>
                 <h2 class="text-3xl font-bold text-gray-900 mb-2">Quên mật khẩu?</h2>
-                <p class="text-sm text-gray-600">Nhập email của bạn để nhận liên kết đặt lại mật khẩu.</p>
+                <p class="text-sm text-gray-600">Nhập email của bạn để nhận mã xác nhận khôi phục mật khẩu.</p>
             </div>
 
             <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
@@ -33,7 +33,9 @@
                             class="block w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400"
                             :class="form.errors.email ? 'border-red-400 bg-red-50' : 'border-gray-300'"
                             placeholder="example@email.com" />
-                        <p v-if="form.errors.email" class="text-red-500 text-sm mt-1">{{ form.errors.email }}</p>
+                        <p v-if="form.errors.email" class="text-red-500 text-sm mt-1">
+                            {{ Array.isArray(form.errors.email) ? form.errors.email[0] : form.errors.email }}
+                        </p>
                     </div>
 
                     <!-- Submit -->
@@ -48,7 +50,7 @@
                                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
                                 </path>
                             </svg>
-                            <span>{{ form.processing ? 'Đang gửi...' : 'Gửi liên kết đặt lại mật khẩu' }}</span>
+                            <span>{{ form.processing ? 'Đang gửi...' : 'Nhận mã xác nhận' }}</span>
                         </button>
                     </div>
 

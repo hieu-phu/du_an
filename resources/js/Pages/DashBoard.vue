@@ -1,144 +1,136 @@
 <template>
-
-  <Head title="Dashboard - Ecommerce"></Head>
+  <Head title="Dashboard" />
 
   <AdminLayout>
     <PageBreadcrumb title="Dashboard" :items="[{ text: 'Dashboard', link: null }]" />
 
-    <div class="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-4 2xl:gap-7.5">
-      <!-- Metric Cards -->
-      <div v-for="metric in metrics" :key="metric.title"
-        class="rounded-lg border border-gray-200 bg-white p-6 shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
-        <div class="flex items-center justify-between">
-          <div>
-            <h4 class="text-title-md font-bold text-gray-800 dark:text-white/90">
-              {{ metric.value }}
-            </h4>
-            <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ metric.title }}</span>
-          </div>
-          <div class="flex items-center justify-center w-12 h-12 rounded-full" :class="metric.bgColor">
-            <component :is="metric.icon" class="text-white" />
-          </div>
+    <div class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 class="text-xl font-semibold text-gray-900">Tổng quan hệ thống</h2>
+          <p class="mt-1 text-sm text-gray-500">
+            Vai trò hiện tại: {{ roleLabel }}
+          </p>
         </div>
+
+        <div v-if="permissions['attendance.mine.action']" class="flex flex-wrap gap-3">
+          <button
+            @click="checkIn"
+            :disabled="attendanceForm.processing"
+            class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+          >
+            {{ attendanceForm.processing ? 'Đang xử lý...' : 'Check in' }}
+          </button>
+          <button
+            @click="checkOut"
+            :disabled="attendanceForm.processing"
+            class="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-600 disabled:opacity-60"
+          >
+            {{ attendanceForm.processing ? 'Đang xử lý...' : 'Check out' }}
+          </button>
+        </div>
+      </div>
+
+      <div v-if="todayAttendance" class="mt-4 rounded-lg bg-gray-50 p-4 text-sm text-gray-700">
+        <div>Hôm nay: {{ todayAttendance.work_date || '-' }}</div>
+        <div>Check in: {{ formatDateTime(todayAttendance.check_in_at) }}</div>
+        <div>Check out: {{ formatDateTime(todayAttendance.check_out_at) }}</div>
+        <div>Trạng thái: {{ todayAttendance.status || 'chưa chấm' }}</div>
       </div>
     </div>
 
-    <div class="mt-4 grid grid-cols-12 gap-4 md:mt-6 md:gap-6 2xl:mt-7.5 2xl:gap-7.5">
-
-
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div
+        v-for="card in stats"
+        :key="card.title"
+        class="rounded-xl border border-gray-200 bg-white p-5 shadow-theme-sm"
+      >
+        <div class="text-sm text-gray-500">{{ card.title }}</div>
+        <div class="mt-2 text-2xl font-semibold text-gray-900">{{ card.value }}</div>
+      </div>
     </div>
 
-    <!-- Add your charts and tables here -->
-    <DataTable :columns="columns" :data="users" :showIndex="true" :actions="actions"
-      emptyMessage="Không có người dùng" />
+    <div class="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
+      <h3 class="text-lg font-semibold text-gray-900">Điều hướng nhanh</h3>
+      <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <Link
+          v-for="item in quickLinks"
+          :key="item.path"
+          :href="item.path"
+          class="rounded-lg border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition hover:border-blue-400 hover:text-blue-600"
+        >
+          {{ item.label }}
+        </Link>
+      </div>
+    </div>
   </AdminLayout>
 </template>
 
 <script setup>
-import { Head } from '@inertiajs/vue3'
+import { computed } from 'vue'
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
-import { LayoutDashboardIcon, UserGroupIcon, BoxIcon, BarChartIcon } from '@/icons'
-import DataTable from '@/components/tables/DataTable.vue'
-import { ref } from 'vue'
-import EyeOn from '../icons/EyeOn.vue'
-import EyeOff from '../icons/EyeOff.vue'
-import EditButtonIcon from '../icons/EditButtonIcon.vue'
-import axios from 'axios'
 
-const metrics = [
-  {
-    title: 'Total Users',
-    value: '1,234',
-    icon: UserGroupIcon,
-    bgColor: 'bg-brand-500'
-  },
-  {
-    title: 'Total Orders',
-    value: '567',
-    icon: BoxIcon,
-    bgColor: 'bg-success-500'
-  },
-  {
-    title: 'Total Revenue',
-    value: '$12,345',
-    icon: BarChartIcon,
-    bgColor: 'bg-warning-500'
-  },
-  {
-    title: 'Total Products',
-    value: '89',
-    icon: LayoutDashboardIcon,
-    bgColor: 'bg-error-500'
+const props = defineProps({
+  stats: { type: Array, default: () => [] },
+  todayAttendance: { type: Object, default: null },
+})
+
+const page = usePage()
+const attendanceForm = useForm({})
+const permissions = computed(() => page.props.auth?.permissions || {})
+const primaryRole = computed(() => page.props.auth?.user?.primary_role || 'employee')
+
+const roleLabel = computed(() => ({
+  admin: 'Admin',
+  hr: 'HR',
+  employee: 'Nhân viên',
+}[primaryRole.value] || primaryRole.value))
+
+const quickLinks = computed(() => {
+  const links = []
+
+  if (permissions.value['profile.view']) {
+    links.push({ label: 'Hồ sơ cá nhân', path: '/my-profile' })
   }
-];
 
-const columns = [
-  { label: 'ID', key: 'id', align: 'text-center', width: '80px' },
-  { label: 'Tên', key: 'name' },
-  { label: 'Email', key: 'email' }
-]
-
-const users = ref([
-  { id: 1, name: 'Nguyễn Văn A', email: 'a@example.com', status: 'active' },
-  { id: 2, name: 'Trần Thị B', email: 'b@example.com', status: 'inactive' }
-])
-
-const actions = [
-  {
-    icon: EditButtonIcon,
-    buttonProps: { class: 'mr-3 devc__admin__action-btn' },
-    onClick: (item) => openEditModal(item)
-  },
-  {
-    // Không dùng icon là hàm nữa, thay bằng render thủ công
-    buttonProps: { class: 'devc__admin__action-btn' },
-    onClick: (item) => toggleStatus(item),
-    // Thêm một custom render cho action này
-    render: (item) => item.status === 'active' ? EyeOn : EyeOff
+  if (permissions.value['attendance.mine.view']) {
+    links.push({ label: 'Công của tôi', path: '/my-attendance' })
   }
-]
 
-// Hàm mẫu
-function openEditModal(user) {
-  alert('Chỉnh sửa ' + user.name)
+  if (permissions.value['users.view']) {
+    links.push({ label: 'Nhân sự', path: '/users' })
+  }
+
+  if (permissions.value['attendance.manage.view']) {
+    links.push({ label: 'Báo cáo chấm công', path: '/attendance/reports' })
+  }
+
+  if (permissions.value['projects.all.view']) {
+    links.push({ label: 'Dự án', path: '/projects' })
+  } else if (permissions.value['projects.mine.view']) {
+    links.push({ label: 'Dự án của tôi', path: '/my-projects' })
+  }
+
+  if (permissions.value['departments.view']) {
+    links.push({ label: 'Phòng ban', path: '/departments' })
+  }
+
+  return links
+})
+
+function checkIn() {
+  attendanceForm.post(route('attendance.check-in'), { preserveScroll: true })
 }
 
-function toggleStatus(user) {
-  user.status = user.status === 'active' ? 'inactive' : 'active'
+function checkOut() {
+  attendanceForm.post(route('attendance.check-out'), { preserveScroll: true })
 }
-function getData() {
-  axios.get('/api/user')
-    .then(response => {
-      console.log(response.data);
-    })
-    .catch(error => {
-      console.error('Error fetching dashboard data:', error);
-    });
+
+function formatDateTime(value) {
+  if (!value) return '-'
+
+  return new Date(value).toLocaleString('vi-VN')
 }
-import { getParamsURL } from '@/config/helpers';
-const paramsObject = getParamsURL()
-getData(paramsObject);
 </script>
-
-
-<style scoped>
-.btn {
-  padding: 4px 10px;
-  border-radius: 4px;
-  color: white;
-  cursor: pointer;
-}
-
-.btn-primary {
-  background-color: #3b82f6;
-}
-
-.btn-danger {
-  background-color: #ef4444;
-}
-
-.btn-info {
-  background-color: #0ea5e9;
-}
-</style>

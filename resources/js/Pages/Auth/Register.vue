@@ -5,10 +5,10 @@
                 <h2 class="text-3xl font-bold text-gray-900 mb-2">Đăng ký</h2>
                 <p class="text-sm text-gray-600">
                     Đã có tài khoản?
-                    <a :href="route('login')"
+                    <!-- <a :href="route('login')"
                         class="font-semibold text-blue-600 hover:text-blue-500 transition-colors duration-200">
                         Đăng nhập ngay
-                    </a>
+                    </a> -->
                 </p>
             </div>
 

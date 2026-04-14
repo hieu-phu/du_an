@@ -22,7 +22,9 @@
                             class="block w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400"
                             :class="form.errors.email ? 'border-red-400 bg-red-50' : 'border-gray-300'"
                             placeholder="example@email.com" />
-                        <p v-if="form.errors.email" class="text-red-500 text-sm mt-1">{{ form.errors.email }}</p>
+                        <p v-if="form.errors.email" class="text-red-500 text-sm mt-1">
+                            {{ Array.isArray(form.errors.email) ? form.errors.email[0] : form.errors.email }}
+                        </p>
                     </div>
 
                     <!-- Mật khẩu mới -->
@@ -52,7 +54,9 @@
                                 </svg>
                             </button>
                         </div>
-                        <p v-if="form.errors.password" class="text-red-500 text-sm mt-1">{{ form.errors.password }}</p>
+                        <p v-if="form.errors.password" class="text-red-500 text-sm mt-1">
+                            {{ Array.isArray(form.errors.password) ? form.errors.password[0] : form.errors.password }}
+                        </p>
                     </div>
 
                     <!-- Xác nhận mật khẩu -->
@@ -82,8 +86,9 @@
                                 </svg>
                             </button>
                         </div>
-                        <p v-if="form.errors.password_confirmation" class="text-red-500 text-sm mt-1">{{
-                            form.errors.password_confirmation }}</p>
+                        <p v-if="form.errors.password_confirmation" class="text-red-500 text-sm mt-1">
+                            {{ Array.isArray(form.errors.password_confirmation) ? form.errors.password_confirmation[0] : form.errors.password_confirmation }}
+                        </p>
                     </div>
 
                     <!-- Submit -->

@@ -13,7 +13,11 @@ class UpdatePhoneController extends Controller
     public function index(): Response
     {
         return Inertia::render('Auth/UpdatePhone', [
-            'user' => auth()->user()->only('email', 'phone', 'provider'),
+            'user' => [
+                'email' => auth()->user()->email,
+                'phone' => auth()->user()->phone,
+                'provider' => auth()->user()->socialAccounts()->where('provider', 'google')->exists() ? 'google' : null,
+            ],
         ]);
     }
 

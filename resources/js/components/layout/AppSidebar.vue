@@ -1,334 +1,172 @@
 <template>
-  <aside :class="[
-    'fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-999 border-r border-gray-200',
-    {
-      'lg:w-[290px]': isExpanded || isMobileOpen || isHovered,
-      'lg:w-[90px]': !isExpanded && !isHovered,
-      'translate-x-0 w-[290px]': isMobileOpen,
-      '-translate-x-full': !isMobileOpen,
-      'lg:translate-x-0': true,
-    },
-  ]" @mouseenter="!isExpanded && (isHovered = true)" @mouseleave="isHovered = false">
-    <div :class="[
-      'py-8 flex',
-      !isExpanded && !isHovered ? 'lg:justify-center' : 'justify-start',
-    ]">
-      <Link href="/dashboard" class="d-inline">
-        <img v-if="isExpanded || isHovered || isMobileOpen" class="dark:hidden h-9"
-          src="/resource/asfy-images/asfy-logo.png" alt="Logo" />
-        <img v-if="isExpanded || isHovered || isMobileOpen" class="hidden dark:block h-9"
-          src="/resource/asfy-images/asfy-logo.png" alt="Logo" />
-        <img v-else src="/resource/asfy-images/asfy-logo.png" alt="Logo" width="32" height="32" />
+  <aside
+    :class="[
+      'fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-gray-200 bg-white text-gray-900 transition-all duration-300 ease-in-out dark:border-gray-800 dark:bg-gray-900',
+      {
+        'w-[290px] translate-x-0': isMobileOpen,
+        'w-[290px] lg:w-[290px]': isExpanded || isHovered,
+        'lg:w-[92px]': !isExpanded && !isHovered,
+        '-translate-x-full lg:translate-x-0': !isMobileOpen,
+      },
+    ]"
+    @mouseenter="setIsHovered(true)"
+    @mouseleave="setIsHovered(false)"
+  >
+    <div class="flex h-[73px] items-center border-b border-gray-200 px-4 dark:border-gray-800">
+      <Link href="/dashboard" class="flex items-center gap-3">
+        <img src="/resource/asfy-images/asfy-logo.png" alt="Logo" class="h-9 w-9 flex-shrink-0 rounded-lg object-contain" />
+        <div v-if="showLabel" class="min-w-0">
+          <div class="truncate text-sm font-semibold text-gray-900 dark:text-white">HRM System</div>
+          <div class="truncate text-xs text-gray-500 dark:text-gray-400">System Navigation</div>
+        </div>
       </Link>
     </div>
-    <div class="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
-      <nav class="mb-6">
-        <div class="flex flex-col gap-4">
-          <div v-for="(menuGroup, groupIndex) in menuGroups" :key="groupIndex">
-            <h2 :class="[
-              'mb-4 text-xs uppercase flex leading-[20px] text-gray-400',
-              !isExpanded && !isHovered
-                ? 'lg:justify-center'
-                : 'justify-start',
-            ]">
-              <template v-if="isExpanded || isHovered || isMobileOpen">
-                {{ menuGroup.title }}
-              </template>
-              <HorizontalDots v-else />
-            </h2>
-            <ul class="flex flex-col gap-4">
-              <template v-for="(item, index) in menuGroup.items" :key="item.name">
 
-                <!-- LABEL tên công ty của trang chủ =)) -->
-                <li v-if="item.name === 'Hành chính nhân sự'" class="menu-company-label" :class="{
-                  'expanded': isExpanded || isHovered || isMobileOpen,
-                  'collapsed': !(isExpanded || isHovered || isMobileOpen)
-                }">
-                  <div class="company-label-wrapper" v-if="isExpanded || isHovered || isMobileOpen">
-                    <div class="company-label-content">
-                      <span class="company-label-text">{{ user?.company?.name }}</span>
-                    </div>
-                  </div>
-                  <div v-else class="company-mini-view">
-                    <WarehouseIcon class="w-5 h-5 text-gray-400" />
-                  </div>
-                </li>
+    <div class="flex-1 overflow-y-auto px-3 py-3">
+      <nav v-if="showLabel" class="space-y-2">
+        <section
+          v-for="(group, groupIndex) in menuGroups"
+          :key="`${group.title}-${groupIndex}`"
+          class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"
+        >
+          <button
+            type="button"
+            @click="toggleGroup(group.title)"
+            class="flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-gray-50 dark:hover:bg-gray-800/70"
+          >
+            <span class="text-[12px] font-bold uppercase tracking-[0.16em] text-gray-700 dark:text-gray-200">
+              {{ group.title }}
+            </span>
+            <span class="ml-auto rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-bold text-gray-700 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100">
+              {{ group.items.length }}
+            </span>
+            <ChevronDownIcon
+              class="h-4 w-4 text-gray-700 transition-transform dark:text-gray-200"
+              :class="{ 'rotate-180': isGroupOpen(group) }"
+            />
+          </button>
 
-                <!-- MENU ITEM -->
-                <li>
-                  <!-- MENU CHA CÓ SUBMENU -->
-                  <button v-if="item.subItems" @click="toggleSubmenu(groupIndex, index)" :class="[
-                    'menu-item group w-full',
-                    {
-                      'menu-item-active': isSubmenuOpen(groupIndex, index),
-                      'menu-item-inactive': !isSubmenuOpen(groupIndex, index),
-                    },
-                    !isExpanded && !isHovered
-                      ? 'lg:justify-center'
-                      : 'lg:justify-start',
-                  ]">
-                    <span :class="[
-                      isSubmenuOpen(groupIndex, index)
-                        ? 'menu-item-icon-active'
-                        : 'menu-item-icon-inactive',
-                    ]">
-                      <component :is="getIconComponent(item.icon)" />
-                    </span>
+          <transition
+            enter-active-class="transition-all duration-200 ease-out"
+            enter-from-class="opacity-0 -translate-y-1"
+            enter-to-class="opacity-100 translate-y-0"
+            leave-active-class="transition-all duration-150 ease-in"
+            leave-from-class="opacity-100 translate-y-0"
+            leave-to-class="opacity-0 -translate-y-1"
+          >
+            <ul v-show="isGroupOpen(group)" class="space-y-1 px-2 pb-2">
+              <li v-for="item in group.items" :key="item.path">
+                <Link
+                  :href="item.path"
+                  :class="[
+                    'group flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors',
+                    isItemActive(item)
+                      ? 'bg-blue-50 text-blue-700 shadow-sm dark:bg-blue-900/30 dark:text-blue-300'
+                      : 'text-gray-600 hover:bg-white hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white',
+                  ]"
+                >
+                  <span
+                    :class="[
+                      'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl transition-colors',
+                      isItemActive(item)
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                        : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200 group-hover:text-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:group-hover:bg-gray-700 dark:group-hover:text-white',
+                    ]"
+                  >
+                    <component :is="getIconComponent(item.icon)" class="h-4.5 w-4.5" />
+                  </span>
 
-                    <span v-if="isExpanded || isHovered || isMobileOpen" class="menu-item-text">
-                      {{ item.name }}
-                    </span>
-
-                    <ChevronDownIcon v-if="isExpanded || isHovered || isMobileOpen" :class="[
-                      'ml-auto w-5 h-5 transition-transform duration-200',
-                      {
-                        'rotate-180 text-brand-500': isSubmenuOpen(
-                          groupIndex,
-                          index
-                        ),
-                      },
-                    ]" />
-                  </button>
-
-                  <!-- MENU KHÔNG CÓ SUBMENU -->
-                  <Link v-else-if="item.path" :href="item.path" :class="[
-                    'menu-item group',
-                    {
-                      'menu-item-active': isActive(item.path, item.none_active || false),
-                      'menu-item-inactive': !isActive(item.path, item.none_active || false),
-                    },
-                  ]">
-                    <span :class="[
-                      isActive(item.path, item.none_active || false)
-                        ? 'menu-item-icon-active'
-                        : 'menu-item-icon-inactive',
-                    ]">
-                      <component :is="getIconComponent(item.icon)" />
-                    </span>
-
-                    <span v-if="isExpanded || isHovered || isMobileOpen" class="menu-item-text">
-                      {{ item.name }}
-                    </span>
-                  </Link>
-
-                  <!-- SUBMENU -->
-                  <transition @enter="startTransition" @after-enter="endTransition" @before-leave="startTransition"
-                    @after-leave="endTransition">
-                    <div v-show="isSubmenuOpen(groupIndex, index) &&
-                      (isExpanded || isHovered || isMobileOpen)
-                      ">
-                      <ul class="mt-2 space-y-1 ml-9">
-                        <li v-for="subItem in item.subItems" :key="subItem.name">
-                          <Link :href="subItem.path" :class="[
-                            'menu-dropdown-item',
-                            {
-                              'menu-dropdown-item-active': isActive(
-                                subItem.path,
-                                subItem.none_active || false
-                              ),
-                              'menu-dropdown-item-inactive': !isActive(
-                                subItem.path,
-                                subItem.none_active || false
-                              ),
-                            },
-                          ]">
-                            {{ subItem.name }}
-
-                            <span class="flex items-center gap-1 ml-auto">
-                              <span v-if="subItem.new" :class="[
-                                'menu-dropdown-badge',
-                                {
-                                  'menu-dropdown-badge-active': isActive(
-                                    subItem.path,
-                                    subItem.none_active || false
-                                  ),
-                                  'menu-dropdown-badge-inactive': !isActive(
-                                    subItem.path,
-                                    subItem.none_active || false
-                                  ),
-                                },
-                              ]">
-                                new
-                              </span>
-
-                              <span v-if="subItem.pro" :class="[
-                                'menu-dropdown-badge',
-                                {
-                                  'menu-dropdown-badge-active': isActive(
-                                    subItem.path,
-                                    subItem.none_active || false
-                                  ),
-                                  'menu-dropdown-badge-inactive': !isActive(
-                                    subItem.path,
-                                    subItem.none_active || false
-                                  ),
-                                },
-                              ]">
-                                pro
-                              </span>
-                            </span>
-                          </Link>
-                        </li>
-                      </ul>
-                    </div>
-                  </transition>
-                </li>
-
-              </template>
+                  <span class="truncate">{{ item.name }}</span>
+                </Link>
+              </li>
             </ul>
+          </transition>
+        </section>
+      </nav>
 
-          </div>
-        </div>
+      <nav v-else class="space-y-2">
+        <Link
+          v-for="item in flatMenuItems"
+          :key="item.path"
+          :href="item.path"
+          :class="[
+            'group flex items-center justify-center rounded-2xl px-2 py-2.5 transition-colors',
+            isItemActive(item)
+              ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+              : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white',
+          ]"
+        >
+          <span
+            :class="[
+              'flex h-10 w-10 items-center justify-center rounded-xl transition-colors',
+              isItemActive(item)
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200 group-hover:text-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:group-hover:bg-gray-700 dark:group-hover:text-white',
+            ]"
+          >
+            <component :is="getIconComponent(item.icon)" class="h-5 w-5" />
+          </span>
+        </Link>
       </nav>
     </div>
   </aside>
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
+import { computed, ref, watch } from 'vue'
 import { Link, usePage } from '@inertiajs/vue3'
+import { ChevronDownIcon } from '@/icons'
+import { useSidebar } from '@/composables/useSidebar'
 
-import {
-  ChevronDownIcon,
-  HorizontalDots,
-  WarehouseIcon,
-} from "../../icons";
-import { useSidebar } from "@/composables/useSidebar";
-const { isExpanded, isMobileOpen, isHovered, openSubmenu } = useSidebar();
-const page = usePage();
-const user = computed(() => page.props.auth?.user)
+const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar()
+const page = usePage()
 
-const companies = computed(() => page.props.auth.companies || [])
-const menuGroups = computed(() => page.props.auth.menuItems || []);
-const isActive = (path, noneActive = false) => {
-  if (noneActive) {
-    return false;
-  }
-  const currentUrl = page.url.split('?')[0];
-  const pathClean = new URL(path, window.location.origin).pathname;
-  return currentUrl === pathClean || currentUrl.startsWith(pathClean + '/');
-};
+const menuGroups = computed(() => page.props.auth?.menuItems || [])
+const flatMenuItems = computed(() => menuGroups.value.flatMap((group) => group.items || []))
+const showLabel = computed(() => isExpanded.value || isHovered.value || isMobileOpen.value)
+const openGroupTitle = ref(null)
 
-const toggleSubmenu = (groupIndex, itemIndex) => {
-  const key = `${groupIndex}-${itemIndex}`;
-  openSubmenu.value = openSubmenu.value === key ? null : key;
-};
-const isAnySubmenuRouteActive = computed(() => {
-  return menuGroups.value.some((group) =>
-    group.items.some(
-      (item) =>
-        item.subItems && item.subItems.some((subItem) => isActive(subItem.path, subItem.none_active || false))
-    )
-  );
-});
-const iconModules = import.meta.glob('../../icons/*.vue', { eager: true });
+const iconModules = import.meta.glob('../../icons/*.vue', { eager: true })
+
 const getIconComponent = (iconName) => {
-  // Tìm module tương ứng với tên icon
-  const modulePath = `../../icons/${iconName}.vue`;
+  const modulePath = `../../icons/${iconName}.vue`
+  return iconModules[modulePath]?.default || iconModules['../../icons/GridIcon.vue']?.default || null
+}
 
-  if (iconModules[modulePath]) {
-    return iconModules[modulePath].default;
+const isItemActive = (item) => {
+  const currentUrl = page.url.split('?')[0]
+  const itemPath = new URL(item.path, window.location.origin).pathname
+
+  if (item.exact) {
+    return currentUrl === itemPath
   }
 
-  // Fallback nếu không tìm thấy icon
-  console.warn(`Icon ${iconName} not found`);
-  return null;
-};
+  return currentUrl === itemPath || currentUrl.startsWith(`${itemPath}/`)
+}
 
-const isSubmenuOpen = (groupIndex, itemIndex) => {
-  const key = `${groupIndex}-${itemIndex}`;
-  return (
-    openSubmenu.value === key ||
-    (isAnySubmenuRouteActive.value &&
-      menuGroups.value[groupIndex].items[itemIndex].subItems?.some((subItem) =>
-        isActive(subItem.path)
-      ))
-  );
-};
-
-const startTransition = (el) => {
-  el.style.height = "auto";
-  const height = el.scrollHeight;
-  el.style.height = "0px";
-  el.offsetHeight; // force reflow
-  el.style.height = height + "px";
-};
-
-const endTransition = (el) => {
-  el.style.height = "";
-};
-const activeCompany = computed(() => {
-  return companies.value.find(c => c.is_active === 1)
+const activeGroupTitle = computed(() => {
+  const group = menuGroups.value.find((menuGroup) => menuGroup.items?.some((item) => isItemActive(item)))
+  return group?.title || menuGroups.value[0]?.title || null
 })
+
+const isGroupOpen = (group) => openGroupTitle.value === group.title
+
+const toggleGroup = (groupTitle) => {
+  openGroupTitle.value = openGroupTitle.value === groupTitle ? null : groupTitle
+}
+
+watch(
+  [menuGroups, activeGroupTitle],
+  ([groups, activeTitle]) => {
+    if (!groups.length) {
+      openGroupTitle.value = null
+      return
+    }
+
+    if (!openGroupTitle.value || !groups.some((group) => group.title === openGroupTitle.value) || activeTitle) {
+      openGroupTitle.value = activeTitle
+    }
+  },
+  { immediate: true },
+)
 </script>
-<style>
-.menu-company-label {
-  position: relative;
-  margin-top: 16px;
-  margin-bottom: 4px;
-}
-
-.menu-company-label.expanded::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg,
-      transparent 0%,
-      rgba(209, 213, 219, 0.6) 20%,
-      rgba(209, 213, 219, 0.8) 50%,
-      rgba(209, 213, 219, 0.6) 80%,
-      transparent 100%);
-}
-
-.company-label-wrapper {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: 0 8px;
-  margin-top: 12px;
-}
-
-
-.company-label-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 12px;
-}
-
-.company-label-text {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #6b7280;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  padding: 4px 8px;
-  background-color: rgba(249, 250, 251, 0.7);
-  border-radius: 4px;
-}
-
-.company-mini-view {
-  display: flex;
-  justify-content: center;
-  padding: 12px 0 8px 0;
-  position: relative;
-}
-
-.company-mini-view::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 8px;
-  right: 8px;
-  height: 1px;
-  background: linear-gradient(90deg,
-      transparent 0%,
-      rgba(209, 213, 219, 0.6) 20%,
-      rgba(209, 213, 219, 0.8) 50%,
-      rgba(209, 213, 219, 0.6) 80%,
-      transparent 100%);
-}
-</style>

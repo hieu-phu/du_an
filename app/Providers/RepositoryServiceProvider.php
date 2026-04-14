@@ -17,6 +17,7 @@ class RepositoryServiceProvider extends ServiceProvider
         UserRepository::class,
         NotificationRepository::class,
         \App\Repositories\DepartmentRepository::class,
+        \App\Repositories\AttendanceRepository::class,
     ];
 
     public function register(): void

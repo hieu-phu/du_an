@@ -4,7 +4,7 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "concurrently -n \"VITE,SERVER,QUEUE\" -c \"blue,green,magenta\" \"vite\" \"php artisan serve\" \"php artisan queue:work\""
     },
     "devDependencies": {
         "@laravel/echo-vue": "^2.2.6",

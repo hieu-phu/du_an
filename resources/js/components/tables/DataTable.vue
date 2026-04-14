@@ -181,7 +181,7 @@
 <script setup>
 import { computed } from 'vue'
 import Skeleton from 'primevue/skeleton'
-import Tooltip from '@/Components/ui/Tooltip.vue'
+import Tooltip from '@/components/ui/Tooltip.vue'
 
 const props = defineProps({
   columns: { type: Array, required: true },

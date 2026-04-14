@@ -1,60 +1,77 @@
 <template>
-    <CustomModal v-if="modelValue" :title="isEditMode ? 'Chỉnh sửa nhân sự' : 'Thêm nhân sự mới'" @close="close"
-        :custom_class="modalClasses">
+    <CustomModal
+        v-if="modelValue"
+        :title="isEditMode ? 'Chỉnh sửa nhân sự' : 'Thêm nhân sự mới'"
+        @close="close"
+        :custom_class="modalClasses"
+    >
         <template #body>
             <form @submit.prevent="submitForm">
-                <div class="modal-body overflow-y-auto px-6 py-5 max-h-[calc(85vh-140px)]">
-                    <!-- Avatar upload -->
-                    <div class="flex justify-center mb-6">
-                        <div class="relative group">
-                            <div class="w-24 h-24 rounded-full overflow-hidden border-3 border-gray-200 dark:border-gray-700 shadow-lg">
-                                <img v-if="avatarPreview" :src="avatarPreview" alt="Avatar"
-                                    class="w-full h-full object-cover" />
-                                <div v-else
-                                    class="w-full h-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-2xl font-bold">
-                                    {{ getInitials(form.name) }}
-                                </div>
-                            </div>
-                            <label
-                                class="absolute bottom-0 right-0 w-8 h-8 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center cursor-pointer shadow-md transition-all duration-200 group-hover:scale-110">
-                                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                                <input type="file" accept="image/*" class="hidden" @change="onAvatarChange" />
-                            </label>
-                        </div>
+                <div class="modal-body max-h-[calc(85vh-140px)] overflow-y-auto px-6 py-5">
+                    <div class="mb-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                        Mã nhân viên sẽ được hệ thống tự động tạo khi lưu.
                     </div>
 
-                    <!-- Thông tin cơ bản -->
-                    <div class="space-y-1 mb-5">
-                        <h5
-                            class="text-sm font-semibold text-gray-800 dark:text-gray-200 uppercase tracking-wider flex items-center gap-2">
-                            <span class="w-1 h-4 bg-blue-500 rounded-full"></span>
-                            Thông tin cơ bản
-                        </h5>
-                        <div class="h-px bg-gradient-to-r from-blue-500/30 to-transparent"></div>
+                    <div class="mb-6 grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
+                        <FormInput v-model="form.name" label="Họ và tên" placeholder="Nhập họ và tên" :required="true" :error="form.errors.name" />
+                        <FormInput v-model="form.email" label="Email Gmail" type="email" placeholder="Nhập email Gmail" :required="true" :error="form.errors.email" />
+                        <FormInput v-model="form.phone" label="Số điện thoại" placeholder="Nhập số điện thoại" :required="true" :error="form.errors.phone" />
+                        <InputDate v-model="form.date_of_birth" label="Ngày sinh" placeholder="Chọn ngày sinh" :error="form.errors.date_of_birth" />
+                        <InputDate v-model="form.hire_date" label="Ngày vào làm" placeholder="Chọn ngày vào làm" :required="true" :error="form.errors.hire_date" />
+                        <FormInput
+                            v-model="salaryDisplay"
+                            label="Lương cơ bản"
+                            type="text"
+                            placeholder="Nhập lương cơ bản"
+                            :error="form.errors.base_salary"
+                            unit="VND"
+                            @update:modelValue="handleSalaryInput"
+                        />
+                        <InputDate
+                            v-if="form.employment_status === 'terminated'"
+                            v-model="form.termination_date"
+                            label="Ngày nghỉ việc"
+                            placeholder="Chọn ngày nghỉ việc"
+                            :required="true"
+                            :error="form.errors.termination_date"
+                        />
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4 mb-6">
-                        <FormInput v-model="form.name" label="Họ và tên" placeholder="Nhập họ và tên" :required="true"
-                            :error="form.errors.name" />
-
-                        <FormInput v-model="form.email" label="Email" type="email" placeholder="Nhập email"
-                            :required="true" :error="form.errors.email" />
-
-                        <FormInput v-model="form.phone" label="Số điện thoại" placeholder="Nhập số điện thoại"
-                            :required="true" :error="form.errors.phone" />
-
-                        <div class="w-full">
-                            <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                                Trạng thái <span class="text-red-500">*</span>
-                            </label>
-                            <select v-model="form.status"
-                                class="w-full px-4 py-3 rounded-sm border bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                                :class="form.errors.status ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'">
+                    <div class="mb-6 grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
+                        <FormSelect
+                            id="department_id"
+                            v-model="form.department_id"
+                            :options="departmentOptions"
+                            label="Phòng ban"
+                            :required="true"
+                            placeholder="Chọn phòng ban"
+                            :error="form.errors.department_id"
+                        />
+                        <FormSelect
+                            id="position_id"
+                            v-model="form.position_id"
+                            :options="positionOptions"
+                            label="Chức vụ"
+                            :required="true"
+                            placeholder="Chọn chức vụ"
+                            :error="form.errors.position_id"
+                        />
+                        <FormSelect
+                            id="role_name"
+                            v-model="form.role_name"
+                            :options="roleOptions"
+                            label="Quyền tài khoản"
+                            :required="true"
+                            placeholder="Chọn quyền tài khoản"
+                            :error="form.errors.role_name"
+                        />
+                        <div>
+                            <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Trạng thái tài khoản</label>
+                            <select
+                                v-model="form.status"
+                                :disabled="form.employment_status === 'terminated'"
+                                class="w-full rounded-sm border border-gray-300 bg-white px-4 py-3 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:disabled:bg-gray-700"
+                            >
                                 <option value="active">Đang hoạt động</option>
                                 <option value="inactive">Ngừng hoạt động</option>
                                 <option value="pending">Đang chờ</option>
@@ -62,64 +79,70 @@
                             </select>
                             <ErrorForm :message="form.errors.status" />
                         </div>
+                        <div>
+                            <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Trạng thái làm việc</label>
+                            <select v-model="form.employment_status" class="w-full rounded-sm border border-gray-300 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
+                                <option value="active">Đang làm việc</option>
+                                <option value="inactive">Tạm ngừng</option>
+                                <option value="terminated">Nghỉ việc</option>
+                            </select>
+                            <p class="mt-1 text-xs text-gray-500">
+                                Nghỉ việc sẽ tự động khóa tài khoản và yêu cầu ngày nghỉ việc.
+                            </p>
+                            <ErrorForm :message="form.errors.employment_status" />
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Loại nhân sự / giai đoạn làm việc</label>
+                            <select v-model="form.employment_type" class="w-full rounded-sm border border-gray-300 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
+                                <option value="probation">Thử việc</option>
+                                <option value="official">Chính thức</option>
+                                <option value="intern">Thực tập</option>
+                                <option value="collaborator">Cộng tác viên</option>
+                            </select>
+                            <ErrorForm :message="form.errors.employment_type" />
+                        </div>
                     </div>
 
-                    <!-- Mật khẩu -->
-                    <div class="space-y-1 mb-5">
-                        <h5
-                            class="text-sm font-semibold text-gray-800 dark:text-gray-200 uppercase tracking-wider flex items-center gap-2">
-                            <span class="w-1 h-4 bg-orange-500 rounded-full"></span>
-                            {{ isEditMode ? 'Đổi mật khẩu (để trống nếu không đổi)' : 'Mật khẩu' }}
-                        </h5>
-                        <div class="h-px bg-gradient-to-r from-orange-500/30 to-transparent"></div>
+                    <div class="mb-6 grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
+                        <FormInput v-model="form.password" label="Mật khẩu" type="password" placeholder="Nhập mật khẩu" :required="!isEditMode" :error="form.errors.password" />
+                        <FormInput v-model="form.password_confirmation" label="Xác nhận mật khẩu" type="password" placeholder="Nhập lại mật khẩu" :required="!isEditMode" />
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4 mb-6">
-                        <FormInput v-model="form.password" label="Mật khẩu" type="password"
-                            placeholder="Nhập mật khẩu" :required="!isEditMode" :error="form.errors.password" />
-
-                        <FormInput v-model="form.password_confirmation" label="Xác nhận mật khẩu" type="password"
-                            placeholder="Nhập lại mật khẩu" :required="!isEditMode" />
-                    </div>
-
-                    <!-- Thông tin bổ sung -->
-                    <div class="space-y-1 mb-5">
-                        <h5
-                            class="text-sm font-semibold text-gray-800 dark:text-gray-200 uppercase tracking-wider flex items-center gap-2">
-                            <span class="w-1 h-4 bg-green-500 rounded-full"></span>
-                            Thông tin bổ sung
-                        </h5>
-                        <div class="h-px bg-gradient-to-r from-green-500/30 to-transparent"></div>
-                    </div>
-
-                    <div class="grid grid-cols-1 gap-y-4 mb-6">
-                        <div class="w-full">
-                            <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                                Địa chỉ (nếu có)
-                            </label>
-                            <textarea v-model="form.address" rows="2" placeholder="Nhập địa chỉ"
-                                class="w-full px-4 py-3 rounded-sm border bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none"
-                                :class="form.errors.address ? 'border-red-500' : 'border-gray-300 dark:border-gray-700'"></textarea>
-                            <ErrorForm :message="form.errors.address" />
+                    <div class="mb-6 grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
+                        <FormSelect
+                            id="province_id"
+                            v-model="form.province_id"
+                            :options="provinceOptions"
+                            label="Tỉnh / Thành phố"
+                            placeholder="Chọn tỉnh/thành"
+                            :error="form.errors.province_id"
+                            @update:modelValue="handleProvinceChange"
+                        />
+                        <FormSelect
+                            id="ward_id"
+                            v-model="form.ward_id"
+                            :options="wardOptions"
+                            label="Phường / Xã"
+                            placeholder="Chọn phường/xã"
+                            :error="form.errors.ward_id"
+                            :disabled="!form.province_id"
+                        />
+                        <div class="md:col-span-2">
+                            <FormInput
+                                v-model="form.address_line"
+                                label="Địa chỉ cụ thể (Số nhà, tên đường...)"
+                                placeholder="Nhập số nhà, tên đường..."
+                                :error="form.errors.address_line"
+                            />
                         </div>
                     </div>
                 </div>
 
-                <!-- Footer buttons - Fixed -->
-                <div
-                    class="modal-footer flex-shrink-0 flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                    <button type="button" @click="close"
-                        class="px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200">
+                <div class="modal-footer flex flex-shrink-0 items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-800/50">
+                    <button type="button" @click="close" class="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
                         Hủy bỏ
                     </button>
-                    <button type="submit" :disabled="form.processing"
-                        class="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm hover:shadow transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-                        <svg v-if="form.processing" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
-                                stroke-width="4" />
-                            <path class="opacity-75" fill="currentColor"
-                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
+                    <button type="submit" :disabled="form.processing" class="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                         {{ isEditMode ? 'Cập nhật' : 'Tạo mới' }}
                     </button>
                 </div>
@@ -129,34 +152,61 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
-import { useForm } from '@inertiajs/vue3'
+import { computed, ref, watch } from 'vue'
+import { useForm, usePage } from '@inertiajs/vue3'
+import axios from 'axios'
 import { toast } from 'vue3-toastify'
-
 import CustomModal from '@/components/modals/CustomModal.vue'
 import FormInput from '@/components/ui/FormInput.vue'
+import FormSelect from '@/components/forms/FormSelect.vue'
 import ErrorForm from '@/components/forms/ErrorForm.vue'
+import InputDate from '@/components/forms/InputDate.vue'
 
 const props = defineProps({
     modelValue: Boolean,
     isEditMode: { type: Boolean, default: false },
     userData: { type: Object, default: null },
+    departments: { type: Array, default: () => [] },
+    positions: { type: Array, default: () => [] },
+    roles: { type: Array, default: () => [] },
+    provinces: { type: Array, default: () => [] },
     storeRoute: { type: String, default: '' },
     updateRoute: { type: String, default: '' },
 })
 
 const emit = defineEmits(['update:modelValue', 'success'])
+const page = usePage()
+const isAdmin = computed(() => (page.props.auth?.user?.roles || []).includes('admin'))
 
 const modalClasses = [
-    "relative", "w-full", "max-w-[720px]",
-    "flex", "flex-col", "rounded-xl",
-    "bg-white", "dark:bg-gray-900",
-    "overflow-hidden", "max-h-[90vh]", "md:max-h-[85vh]",
-    "shadow-2xl"
+    'relative', 'w-full', 'max-w-[900px]',
+    'flex', 'flex-col', 'rounded-xl',
+    'bg-white', 'dark:bg-gray-900',
+    'overflow-hidden', 'max-h-[90vh]', 'md:max-h-[85vh]',
+    'shadow-2xl'
 ]
 
-const avatarPreview = ref(null)
-const avatarFile = ref(null)
+const departmentOptions = computed(() => props.departments.map((item) => ({
+    value: item.id,
+    label: item.name,
+})))
+
+const positionOptions = computed(() => props.positions.map((item) => ({
+    value: item.id,
+    label: item.name,
+})))
+
+const provinceOptions = computed(() => props.provinces.map((item) => ({
+    value: item.id,
+    label: item.name,
+})))
+
+const wardOptions = ref([])
+
+const roleOptions = computed(() => props.roles.map((item) => ({
+    value: item.name,
+    label: getRoleLabel(item.name),
+})))
 
 const form = useForm({
     name: '',
@@ -164,72 +214,127 @@ const form = useForm({
     phone: '',
     password: '',
     password_confirmation: '',
-    address: '',
+    province_id: '',
+    ward_id: '',
+    address_line: '',
     status: 'active',
+    date_of_birth: '',
+    hire_date: '',
+    termination_date: '',
+    department_id: '',
+    position_id: '',
+    base_salary: '',
+    employment_status: 'active',
+    employment_type: 'official',
+    role_name: 'employee',
     avatar: null,
 })
 
-const getInitials = (name = '') => {
-    const parts = name.trim().split(' ')
-    if (!parts[0]) return '?'
-    if (parts.length === 1) return parts[0].charAt(0).toUpperCase()
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+const salaryDisplay = ref('')
+const lastManualStatus = ref('active')
+
+const getRoleLabel = (roleName) => ({
+    admin: 'Quản trị viên',
+    hr: 'Nhân sự',
+    employee: 'Nhân viên',
+}[roleName] || roleName)
+
+const fetchWards = async (provinceId) => {
+    if (!provinceId) return
+    try {
+        const response = await axios.get(`/api/locations/wards/${provinceId}`)
+        wardOptions.value = response.data.map(w => ({ value: w.id, label: w.name }))
+    } catch (error) {
+        console.error('Error fetching wards:', error)
+    }
 }
 
-const onAvatarChange = (event) => {
-    const file = event.target.files[0]
-    if (!file) return
+const handleProvinceChange = (val) => {
+    form.ward_id = ''
+    wardOptions.value = []
+    if (val) fetchWards(val)
+}
 
-    if (file.size > 2 * 1024 * 1024) {
-        toast.error('Ảnh đại diện không được vượt quá 2MB')
-        return
-    }
+const formatNumber = (value) => new Intl.NumberFormat('vi-VN').format(Number(value))
 
-    avatarFile.value = file
-    form.avatar = file
-    avatarPreview.value = URL.createObjectURL(file)
+const handleSalaryInput = (value) => {
+    const digitsOnly = String(value ?? '').replace(/\D/g, '')
+    form.base_salary = digitsOnly
+    salaryDisplay.value = digitsOnly ? formatNumber(digitsOnly) : ''
 }
 
 const resetForm = () => {
     form.reset()
     form.clearErrors()
-    avatarPreview.value = null
-    avatarFile.value = null
+    form.status = 'active'
+    form.employment_status = 'active'
+    form.employment_type = 'official'
+    form.role_name = 'employee'
+    form.department_id = ''
+    form.position_id = ''
+    salaryDisplay.value = ''
+    lastManualStatus.value = 'active'
 }
 
 const populateForm = (user) => {
-    if (!user) return
     form.name = user.name || ''
     form.email = user.email || ''
     form.phone = user.phone || ''
-    form.address = user.address || ''
+    form.province_id = user.province_id || ''
+    form.ward_id = user.ward_id || ''
+    form.address_line = user.address_line || ''
+
+    if (form.province_id) fetchWards(form.province_id)
+
     form.status = user.status || 'active'
+    form.date_of_birth = user.date_of_birth || ''
+    form.hire_date = user.hire_date || ''
+    form.termination_date = user.termination_date || ''
+    form.department_id = user.department_id || ''
+    form.position_id = user.position_id || ''
+    form.base_salary = user.base_salary ? String(Number(user.base_salary)) : ''
+    salaryDisplay.value = form.base_salary ? formatNumber(form.base_salary) : ''
+    form.employment_status = user.employment_status || 'active'
+    form.employment_type = user.employment_type || 'official'
+    form.role_name = user.role_name || 'employee'
     form.password = ''
     form.password_confirmation = ''
-    form.avatar = null
-
-    if (user.avatar) {
-        avatarPreview.value = user.avatar.startsWith('http')
-            ? user.avatar
-            : `/storage/${user.avatar}`
-    } else {
-        avatarPreview.value = null
-    }
+    lastManualStatus.value = form.status === 'blocked' && form.employment_status === 'terminated'
+        ? 'active'
+        : form.status
 }
 
 watch(() => props.modelValue, (isOpen) => {
-    if (isOpen) {
-        if (props.isEditMode && props.userData) {
-            populateForm(props.userData)
-        } else {
-            resetForm()
-        }
+    if (!isOpen) return
+
+    if (props.isEditMode && props.userData) {
+        populateForm(props.userData)
+        return
+    }
+
+    resetForm()
+})
+
+watch(() => form.status, (status) => {
+    if (form.employment_status !== 'terminated') {
+        lastManualStatus.value = status
     }
 })
 
-watch(() => props.userData, (user) => {
-    if (props.modelValue && props.isEditMode && user) {
-        populateForm(user)
+watch(() => form.employment_status, (status, previousStatus) => {
+    if (status === 'terminated') {
+        if (previousStatus !== 'terminated') {
+            lastManualStatus.value = form.status
+        }
+
+        form.status = 'blocked'
+        return
+    }
+
+    form.termination_date = ''
+
+    if (previousStatus === 'terminated' && form.status === 'blocked') {
+        form.status = lastManualStatus.value || 'active'
     }
 })
 
@@ -239,45 +344,37 @@ const close = () => {
 }
 
 const submitForm = () => {
+    const payload = {
+        ...form.data(),
+        base_salary: form.base_salary === '' ? null : Number(form.base_salary),
+    }
+
     if (props.isEditMode && props.userData) {
         const updateUrl = props.updateRoute.replace(':id', props.userData.id)
 
-        form.transform(data => {
-            data._method = 'PUT'
-            return data
-        }).post(updateUrl, {
-            forceFormData: true,
+        form.transform(() => ({
+            ...payload,
+            _method: 'PUT',
+        })).post(updateUrl, {
             preserveScroll: true,
             onSuccess: () => {
                 toast.success('Cập nhật nhân sự thành công!')
                 close()
                 emit('success')
             },
-            onError: (errors) => {
-                if (errors.error) {
-                    toast.error(errors.error)
-                } else {
-                    toast.error('Vui lòng kiểm tra lại thông tin!')
-                }
-            }
+            onError: () => toast.error('Vui lòng kiểm tra lại thông tin!')
         })
-    } else {
-        form.post(props.storeRoute, {
-            forceFormData: true,
-            preserveScroll: true,
-            onSuccess: () => {
-                toast.success('Thêm nhân sự mới thành công!')
-                close()
-                emit('success')
-            },
-            onError: (errors) => {
-                if (errors.error) {
-                    toast.error(errors.error)
-                } else {
-                    toast.error('Vui lòng kiểm tra lại thông tin!')
-                }
-            }
-        })
+        return
     }
+
+    form.transform(() => payload).post(props.storeRoute, {
+        preserveScroll: true,
+        onSuccess: () => {
+            toast.success(isAdmin.value ? 'Thêm mới thành công!' : 'Đã gửi yêu cầu cho Admin duyệt!')
+            close()
+            emit('success')
+        },
+        onError: () => toast.error('Vui lòng kiểm tra lại thông tin!')
+    })
 }
 </script>

@@ -5,14 +5,20 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use App\Models\PasswordResetOtp;
+use App\Models\User;
+use App\Mail\PasswordResetOtpMail;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class PasswordResetLinkController extends Controller
 {
     /**
-     * Display the password reset link request view (Vue via Inertia).
+     * Display the password reset link request view.
      */
     public function create(): Response
     {
@@ -29,19 +35,79 @@ class PasswordResetLinkController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $request->validate([
-            'email' => ['required', 'email'],
+            'email' => ['required', 'email', 'exists:users,email'],
+        ], [
+            'email.exists' => 'Email không tồn tại trong hệ thống.'
         ]);
 
-        // We will send the password reset link to this user. Once we have attempted
-        // to send the link, we will examine the response then see the message we
-        // need to show to the user. Finally, we'll send out a proper response.
-        $status = Password::sendResetLink(
-            $request->only('email')
+        $existingOtp = PasswordResetOtp::where('email', $request->email)->first();
+        if ($existingOtp && $existingOtp->updated_at->addMinute()->isFuture()) {
+            $secondsLeft = now()->diffInSeconds($existingOtp->updated_at->addMinute());
+            return back()->withErrors([
+                'email' => "Vui lòng chờ {$secondsLeft} giây trước khi yêu cầu mã mới."
+            ]);
+        }
+
+        $otp = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        
+        PasswordResetOtp::updateOrCreate(
+            ['email' => $request->email],
+            [
+                'otp' => $otp,
+                'expires_at' => now()->addMinutes(15),
+            ]
         );
 
-        return $status == Password::RESET_LINK_SENT
-            ? back()->with('status', __($status))
-            : back()->withInput($request->only('email'))
-                ->withErrors(['email' => __($status)]);
+        Mail::to($request->email)->queue(new PasswordResetOtpMail($otp));
+
+        return redirect()->route('password.otp.view', ['email' => $request->email]);
+    }
+
+    /**
+     * Display the OTP verification view.
+     */
+    public function otpView(Request $request): Response
+    {
+        return Inertia::render('Auth/VerifyOtp', [
+            'email' => $request->email,
+            'status' => session('status'),
+        ]);
+    }
+
+    /**
+     * Verify the OTP.
+     */
+    public function verifyOtp(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'email' => ['required', 'email'],
+            'otp' => ['required', 'string', 'size:6'],
+        ]);
+
+        $otpRecord = PasswordResetOtp::where('email', $request->email)
+            ->where('otp', $request->otp)
+            ->where('expires_at', '>', now())
+            ->first();
+
+        if (!$otpRecord) {
+            return back()->withErrors(['otp' => 'Mã xác nhận không chính xác hoặc đã hết hạn.']);
+        }
+
+        // Generate a temporary token to pass to the password reset page
+        $token = bin2hex(random_bytes(32));
+        
+        // We can reuse Laravel's password_reset_tokens table for compatibility or just pass email + token
+        DB::table('password_reset_tokens')->updateOrInsert(
+            ['email' => $request->email],
+            [
+                'token' => Hash::make($token),
+                'created_at' => now(),
+            ]
+        );
+
+        return redirect()->route('password.reset', [
+            'token' => $token,
+            'email' => $request->email
+        ]);
     }
 }

@@ -30,9 +30,9 @@ const props = defineProps({
     type: String,
     default: ""
   },
-  max_with: {
+  max_width: {
     type: String,
-    default: 900
+    default: "900"
   },
   custom_class: {
     type: Array,

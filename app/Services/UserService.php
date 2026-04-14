@@ -7,10 +7,7 @@ use App\Repositories\UserRepository;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Intervention\Image\Drivers\Gd\Driver;
-use Intervention\Image\ImageManager;
 
 class UserService extends BaseService
 {
@@ -18,110 +15,111 @@ class UserService extends BaseService
         protected UserRepository $userRepository
     ) {}
 
-    /**
-     * Lấy danh sách nhân sự có phân trang + filter.
-     */
     public function getListPaginated(array $filters, int $perPage = 15): LengthAwarePaginator
     {
         return $this->userRepository->getListPaginated($filters, $perPage);
     }
 
-    /**
-     * Tạo nhân sự mới.
-     */
+    public function getDetailedUser(int $id): ?array
+    {
+        return $this->userRepository->findDetailedById($id);
+    }
+
     public function createUser(array $validatedData, ?UploadedFile $avatarFile = null): User
     {
         return $this->handleTransaction(function () use ($validatedData, $avatarFile) {
-            $avatarPath = null;
-            $thumbnailPath = null;
+            $validatedData = $this->normalizeEmploymentData($validatedData);
+            $avatarPath = $avatarFile ? $this->handleAvatarUpload($avatarFile) : null;
 
-            try {
-                if ($avatarFile) {
-                    $avatarPath = $this->handleAvatarUpload($avatarFile);
-                    $thumbnailPath = $this->generateThumbnail($avatarFile);
-                }
+            $user = $this->userRepository->createUser([
+                'name' => $validatedData['name'],
+                'username' => $validatedData['email'],
+                'email' => $validatedData['email'],
+                'phone' => $validatedData['phone'],
+                'password' => Hash::make($validatedData['password']),
+                'address' => $validatedData['address'] ?? null,
+                'status' => $validatedData['status'],
+                'is_employee' => 1,
+                'avatar' => $avatarPath,
+                'thumbnail' => $avatarPath,
+                'creater_id' => $this->user()?->id,
+                'slug' => Str::slug($validatedData['name']) . '-' . Str::random(6),
+            ]);
 
-                $user = $this->userRepository->createUser([
-                    'name'       => $validatedData['name'],
-                    'username'   => $validatedData['email'],
-                    'email'      => $validatedData['email'],
-                    'phone'      => $validatedData['phone'],
-                    'password'   => Hash::make($validatedData['password']),
-                    'address'    => $validatedData['address'] ?? null,
-                    'status'     => $validatedData['status'],
-                    'is_employee' => 1,
-                    'avatar'     => $avatarPath,
-                    'thumbnail'  => $thumbnailPath,
-                    'creater_id' => $this->user()?->id,
-                    'slug'       => Str::slug($validatedData['name']) . '-' . Str::random(6),
-                ]);
+            $user->employeeProfile()->create([
+                'employee_code' => $this->generateEmployeeCode(),
+                'department_id' => $validatedData['department_id'],
+                'position_id' => $validatedData['position_id'] ?? null,
+                'province_id' => $validatedData['province_id'] ?? null,
+                'district_id' => $validatedData['district_id'] ?? null,
+                'ward_id' => $validatedData['ward_id'] ?? null,
+                'address_line' => $validatedData['address_line'] ?? null,
+                'date_of_birth' => $validatedData['date_of_birth'] ?? null,
+                'hire_date' => $validatedData['hire_date'],
+                'termination_date' => $validatedData['termination_date'] ?? null,
+                'base_salary' => $validatedData['base_salary'] ?? 0,
+                'employment_status' => $validatedData['employment_status'],
+                'employment_type' => $validatedData['employment_type'],
+            ]);
 
-                return $user;
-            } catch (\Exception $e) {
-                $this->cleanupAvatar($avatarPath, $thumbnailPath);
-                throw $e;
-            }
+            $user->syncRoles([$validatedData['role_name'] ?? 'employee']);
+
+            return $user;
         });
     }
 
-    /**
-     * Cập nhật thông tin nhân sự.
-     */
     public function updateUser(User $user, array $validatedData, ?UploadedFile $avatarFile = null): bool
     {
         return $this->handleTransaction(function () use ($user, $validatedData, $avatarFile) {
+            $validatedData = $this->normalizeEmploymentData($validatedData);
             $avatarPath = $user->avatar;
-            $thumbnailPath = $user->thumbnail;
-            $oldAvatarPath = null;
-            $oldThumbnailPath = null;
 
-            try {
-                if ($avatarFile) {
-                    $oldAvatarPath = $avatarPath;
-                    $oldThumbnailPath = $thumbnailPath;
-
-                    $avatarPath = $this->handleAvatarUpload($avatarFile);
-                    $thumbnailPath = $this->generateThumbnail($avatarFile);
-                }
-
-                $userData = [
-                    'name'      => $validatedData['name'],
-                    'email'     => $validatedData['email'],
-                    'phone'     => $validatedData['phone'],
-                    'address'   => $validatedData['address'] ?? null,
-                    'status'    => $validatedData['status'],
-                    'avatar'    => $avatarPath,
-                    'thumbnail' => $thumbnailPath,
-                ];
-
-                if (!empty($validatedData['password'])) {
-                    $userData['password'] = Hash::make($validatedData['password']);
-                }
-
-                $result = $this->userRepository->updateUser($user, $userData);
-
-                // Xóa ảnh cũ sau khi update thành công
-                if ($avatarFile) {
-                    $this->cleanupAvatar($oldAvatarPath, $oldThumbnailPath);
-                }
-
-                // Gửi notification
-                $this->sendUpdateNotification($user);
-
-                return $result;
-            } catch (\Exception $e) {
-                // Nếu lỗi, xóa ảnh mới vừa upload
-                if ($avatarFile) {
-                    $this->cleanupAvatar($avatarPath, $thumbnailPath);
-                }
-                throw $e;
+            if ($avatarFile) {
+                $avatarPath = $this->handleAvatarUpload($avatarFile);
             }
+
+            $userData = [
+                'name' => $validatedData['name'],
+                'email' => $validatedData['email'],
+                'username' => $validatedData['email'],
+                'phone' => $validatedData['phone'],
+                'address' => $validatedData['address'] ?? null,
+                'status' => $validatedData['status'],
+                'avatar' => $avatarPath,
+                'thumbnail' => $avatarPath,
+            ];
+
+            if (!empty($validatedData['password'])) {
+                $userData['password'] = Hash::make($validatedData['password']);
+            }
+
+            $result = $this->userRepository->updateUser($user, $userData);
+
+            $user->employeeProfile()->updateOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'employee_code' => $user->employeeProfile?->employee_code ?? $this->generateEmployeeCode(),
+                    'department_id' => $validatedData['department_id'],
+                    'position_id' => $validatedData['position_id'] ?? null,
+                    'province_id' => $validatedData['province_id'] ?? null,
+                    'district_id' => $validatedData['district_id'] ?? null,
+                    'ward_id' => $validatedData['ward_id'] ?? null,
+                    'address_line' => $validatedData['address_line'] ?? null,
+                    'date_of_birth' => $validatedData['date_of_birth'] ?? null,
+                    'hire_date' => $validatedData['hire_date'],
+                    'termination_date' => $validatedData['termination_date'] ?? null,
+                    'base_salary' => $validatedData['base_salary'] ?? 0,
+                    'employment_status' => $validatedData['employment_status'],
+                    'employment_type' => $validatedData['employment_type'],
+                ]
+            );
+
+            $user->syncRoles([$validatedData['role_name'] ?? 'employee']);
+
+            return $result;
         });
     }
 
-    /**
-     * Chuyển đổi trạng thái nhân sự (active <-> inactive).
-     */
     public function toggleStatus(User $user): bool
     {
         $newStatus = $user->status === 'active' ? 'inactive' : 'active';
@@ -129,71 +127,69 @@ class UserService extends BaseService
         return $this->userRepository->updateStatus($user, $newStatus);
     }
 
-    /**
-     * Upload avatar và trả về path.
-     */
+    public function updateAccountStatus(User $user, string $status): bool
+    {
+        if ($user->employeeProfile?->employment_status === 'terminated') {
+            $status = 'blocked';
+        }
+
+        return $this->userRepository->updateStatus($user, $status);
+    }
+
+    public function updateEmploymentStatus(User $user, string $employmentStatus): bool
+    {
+        return $this->handleTransaction(function () use ($user, $employmentStatus) {
+            $profile = $user->employeeProfile;
+
+            if (!$profile) {
+                return false;
+            }
+
+            $profile->update([
+                'employment_status' => $employmentStatus,
+                'termination_date' => $employmentStatus === 'terminated'
+                    ? now()->toDateString()
+                    : null,
+            ]);
+
+            $accountStatus = $employmentStatus === 'terminated'
+                ? 'blocked'
+                : $user->status;
+
+            return $this->userRepository->updateStatus($user, $accountStatus);
+        });
+    }
+
     private function handleAvatarUpload(UploadedFile $file): string
     {
         return $file->store('avatars', 'public');
     }
 
-    /**
-     * Tạo thumbnail từ ảnh gốc.
-     */
-    private function generateThumbnail(UploadedFile $file): string
+    private function normalizeEmploymentData(array $validatedData): array
     {
-        $manager = new ImageManager(new Driver());
-        $image = $manager->read($file->getRealPath());
-        $image->cover(200, 200);
+        if (($validatedData['employment_status'] ?? null) === 'terminated') {
+            $validatedData['status'] = 'blocked';
+        }
 
-        $thumbnailPath = 'avatars/thumbnails/' . time() . '_' . $file->getClientOriginalName();
-        Storage::disk('public')->put($thumbnailPath, (string) $image->encode());
+        if (($validatedData['employment_status'] ?? null) !== 'terminated') {
+            $validatedData['termination_date'] = null;
+        }
 
-        return $thumbnailPath;
+        return $validatedData;
     }
 
-    /**
-     * Xóa avatar và thumbnail khỏi storage.
-     */
-    private function cleanupAvatar(?string $avatarPath, ?string $thumbnailPath): void
+    private function generateEmployeeCode(): string
     {
-        if ($avatarPath && Storage::disk('public')->exists($avatarPath)) {
-            Storage::disk('public')->delete($avatarPath);
-        }
-        if ($thumbnailPath && Storage::disk('public')->exists($thumbnailPath)) {
-            Storage::disk('public')->delete($thumbnailPath);
-        }
-    }
+        $maxNumber = \App\Models\EmployeeProfile::query()
+            ->pluck('employee_code')
+            ->reduce(function (int $carry, ?string $code) {
+                if (!$code || !preg_match('/^EMP-(\d+)$/', $code, $matches)) {
+                    return $carry;
+                }
 
-    /**
-     * Gửi notification sau khi cập nhật nhân sự.
-     */
-    private function sendUpdateNotification(User $user): void
-    {
-        $currentUser = $this->user();
-        if (!$currentUser) {
-            return;
-        }
+                return max($carry, (int) $matches[1]);
+            }, 0);
 
-        try {
-            $notificationService = app(NotificationService::class);
-            $notificationService->create(
-                userId: $currentUser->id,
-                title: 'Cập nhật thông tin nhân sự',
-                message: 'Thông tin của bạn đã được cập nhật bởi ' . $currentUser->name,
-                data: [
-                    'category' => 'user',
-                    'user' => [
-                        'name'   => $currentUser->name,
-                        'avatar' => $currentUser->thumbnail ?? null,
-                    ],
-                ],
-                urlLink: '/profile',
-                category: 'user'
-            );
-        } catch (\Exception $e) {
-            // Notification failure không nên break flow chính
-            \Illuminate\Support\Facades\Log::warning('Failed to send user update notification: ' . $e->getMessage());
-        }
+        return 'EMP-' . str_pad((string) ($maxNumber + 1), 3, '0', STR_PAD_LEFT);
     }
 }

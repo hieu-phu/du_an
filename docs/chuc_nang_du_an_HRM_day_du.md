@@ -153,7 +153,6 @@ Xây dựng hệ thống HRM trên nền tảng web để quản lý toàn diệ
 ### Chức năng quản lý cần bổ sung
 - Chuẩn hóa dữ liệu địa chỉ
 - Hạn chế nhập địa chỉ sai hoặc trùng logic
-
 ---
 
 ## Module 6. Quản lý chấm công

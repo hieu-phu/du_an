@@ -11,11 +11,15 @@
                     </a>
                 </p>
             </div>
-
             <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
                 <!-- Session Status -->
                 <div v-if="status" class="mb-4 text-sm font-medium text-green-600 bg-green-50 p-3 rounded-lg">
                     {{ status }}
+                </div>
+
+                <!-- Global Error Message -->
+                <div v-if="$page.props.flash.error" class="mb-4 text-sm font-medium text-red-600 bg-red-50 p-3 rounded-lg">
+                    {{ $page.props.flash.error }}
                 </div>
 
                 <form class="space-y-6" @submit.prevent="submit">
@@ -145,6 +149,10 @@ const form = useForm({
 
 function submit() {
     form.post(route('login'), {
+        onSuccess: () => {
+            // Force full page reload to ensure fresh CSRF token and session are loaded
+            window.location.href = '/dashboard'
+        },
         onFinish: () => form.reset('password'),
     })
 }
