@@ -5,16 +5,17 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\SocialAccount;
 use App\Models\User;
+use App\Services\Auth\FirstLoginOtpService;
 use App\Services\Auth\LoginNotificationService;
 use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 
 class GoogleController extends Controller
 {
     public function __construct(
+        protected FirstLoginOtpService $firstLoginOtpService,
         protected LoginNotificationService $loginNotificationService
     ) {
     }
@@ -72,6 +73,13 @@ class GoogleController extends Controller
                     'avatar' => $googleUser->avatar,
                 ]
             );
+
+            if ($this->firstLoginOtpService->requiresOtp($user)) {
+                $this->firstLoginOtpService->sendOtp($user);
+                $this->firstLoginOtpService->storePendingLogin(request(), $user, 'Google', $this->getRedirectUrl());
+
+                return redirect()->route('login.otp.view');
+            }
 
             Auth::login($user);
             request()->session()->regenerate();

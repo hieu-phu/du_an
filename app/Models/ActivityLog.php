@@ -18,5 +18,12 @@ class ActivityLog extends Model
         'reference_table',
         'reference_id',
         'ip_address',
+        'device',
+        'user_agent',
+        'occurred_at',
+    ];
+
+    protected $casts = [
+        'occurred_at' => 'datetime',
     ];
 }

@@ -15,6 +15,7 @@
 
         <div v-if="permissions['attendance.mine.action']" class="flex flex-wrap gap-3">
           <button
+            v-if="canCheckIn"
             @click="checkIn"
             :disabled="attendanceForm.processing"
             class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
@@ -22,6 +23,7 @@
             {{ attendanceForm.processing ? 'Đang xử lý...' : 'Check in' }}
           </button>
           <button
+            v-if="canCheckOut"
             @click="checkOut"
             :disabled="attendanceForm.processing"
             class="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-600 disabled:opacity-60"
@@ -32,10 +34,10 @@
       </div>
 
       <div v-if="todayAttendance" class="mt-4 rounded-lg bg-gray-50 p-4 text-sm text-gray-700">
-        <div>Hôm nay: {{ todayAttendance.work_date || '-' }}</div>
+        <div>Hôm nay: {{ formatDate(todayAttendance.work_date) }}</div>
         <div>Check in: {{ formatDateTime(todayAttendance.check_in_at) }}</div>
         <div>Check out: {{ formatDateTime(todayAttendance.check_out_at) }}</div>
-        <div>Trạng thái: {{ todayAttendance.status || 'chưa chấm' }}</div>
+        <div>Trạng thái: {{ todayAttendance.status_label || 'Chưa chấm công' }}</div>
       </div>
     </div>
 
@@ -88,6 +90,9 @@ const roleLabel = computed(() => ({
   employee: 'Nhân viên',
 }[primaryRole.value] || primaryRole.value))
 
+const canCheckIn = computed(() => !props.todayAttendance?.check_in_at)
+const canCheckOut = computed(() => !!props.todayAttendance?.check_in_at && !props.todayAttendance?.check_out_at)
+
 const quickLinks = computed(() => {
   const links = []
 
@@ -132,5 +137,11 @@ function formatDateTime(value) {
   if (!value) return '-'
 
   return new Date(value).toLocaleString('vi-VN')
+}
+
+function formatDate(value) {
+  if (!value) return '-'
+
+  return new Date(value).toLocaleDateString('vi-VN')
 }
 </script>

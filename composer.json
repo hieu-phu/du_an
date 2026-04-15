@@ -10,6 +10,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "dompdf/dompdf": "3.1",
         "inertiajs/inertia-laravel": "^2.0",
         "intervention/image": "^3.11",
         "intervention/image-laravel": "^1.5",
@@ -54,9 +55,21 @@
             "npm install",
             "npm run build"
         ],
+        "queue:work": [
+            "@php artisan queue:work database --queue=default --tries=3 --timeout=90 --sleep=3 --backoff=10 --max-time=3600"
+        ],
+        "queue:restart": [
+            "@php artisan queue:restart"
+        ],
+        "queue:failed": [
+            "@php artisan queue:failed"
+        ],
+        "queue:retry": [
+            "@php artisan queue:retry all"
+        ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74,#6ee7b7\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"php artisan reverb:start\" \"npm run dev\" --names='server,queue,reverb,vite'"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74,#6ee7b7\" \"php artisan serve\" \"composer run queue:work\" \"php artisan reverb:start\" \"npm run dev\" --names='server,queue,reverb,vite'"
         ],
         "test": [
             "@php artisan config:clear --ansi",

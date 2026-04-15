@@ -1,10 +1,40 @@
 <script setup>
 import { useForm } from '@inertiajs/vue3'
-import { ref, onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 
 const props = defineProps({
-    email: String,
-    status: String,
+    email: {
+        type: String,
+        default: '',
+    },
+    status: {
+        type: String,
+        default: null,
+    },
+    title: {
+        type: String,
+        default: 'Xac nhan ma OTP',
+    },
+    description: {
+        type: String,
+        default: 'Chung toi da gui ma xac nhan 6 so den email',
+    },
+    submitRoute: {
+        type: String,
+        required: true,
+    },
+    resendRoute: {
+        type: String,
+        required: true,
+    },
+    changeRoute: {
+        type: String,
+        required: true,
+    },
+    changeLabel: {
+        type: String,
+        default: 'Thay doi email khac',
+    },
 })
 
 const form = useForm({
@@ -15,37 +45,44 @@ const form = useForm({
 const otpInput = ref(null)
 const cooldown = ref(60)
 const canResend = ref(false)
+let timerId = null
 
 const startCooldown = () => {
     canResend.value = false
     cooldown.value = 60
-    const timer = setInterval(() => {
+
+    if (timerId) {
+        clearInterval(timerId)
+    }
+
+    timerId = setInterval(() => {
         cooldown.value--
+
         if (cooldown.value <= 0) {
             canResend.value = true
-            clearInterval(timer)
+            clearInterval(timerId)
+            timerId = null
         }
     }, 1000)
 }
 
 onMounted(() => {
-    if (otpInput.value) {
-        otpInput.value.focus()
-    }
+    otpInput.value?.focus()
     startCooldown()
 })
 
 const submit = () => {
-    form.post(route('password.otp.verify'))
+    form.post(props.submitRoute)
 }
 
 const handleResend = () => {
     if (!canResend.value) return
-    
-    form.post(route('password.email'), {
+
+    form.post(props.resendRoute, {
+        preserveScroll: true,
         onSuccess: () => {
             startCooldown()
-        }
+        },
     })
 }
 </script>
@@ -59,9 +96,9 @@ const handleResend = () => {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                 </div>
-                <h2 class="text-3xl font-bold text-gray-900 mb-2">Xác nhận mã OTP</h2>
+                <h2 class="text-3xl font-bold text-gray-900 mb-2">{{ title }}</h2>
                 <p class="text-sm text-gray-600">
-                    Chúng tôi đã gửi mã xác nhận 6 số đến email <span class="font-semibold text-gray-900">{{ email }}</span>
+                    {{ description }} <span class="font-semibold text-gray-900">{{ email }}</span>
                 </p>
             </div>
 
@@ -72,7 +109,7 @@ const handleResend = () => {
 
                 <form class="space-y-6" @submit.prevent="submit">
                     <div>
-                        <label for="otp" class="block text-sm font-semibold text-gray-700 mb-2">Mã xác nhận (OTP)</label>
+                        <label for="otp" class="block text-sm font-semibold text-gray-700 mb-2">Ma xac nhan (OTP)</label>
                         <input
                             id="otp"
                             ref="otpInput"
@@ -104,26 +141,26 @@ const handleResend = () => {
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
-                            <span>{{ form.processing ? 'Đang xác nhận...' : 'Tiếp tục' }}</span>
+                            <span>{{ form.processing ? 'Dang xac nhan...' : 'Tiep tuc' }}</span>
                         </button>
                     </div>
 
                     <div class="text-center space-y-4">
                         <p class="text-sm text-gray-500">
-                            Không nhận được mã? 
-                            <button 
-                                type="button" 
-                                @click="handleResend" 
+                            Khong nhan duoc ma?
+                            <button
+                                type="button"
+                                @click="handleResend"
                                 :disabled="!canResend || form.processing"
                                 class="font-medium transition duration-200"
                                 :class="canResend ? 'text-blue-600 hover:underline' : 'text-gray-400 cursor-not-allowed'"
                             >
-                                Gửi lại mã <span v-if="!canResend">({{ cooldown }}s)</span>
+                                Gui lai ma <span v-if="!canResend">({{ cooldown }}s)</span>
                             </button>
                         </p>
-                        
-                        <a :href="route('password.request')" class="inline-block text-sm font-medium text-gray-600 hover:text-gray-900 transition duration-200">
-                             Thay đổi email khác
+
+                        <a :href="changeRoute" class="inline-block text-sm font-medium text-gray-600 hover:text-gray-900 transition duration-200">
+                            {{ changeLabel }}
                         </a>
                     </div>
                 </form>

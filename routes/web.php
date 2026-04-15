@@ -1,12 +1,14 @@
 <?php
 
-use App\Http\Controllers\WEB\DepartmentController;
+use App\Http\Controllers\WEB\ActivityLogController;
+use App\Http\Controllers\WEB\AttendanceController;
 use App\Http\Controllers\WEB\DepartmentApprovalController;
+use App\Http\Controllers\WEB\DepartmentController;
 use App\Http\Controllers\WEB\PortalController;
 use App\Http\Controllers\WEB\PositionController;
 use App\Http\Controllers\WEB\ProjectController;
-use App\Http\Controllers\WEB\UserController;
 use App\Http\Controllers\WEB\UserApprovalController;
+use App\Http\Controllers\WEB\UserController;
 use App\Support\PositionCapability;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
@@ -33,7 +35,7 @@ if (app()->isLocal() || app()->environment('staging')) {
     });
 }
 
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'activity.log'])->group(function () {
     Route::get('/', [PortalController::class, 'dashboard']);
     Route::get('/dashboard', [PortalController::class, 'dashboard'])->name('dashboard');
 
@@ -49,15 +51,19 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('access:admin,hr,employee')
         ->name('my-profile.avatar');
 
-    Route::post('/attendance/check-in', [\App\Http\Controllers\WEB\AttendanceController::class, 'checkIn'])
+    Route::post('/attendance/check-in', [AttendanceController::class, 'checkIn'])
         ->middleware('access:admin,hr,employee')
         ->name('attendance.check-in');
 
-    Route::post('/attendance/check-out', [\App\Http\Controllers\WEB\AttendanceController::class, 'checkOut'])
+    Route::post('/attendance/check-out', [AttendanceController::class, 'checkOut'])
         ->middleware('access:admin,hr,employee')
         ->name('attendance.check-out');
 
-    Route::get('/my-attendance', [PortalController::class, 'myAttendance'])
+    Route::post('/attendance/requests', [AttendanceController::class, 'submitRequest'])
+        ->middleware('access:admin,hr,employee')
+        ->name('attendance.requests.store');
+
+    Route::get('/my-attendance', [AttendanceController::class, 'myAttendance'])
         ->middleware('access:admin,hr,employee')
         ->name('attendance.mine');
 
@@ -66,17 +72,24 @@ Route::middleware(['auth'])->group(function () {
         ->name('projects.mine');
 
     Route::middleware(['access:admin,hr'])->group(function () {
-        // Xem danh sách duyệt công — cần quyền view_all_attendance
-        Route::get('/attendance/approvals', fn () => Inertia::render('Attendance/Approvals'))
-            ->middleware('position.capability:' . PositionCapability::VIEW_ALL_ATTENDANCE)
+        Route::get('/attendance/approvals', [AttendanceController::class, 'approvals'])
             ->name('attendance.approvals');
 
-        // Báo cáo chấm công
-        Route::get('/attendance/reports', fn () => Inertia::render('Attendance/Reports'))
-            ->middleware('position.capability:' . PositionCapability::VIEW_ALL_ATTENDANCE)
+        Route::post('/attendance/{attendanceRecord}/confirm', [AttendanceController::class, 'confirm'])
+            ->name('attendance.confirm');
+
+        Route::post('/attendance/{attendanceRecord}/reject', [AttendanceController::class, 'reject'])
+            ->name('attendance.reject');
+
+        Route::get('/attendance/reports', [AttendanceController::class, 'reports'])
             ->name('attendance.reports');
 
-        // Dự án — cần quyền view_all_projects
+        Route::get('/attendance/reports/export/excel', [AttendanceController::class, 'exportExcel'])
+            ->name('attendance.reports.export.excel');
+
+        Route::get('/attendance/reports/export/pdf', [AttendanceController::class, 'exportPdf'])
+            ->name('attendance.reports.export.pdf');
+
         Route::get('/projects', [ProjectController::class, 'index'])
             ->middleware('position.capability:' . PositionCapability::VIEW_ALL_PROJECTS)
             ->name('projects.index');
@@ -94,13 +107,18 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{user}/toggle', [UserController::class, 'toggleStatus'])->name('toggle');
         Route::put('/{user}/account-status', [UserController::class, 'updateAccountStatus'])->name('account-status');
 
-        // Cập nhật chức vụ nhân viên — cần quyền transfer_employee
         Route::put('/{user}/employment-status', [UserController::class, 'updateEmploymentStatus'])
             ->middleware('position.capability:' . PositionCapability::TRANSFER_EMPLOYEE)
             ->name('employment-status');
     });
 
     Route::middleware(['access:admin'])->group(function () {
+        Route::post('/attendance/month-locks/lock', [AttendanceController::class, 'lockMonth'])
+            ->name('attendance.month-locks.lock');
+
+        Route::post('/attendance/month-locks/unlock', [AttendanceController::class, 'unlockMonth'])
+            ->name('attendance.month-locks.unlock');
+
         Route::prefix('users/approvals')->name('web.user-approvals.')->group(function () {
             Route::get('/', [UserApprovalController::class, 'index'])->name('index');
             Route::post('/{approvalRequest}/approve', [UserApprovalController::class, 'approve'])->name('approve');
@@ -115,6 +133,9 @@ Route::middleware(['auth'])->group(function () {
 
         Route::resource('positions', PositionController::class)->only(['index', 'store', 'update', 'destroy']);
         Route::put('/positions/{position}/toggle', [PositionController::class, 'toggleStatus'])->name('positions.toggle');
+        Route::get('/activity-logs', [ActivityLogController::class, 'index'])
+            ->middleware('position.capability:' . PositionCapability::VIEW_ACTIVITY_LOGS)
+            ->name('activity-logs.index');
         Route::get('/settings', fn () => Inertia::render('Settings/Index'))->name('settings.index');
     });
 });

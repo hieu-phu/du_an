@@ -2,23 +2,54 @@
 
 namespace App\Services\Auth;
 
+use App\Mail\AdminUserLoginAlertMail;
 use App\Mail\SuccessfulLoginMail;
+use App\Models\LoginHistory;
 use App\Models\User;
+use App\Services\AuditTrailService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 
 class LoginNotificationService
 {
+    public function __construct(
+        protected AuditTrailService $auditTrailService
+    ) {
+    }
+
     public function handleSuccessfulLogin(User $user, Request $request, string $loginMethod): void
     {
         $ipAddress = $request->ip() ?? 'Khong xac dinh';
         $userAgent = (string) ($request->userAgent() ?: 'Khong xac dinh');
         $loggedInAt = now('Asia/Ho_Chi_Minh');
+        $device = $this->auditTrailService->detectDevice($userAgent) ?? 'Unknown device';
+        $browser = $this->auditTrailService->detectBrowser($userAgent) ?? 'Unknown browser';
 
         $user->forceFill([
             'last_login_at' => $loggedInAt,
             'last_login_ip' => $ipAddress,
         ])->save();
+
+        LoginHistory::query()->create([
+            'user_id' => $user->id,
+            'login_at' => $loggedInAt,
+            'ip_address' => $ipAddress,
+            'device' => $device,
+            'browser' => $browser,
+        ]);
+
+        $this->auditTrailService->log([
+            'user_id' => $user->id,
+            'module' => 'auth',
+            'action' => 'login',
+            'description' => "Dang nhap thanh cong bang {$loginMethod}",
+            'reference_table' => 'users',
+            'reference_id' => $user->id,
+            'ip_address' => $ipAddress,
+            'device' => $device,
+            'user_agent' => $userAgent,
+            'occurred_at' => $loggedInAt,
+        ], $request);
 
         if (blank($user->email)) {
             return;
@@ -31,5 +62,41 @@ class LoginNotificationService
             userAgent: $userAgent,
             loggedInAt: $loggedInAt->format('d/m/Y H:i:s'),
         ));
+
+        $this->notifyAdminsAboutUserLogin(
+            $user->fresh(),
+            $loginMethod,
+            $ipAddress,
+            $userAgent,
+            $loggedInAt->format('d/m/Y H:i:s')
+        );
+    }
+
+    private function notifyAdminsAboutUserLogin(
+        User $user,
+        string $loginMethod,
+        string $ipAddress,
+        string $userAgent,
+        string $loggedInAt
+    ): void {
+        if ($user->hasRole('admin')) {
+            return;
+        }
+
+        $admins = User::role('admin')
+            ->whereKeyNot($user->id)
+            ->whereNotNull('email')
+            ->get(['id', 'name', 'email']);
+
+        foreach ($admins as $admin) {
+            Mail::to($admin->email)->queue(new AdminUserLoginAlertMail(
+                admin: $admin,
+                loggedInUser: $user,
+                loginMethod: $loginMethod,
+                ipAddress: $ipAddress,
+                userAgent: $userAgent,
+                loggedInAt: $loggedInAt,
+            ));
+        }
     }
 }

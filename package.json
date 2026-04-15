@@ -4,7 +4,11 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "concurrently -n \"VITE,SERVER,QUEUE\" -c \"blue,green,magenta\" \"vite\" \"php artisan serve\" \"php artisan queue:work\""
+        "dev": "concurrently -n \"VITE,SERVER,QUEUE\" -c \"blue,green,magenta\" \"vite\" \"php artisan serve\" \"composer run queue:work\"",
+        "queue:work": "composer run queue:work",
+        "queue:failed": "composer run queue:failed",
+        "queue:retry": "composer run queue:retry",
+        "queue:restart": "composer run queue:restart"
     },
     "devDependencies": {
         "@laravel/echo-vue": "^2.2.6",

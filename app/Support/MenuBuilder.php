@@ -64,6 +64,9 @@ class MenuBuilder
                     AccessMatrix::allows($user, 'attendance.manage.view')
                         ? self::item('Báo cáo chấm công', '/attendance/reports', 'BarChartIcon')
                         : null,
+                    $user->hasRole('admin') || $user->hasPositionCapability(PositionCapability::VIEW_ACTIVITY_LOGS)
+                        ? self::item('Truy vết hoạt động', '/activity-logs', 'ListCheckIcon')
+                        : null,
                 ])),
             ],
             [

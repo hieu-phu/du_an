@@ -112,6 +112,11 @@ class User extends Authenticatable
         return $this->hasMany(Session::class);
     }
 
+    public function loginOtps(): HasMany
+    {
+        return $this->hasMany(LoginOtp::class);
+    }
+
     public function employeeProfile(): HasOne
     {
         return $this->hasOne(EmployeeProfile::class);

@@ -71,6 +71,13 @@ class PasswordResetLinkController extends Controller
         return Inertia::render('Auth/VerifyOtp', [
             'email' => $request->email,
             'status' => session('status'),
+            'context' => 'password-reset',
+            'title' => 'Xac nhan ma OTP',
+            'description' => 'Chung toi da gui ma xac nhan 6 so den email',
+            'submitRoute' => route('password.otp.verify'),
+            'resendRoute' => route('password.email'),
+            'changeRoute' => route('password.request'),
+            'changeLabel' => 'Thay doi email khac',
         ]);
     }
 

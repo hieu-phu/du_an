@@ -17,7 +17,10 @@ class RoleAccessTest extends TestCase
         parent::setUp();
 
         foreach (['admin', 'hr', 'employee'] as $role) {
-            Role::firstOrCreate(['name' => $role, 'guard_name' => 'web']);
+            Role::firstOrCreate(
+                ['name' => $role, 'guard_name' => 'web'],
+                ['description' => strtoupper($role) . ' role']
+            );
         }
     }
 

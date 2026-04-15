@@ -4,10 +4,10 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\Auth\FirstLoginOtpService;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
 use Inertia\Inertia;
@@ -15,6 +15,11 @@ use Inertia\Response;
 
 class RegisteredUserController extends Controller
 {
+    public function __construct(
+        protected FirstLoginOtpService $firstLoginOtpService
+    ) {
+    }
+
     /**
      * Display the registration view (Vue via Inertia).
      */
@@ -51,11 +56,17 @@ class RegisteredUserController extends Controller
             // $user->save();
             event(new Registered($user));
 
-            Auth::login($user);
+            $this->firstLoginOtpService->sendOtp($user);
+            $this->firstLoginOtpService->storePendingLogin(
+                $request,
+                $user,
+                'Email va mat khau',
+                route('dashboard', absolute: false)
+            );
 
             \Illuminate\Support\Facades\DB::commit();
 
-            return redirect(route('dashboard', absolute: false));
+            return redirect()->route('login.otp.view');
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\DB::rollBack();
             \Illuminate\Support\Facades\Log::error('Lỗi đăng ký người dùng: ' . $e->getMessage());

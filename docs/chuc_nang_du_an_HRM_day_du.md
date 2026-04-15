@@ -169,7 +169,6 @@ Xây dựng hệ thống HRM trên nền tảng web để quản lý toàn diệ
 - Xem báo cáo công quá khứ
 - Xuất báo cáo chấm công Excel
 - Xuất báo cáo chấm công PDF
-
 ### Quyền xem
 - Admin xem toàn bộ
 - HR xem toàn bộ

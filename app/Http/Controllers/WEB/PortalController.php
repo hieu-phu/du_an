@@ -79,8 +79,8 @@ class PortalController extends Controller
                         ->count(),
                 ],
                 [
-                    'title' => 'Trang thai hom nay',
-                    'value' => $todayRecord?->attendance_status ? strtoupper((string) $todayRecord->attendance_status) : 'CHUA CHAM',
+                    'title' => 'Trạng thái hôm nay',
+                    'value' => $this->attendanceStatusLabel($todayRecord?->attendance_status),
                 ],
             ];
         }
@@ -92,8 +92,19 @@ class PortalController extends Controller
                 'check_in_at' => $todayRecord->check_in_at,
                 'check_out_at' => $todayRecord->check_out_at,
                 'status' => $todayRecord->attendance_status,
+                'status_label' => $this->attendanceStatusLabel($todayRecord->attendance_status),
             ] : null,
         ]);
+    }
+
+    private function attendanceStatusLabel(?string $status): string
+    {
+        return match ($status) {
+            'on_time', 'present' => 'Đúng giờ',
+            'late', 'half_day' => 'Trễ',
+            'absent', 'leave', 'pending' => 'Vắng',
+            default => 'Chưa chấm công',
+        };
     }
 
     public function myProfile(Request $request): Response

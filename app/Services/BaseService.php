@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Http\Request;
 
 class BaseService
 {
@@ -32,5 +33,23 @@ class BaseService
             ]);
             throw $e;
         }
+    }
+
+    protected function audit(
+        string $module,
+        string $action,
+        ?string $description = null,
+        ?string $referenceTable = null,
+        $referenceId = null,
+        ?Request $request = null
+    ): void {
+        app(AuditTrailService::class)->log([
+            'user_id' => $this->user()?->getAuthIdentifier(),
+            'module' => $module,
+            'action' => $action,
+            'description' => $description,
+            'reference_table' => $referenceTable,
+            'reference_id' => $referenceId,
+        ], $request);
     }
 }

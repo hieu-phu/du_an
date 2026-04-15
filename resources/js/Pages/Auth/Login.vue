@@ -149,10 +149,6 @@ const form = useForm({
 
 function submit() {
     form.post(route('login'), {
-        onSuccess: () => {
-            // Force full page reload to ensure fresh CSRF token and session are loaded
-            window.location.href = '/dashboard'
-        },
         onFinish: () => form.reset('password'),
     })
 }

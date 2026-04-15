@@ -17,6 +17,7 @@ class EmployeeProfile extends Model
         'employee_code',
         'department_id',
         'position_id',
+        'default_work_shift_id',
         'province_id',
         'district_id',
         'ward_id',
@@ -51,6 +52,11 @@ class EmployeeProfile extends Model
         return $this->belongsTo(Position::class);
     }
 
+    public function defaultWorkShift(): BelongsTo
+    {
+        return $this->belongsTo(WorkShift::class, 'default_work_shift_id');
+    }
+
     public function province(): BelongsTo
     {
         return $this->belongsTo(Province::class);
@@ -69,6 +75,11 @@ class EmployeeProfile extends Model
     public function attendanceRecords(): HasMany
     {
         return $this->hasMany(AttendanceRecord::class);
+    }
+
+    public function workShiftAssignments(): HasMany
+    {
+        return $this->hasMany(EmployeeWorkShiftAssignment::class);
     }
 
     public function projectMembers(): HasMany

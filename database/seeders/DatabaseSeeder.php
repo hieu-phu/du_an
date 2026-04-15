@@ -143,7 +143,7 @@ class DatabaseSeeder extends Seeder
             'check_in_at' => now()->copy()->setTime(8, 5, 0),
             'check_out_at' => now()->copy()->setTime(17, 30, 0),
             'worked_minutes' => 480,
-            'attendance_status' => 'present',
+            'attendance_status' => 'late',
             'is_confirmed' => true,
             'confirmed_by' => $hr->id,
             'confirmed_at' => now(),

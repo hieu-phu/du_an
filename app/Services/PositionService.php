@@ -3,8 +3,6 @@
 namespace App\Services;
 
 use App\Repositories\PositionRepository;
-use App\Models\ActivityLog;
-use Illuminate\Support\Facades\Auth;
 
 class PositionService extends BaseService
 {
@@ -87,14 +85,6 @@ class PositionService extends BaseService
 
     protected function logActivity(string $action, string $description, $id = null): void
     {
-        ActivityLog::create([
-            'user_id'         => Auth::id(),
-            'module'          => 'Positions',
-            'action'          => $action,
-            'description'     => $description,
-            'reference_table' => 'positions',
-            'reference_id'    => $id,
-            'ip_address'      => request()->ip(),
-        ]);
+        $this->audit('positions', $action, $description, 'positions', $id);
     }
 }

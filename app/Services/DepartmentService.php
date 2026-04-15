@@ -23,7 +23,10 @@ class DepartmentService extends BaseService
      */
     public function store(array $data)
     {
-        return $this->departmentRepository->create($data);
+        $department = $this->departmentRepository->create($data);
+        $this->audit('departments', 'create', "Tao phong ban {$department->name}", 'departments', $department->id);
+
+        return $department;
     }
 
     /**
@@ -31,7 +34,10 @@ class DepartmentService extends BaseService
      */
     public function update($id, array $data)
     {
-        return $this->departmentRepository->update($id, $data);
+        $result = $this->departmentRepository->update($id, $data);
+        $this->audit('departments', 'update', "Cap nhat phong ban #{$id}", 'departments', $id);
+
+        return $result;
     }
 
     /**
@@ -39,11 +45,17 @@ class DepartmentService extends BaseService
      */
     public function delete($id)
     {
-        return $this->departmentRepository->delete($id);
+        $result = $this->departmentRepository->delete($id);
+        $this->audit('departments', 'delete', "Xoa phong ban #{$id}", 'departments', $id);
+
+        return $result;
     }
 
     public function toggleStatus(int $id): bool
     {
-        return $this->departmentRepository->toggleStatus($id);
+        $result = $this->departmentRepository->toggleStatus($id);
+        $this->audit('departments', 'toggle_status', "Chuyen trang thai phong ban #{$id}", 'departments', $id);
+
+        return $result;
     }
 }

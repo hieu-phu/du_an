@@ -63,6 +63,7 @@ class UserService extends BaseService
             ]);
 
             $user->syncRoles([$validatedData['role_name'] ?? 'employee']);
+            $this->audit('users', 'create', "Tao tai khoan {$user->email}", 'users', $user->id);
 
             return $user;
         });
@@ -115,6 +116,7 @@ class UserService extends BaseService
             );
 
             $user->syncRoles([$validatedData['role_name'] ?? 'employee']);
+            $this->audit('users', 'update', "Cap nhat tai khoan {$user->email}", 'users', $user->id);
 
             return $result;
         });
@@ -123,8 +125,10 @@ class UserService extends BaseService
     public function toggleStatus(User $user): bool
     {
         $newStatus = $user->status === 'active' ? 'inactive' : 'active';
+        $result = $this->userRepository->updateStatus($user, $newStatus);
+        $this->audit('users', 'toggle_status', "Chuyen trang thai tai khoan {$user->email} sang {$newStatus}", 'users', $user->id);
 
-        return $this->userRepository->updateStatus($user, $newStatus);
+        return $result;
     }
 
     public function updateAccountStatus(User $user, string $status): bool
@@ -133,7 +137,10 @@ class UserService extends BaseService
             $status = 'blocked';
         }
 
-        return $this->userRepository->updateStatus($user, $status);
+        $result = $this->userRepository->updateStatus($user, $status);
+        $this->audit('users', 'update_account_status', "Cap nhat trang thai tai khoan {$user->email} sang {$status}", 'users', $user->id);
+
+        return $result;
     }
 
     public function updateEmploymentStatus(User $user, string $employmentStatus): bool
@@ -156,7 +163,10 @@ class UserService extends BaseService
                 ? 'blocked'
                 : $user->status;
 
-            return $this->userRepository->updateStatus($user, $accountStatus);
+            $result = $this->userRepository->updateStatus($user, $accountStatus);
+            $this->audit('users', 'update_employment_status', "Cap nhat trang thai lam viec {$user->email} sang {$employmentStatus}", 'users', $user->id);
+
+            return $result;
         });
     }
 
