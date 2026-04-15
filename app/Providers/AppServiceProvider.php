@@ -37,6 +37,7 @@ class AppServiceProvider extends ServiceProvider
                         'avatar'       => $user->avatar,
                         'roles'        => $user->getRoleNames()->values()->all(),
                         'primary_role' => AccessMatrix::primaryRole($user),
+                        'is_department_head' => (bool) ($user->employeeProfile?->is_department_head ?? false),
                     ] : null,
                     'permissions'           => AccessMatrix::permissionsFor($user),
                     'position_capabilities' => $user

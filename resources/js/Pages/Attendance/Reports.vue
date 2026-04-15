@@ -107,6 +107,34 @@
         </template>
       </DataTable>
     </div>
+    <div class="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
+      <div class="mb-4">
+        <h3 class="text-lg font-semibold text-gray-900">Chi tiết tăng ca</h3>
+      </div>
+
+      <DataTable :columns="overtimeColumns" :data="overtime_details" empty-message="Không có dữ liệu tăng ca trong thời gian đã chọn.">
+        <template #cell-work_date="{ item }">
+          {{ formatDate(item.work_date) }}
+        </template>
+        <template #cell-start_at="{ item }">
+          {{ formatDateTime(item.start_at) }}
+        </template>
+        <template #cell-end_at="{ item }">
+          {{ formatDateTime(item.end_at) }}
+        </template>
+        <template #cell-requested_minutes="{ item }">
+          {{ formatMinutes(item.requested_minutes) }}
+        </template>
+        <template #cell-approved_minutes="{ item }">
+          {{ formatMinutes(item.approved_minutes) }}
+        </template>
+        <template #cell-status="{ item }">
+          <span :class="approvalStatusClass(item.status)" class="rounded-full px-3 py-1 text-xs font-semibold">
+            {{ formatApprovalStatus(item.status) }}
+          </span>
+        </template>
+      </DataTable>
+    </div>
   </AdminLayout>
 </template>
 
@@ -121,6 +149,7 @@ const props = defineProps({
   filters: { type: Object, required: true },
   records: { type: Array, default: () => [] },
   summary: { type: Object, default: () => ({}) },
+  overtime_details: { type: Array, default: () => [] },
   employees: { type: Array, default: () => [] },
   can_view_all: { type: Boolean, default: false },
   month_lock: { type: Object, default: () => ({ is_locked: false }) },
@@ -148,6 +177,7 @@ const columns = computed(() => {
     { label: 'Tăng ca', key: 'overtime_minutes', align: 'text-center' },
     { label: 'Trạng thái ngày', key: 'day_status', align: 'text-center' },
     { label: 'Duyệt', key: 'approval_status', align: 'text-center' },
+    { label: 'Công thức áp dụng', key: 'formula_detail' },
   ]
 
   if (!props.can_view_all) {
@@ -162,6 +192,31 @@ const columns = computed(() => {
   ]
 })
 
+
+const overtimeColumns = computed(() => {
+  const baseColumns = [
+    { label: 'Ngày tăng ca', key: 'work_date' },
+    { label: 'Bắt đầu', key: 'start_at' },
+    { label: 'Kết thúc', key: 'end_at' },
+    { label: 'Phút đề nghị', key: 'requested_minutes', align: 'text-center' },
+    { label: 'Phút duyệt', key: 'approved_minutes', align: 'text-center' },
+    { label: 'Trạng thái', key: 'status', align: 'text-center' },
+    { label: 'Người duyệt', key: 'reviewed_by_name' },
+    { label: 'Lý do', key: 'reason' },
+    { label: 'Ghi chú duyệt', key: 'review_note' },
+  ]
+
+  if (!props.can_view_all) {
+    return baseColumns
+  }
+
+  return [
+    { label: 'Nhân viên', key: 'employee_name' },
+    { label: 'Mã NV', key: 'employee_code' },
+    { label: 'Phòng ban', key: 'department_name' },
+    ...baseColumns,
+  ]
+})
 const summaryCards = computed(() => [
   { label: 'Tổng bản ghi', value: props.summary.total_records ?? 0 },
   { label: 'Đã duyệt', value: props.summary.confirmed_records ?? 0 },
@@ -189,7 +244,9 @@ function applyFilters() {
 function toggleMonthLock(action) {
   monthLockForm.month = filterForm.month
   monthLockForm.year = filterForm.year
-  monthLockForm.note = window.prompt(action === 'lock' ? 'Ghi chú khóa tháng:' : 'Ghi chú mở khóa:', props.month_lock?.note || '') || ''
+  const note = window.prompt(action === 'lock' ? 'Ghi chú khóa tháng:' : 'Ghi chú mở khóa:', props.month_lock?.note || '')
+  if (note === null) return
+  monthLockForm.note = note
   monthLockForm.post(route(action === 'lock' ? 'attendance.month-locks.lock' : 'attendance.month-locks.unlock'), {
     preserveScroll: true,
   })
@@ -263,3 +320,6 @@ function approvalStatusClass(value) {
   return classes[value] || 'bg-slate-50 text-slate-700'
 }
 </script>
+
+
+

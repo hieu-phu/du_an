@@ -11,6 +11,22 @@ class ProjectMember extends Model
     /** @use HasFactory<\Database\Factories\ProjectMemberFactory> */
     use HasFactory;
 
+    protected $fillable = [
+        'project_id',
+        'employee_profile_id',
+        'project_role_id',
+        'joined_at',
+        'left_at',
+        'is_active',
+        'note',
+    ];
+
+    protected $casts = [
+        'joined_at' => 'date',
+        'left_at' => 'date',
+        'is_active' => 'boolean',
+    ];
+
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
@@ -19,5 +35,10 @@ class ProjectMember extends Model
     public function employeeProfile(): BelongsTo
     {
         return $this->belongsTo(EmployeeProfile::class);
+    }
+
+    public function role(): BelongsTo
+    {
+        return $this->belongsTo(ProjectRole::class, 'project_role_id');
     }
 }

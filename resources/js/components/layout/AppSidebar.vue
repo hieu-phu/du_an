@@ -23,25 +23,25 @@
     </div>
 
     <div class="flex-1 overflow-y-auto px-3 py-3">
-      <nav v-if="showLabel" class="space-y-2">
+      <nav v-if="showLabel" class="space-y-1">
         <section
           v-for="(group, groupIndex) in menuGroups"
           :key="`${group.title}-${groupIndex}`"
-          class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"
+          class="overflow-hidden border-b border-gray-100 last:border-0 dark:border-gray-800"
         >
           <button
             type="button"
             @click="toggleGroup(group.title)"
-            class="flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-gray-50 dark:hover:bg-gray-800/70"
+            class="flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-gray-50/80 dark:hover:bg-gray-800/40"
           >
-            <span class="text-[12px] font-bold uppercase tracking-[0.16em] text-gray-700 dark:text-gray-200">
+            <span class="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
               {{ group.title }}
             </span>
-            <span class="ml-auto rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-bold text-gray-700 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100">
+            <span v-if="group.items.length > 0" class="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-gray-100 px-1.5 text-[10px] font-bold text-gray-600 dark:bg-gray-800 dark:text-gray-400">
               {{ group.items.length }}
             </span>
             <ChevronDownIcon
-              class="h-4 w-4 text-gray-700 transition-transform dark:text-gray-200"
+              class="h-3.5 w-3.5 text-gray-400 transition-transform duration-300"
               :class="{ 'rotate-180': isGroupOpen(group) }"
             />
           </button>
@@ -83,7 +83,6 @@
           </transition>
         </section>
       </nav>
-
       <nav v-else class="space-y-2">
         <Link
           v-for="item in flatMenuItems"

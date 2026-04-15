@@ -12,68 +12,72 @@ class MenuBuilder
             return [];
         }
 
+        $canViewAllProjects = AccessMatrix::allows($user, 'projects.all.view')
+            || $user->hasPositionCapability(PositionCapability::MANAGE_PROJECTS)
+            || (bool) ($user->employeeProfile?->is_department_head ?? false);
+
         $groups = [
             [
                 'title' => 'Dashboard',
                 'items' => array_values(array_filter([
                     self::item('Dashboard', '/dashboard', 'GridIcon', true),
                     AccessMatrix::allows($user, 'profile.view')
-                        ? self::item('Hồ sơ cá nhân', '/my-profile', 'UserCircleIcon')
+                        ? self::item('Ho so ca nhan', '/my-profile', 'UserCircleIcon')
                         : null,
                 ])),
             ],
             [
-                'title' => 'Cơ cấu tổ chức',
+                'title' => 'Co cau to chuc',
                 'items' => array_values(array_filter([
                     AccessMatrix::allows($user, 'users.view')
-                        ? self::item('Nhân sự', '/users/employees', 'UserGroupIcon')
+                        ? self::item('Nhan su', '/users/employees', 'UserGroupIcon')
                         : null,
                     AccessMatrix::allows($user, 'departments.view')
-                        ? self::item('Phòng ban', '/departments', 'BuildingIcon')
+                        ? self::item('Phong ban', '/departments', 'BuildingIcon')
                         : null,
                     AccessMatrix::allows($user, 'positions.view')
-                        ? self::item('Chức vụ', '/positions', 'BriefcaseIcon')
+                        ? self::item('Chuc vu', '/positions', 'BriefcaseIcon')
                         : null,
                 ])),
             ],
             [
-                'title' => 'Chấm công',
+                'title' => 'Cham cong',
                 'items' => array_values(array_filter([
                     AccessMatrix::allows($user, 'attendance.mine.view')
-                        ? self::item('Công của tôi', '/my-attendance', 'ClockIcon')
+                        ? self::item('Cong cua toi', '/my-attendance', 'ClockIcon')
                         : null,
                     AccessMatrix::allows($user, 'attendance.manage.view')
-                        ? self::item('Duyệt công', '/attendance/approvals', 'CheckCircleIcon')
+                        ? self::item('Duyet cong', '/attendance/approvals', 'CheckCircleIcon')
                         : null,
                 ])),
             ],
             [
-                'title' => 'Dự án',
+                'title' => 'Du an',
                 'items' => array_values(array_filter([
-                    AccessMatrix::allows($user, 'projects.all.view')
-                        ? self::item('Danh sách dự án', '/projects', 'BoxIcon')
+                    $canViewAllProjects
+                        ? self::item('Danh sach du an', '/projects', 'BoxIcon')
                         : null,
-                    !AccessMatrix::allows($user, 'projects.all.view') && AccessMatrix::allows($user, 'projects.mine.view')
-                        ? self::item('Dự án của tôi', '/my-projects', 'BoxIcon')
+                    !$canViewAllProjects && AccessMatrix::allows($user, 'projects.mine.view')
+                        ? self::item('Du an cua toi', '/my-projects', 'BoxIcon')
                         : null,
                 ])),
             ],
             [
-                'title' => 'Báo cáo',
+                'title' => 'Bao cao',
                 'items' => array_values(array_filter([
                     AccessMatrix::allows($user, 'attendance.manage.view')
-                        ? self::item('Báo cáo chấm công', '/attendance/reports', 'BarChartIcon')
+                        ? self::item('Bao cao cham cong', '/attendance/reports', 'BarChartIcon')
                         : null,
                     $user->hasRole('admin') || $user->hasPositionCapability(PositionCapability::VIEW_ACTIVITY_LOGS)
-                        ? self::item('Truy vết hoạt động', '/activity-logs', 'ListCheckIcon')
+                        ? self::item('Truy vet hoat dong', '/activity-logs', 'ListCheckIcon')
                         : null,
                 ])),
             ],
             [
-                'title' => 'Cấu hình',
+                'title' => 'Cau hinh',
                 'items' => array_values(array_filter([
                     AccessMatrix::allows($user, 'settings.view')
-                        ? self::item('Cấu hình website', '/settings', 'SettingsIcon')
+                        ? self::item('Cau hinh website', '/settings', 'SettingsIcon')
                         : null,
                 ])),
             ],

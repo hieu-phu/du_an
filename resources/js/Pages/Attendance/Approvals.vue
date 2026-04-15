@@ -40,7 +40,11 @@
       </div>
     </div>
 
-    <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
+    <div class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
+      <div class="mb-4">
+        <h3 class="text-lg font-semibold text-gray-900">Bản ghi chấm công chờ duyệt</h3>
+      </div>
+
       <DataTable :columns="columns" :data="records" :actions="actions" empty-message="Không có bản ghi chờ duyệt.">
         <template #cell-work_date="{ item }">
           {{ formatDate(item.work_date) }}
@@ -72,26 +76,89 @@
         </template>
       </DataTable>
     </div>
+
+    <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
+      <div class="mb-4">
+        <h3 class="text-lg font-semibold text-gray-900">Đơn chấm công chờ duyệt</h3>
+      </div>
+
+      <DataTable :columns="requestColumns" :data="request_approvals" :actions="requestActions" empty-message="Không có đơn chấm công chờ duyệt.">
+        <template #cell-request_date="{ item }">
+          {{ formatDate(item.request_date) }}
+        </template>
+        <template #cell-submitted_at="{ item }">
+          {{ formatDateTime(item.submitted_at) }}
+        </template>
+        <template #cell-status_label="{ item }">
+          <span :class="approvalStatusClass(item.status)" class="rounded-full px-3 py-1 text-xs font-semibold">
+            {{ item.status_label }}
+          </span>
+        </template>
+      </DataTable>
+    </div>
+
+    <Modal :show="!!selectedRequest" @close="closeRequestDetail">
+      <div v-if="selectedRequest" class="p-6">
+        <h3 class="mb-4 text-lg font-semibold text-gray-900">Chi tiết đơn chấm công</h3>
+        <div class="grid grid-cols-1 gap-3 text-sm text-gray-700 md:grid-cols-2">
+          <div><span class="font-medium text-gray-900">Nhân viên:</span> {{ selectedRequest.employee_name || '-' }}</div>
+          <div><span class="font-medium text-gray-900">Mã NV:</span> {{ selectedRequest.employee_code || '-' }}</div>
+          <div><span class="font-medium text-gray-900">Phòng ban:</span> {{ selectedRequest.department_name || '-' }}</div>
+          <div><span class="font-medium text-gray-900">Loại đơn:</span> {{ selectedRequest.request_type_label || '-' }}</div>
+          <div><span class="font-medium text-gray-900">Ngày áp dụng:</span> {{ formatDate(selectedRequest.request_date) }}</div>
+          <div><span class="font-medium text-gray-900">Khoảng thời gian:</span> {{ selectedRequest.period || '-' }}</div>
+          <div class="md:col-span-2"><span class="font-medium text-gray-900">Lý do:</span> {{ selectedRequest.reason || '-' }}</div>
+        </div>
+
+        <div v-if="selectedRequest.target_type === 'attendance'" class="mt-4 rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
+          <div class="mb-2 font-semibold text-gray-900">Thông tin bổ sung đơn chấm công</div>
+          <div><span class="font-medium text-gray-900">Từ ngày:</span> {{ formatDate(selectedRequest.from_date) }}</div>
+          <div><span class="font-medium text-gray-900">Đến ngày:</span> {{ formatDate(selectedRequest.to_date) }}</div>
+          <div><span class="font-medium text-gray-900">Từ giờ:</span> {{ selectedRequest.from_time || '-' }}</div>
+          <div><span class="font-medium text-gray-900">Đến giờ:</span> {{ selectedRequest.to_time || '-' }}</div>
+          <div><span class="font-medium text-gray-900">Loại nghỉ:</span> {{ selectedRequest.leave_type || '-' }}</div>
+          <div><span class="font-medium text-gray-900">Trạng thái đề nghị:</span> {{ selectedRequest.requested_status || '-' }}</div>
+        </div>
+
+        <div v-if="selectedRequest.target_type === 'overtime'" class="mt-4 rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
+          <div class="mb-2 font-semibold text-gray-900">Thông tin tăng ca</div>
+          <div><span class="font-medium text-gray-900">Bắt đầu:</span> {{ formatDateTime(selectedRequest.overtime_start_at) }}</div>
+          <div><span class="font-medium text-gray-900">Kết thúc:</span> {{ formatDateTime(selectedRequest.overtime_end_at) }}</div>
+          <div><span class="font-medium text-gray-900">Phút đề nghị:</span> {{ formatMinutes(selectedRequest.requested_minutes) }}</div>
+          <div><span class="font-medium text-gray-900">Phút duyệt hiện tại:</span> {{ formatMinutes(selectedRequest.approved_minutes) }}</div>
+        </div>
+
+        <div class="mt-6 flex justify-end">
+          <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700" @click="closeRequestDetail">
+            Đóng
+          </button>
+        </div>
+      </div>
+    </Modal>
   </AdminLayout>
 </template>
 
 <script setup>
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import DataTable from '@/components/tables/DataTable.vue'
+import Modal from '@/components/ui/Modal.vue'
 
 const props = defineProps({
   filters: { type: Object, required: true },
   records: { type: Array, default: () => [] },
   summary: { type: Object, default: () => ({}) },
   employees: { type: Array, default: () => [] },
+  request_approvals: { type: Array, default: () => [] },
 })
 
 const page = usePage()
 const currentRole = computed(() => page.props.auth?.user?.primary_role || 'employee')
+const selectedRequest = ref(null)
 const decisionForm = useForm({ note: '' })
+const requestDecisionForm = useForm({ note: '' })
 const filterForm = reactive({
   month: props.filters.month,
   year: props.filters.year,
@@ -112,11 +179,22 @@ const columns = [
   { label: 'Duyệt', key: 'approval_status', align: 'text-center' },
 ]
 
+const requestColumns = [
+  { label: 'Nhân viên', key: 'employee_name' },
+  { label: 'Mã NV', key: 'employee_code' },
+  { label: 'Loại đơn', key: 'request_type_label' },
+  { label: 'Ngày áp dụng', key: 'request_date' },
+  { label: 'Khoảng thời gian', key: 'period' },
+  { label: 'Lý do', key: 'reason' },
+  { label: 'Trạng thái', key: 'status_label', align: 'text-center' },
+  { label: 'Gửi lúc', key: 'submitted_at' },
+]
+
 const summaryCards = computed(() => [
-  { label: 'Chờ duyệt', value: props.summary.pending_records ?? 0 },
+  { label: 'Công chờ duyệt', value: props.summary.pending_records ?? 0 },
   { label: 'Đã duyệt', value: props.summary.confirmed_records ?? 0 },
   { label: 'Từ chối', value: props.summary.rejected_records ?? 0 },
-  { label: 'Đi muộn', value: props.summary.late_records ?? 0 },
+  { label: 'Đơn chờ duyệt', value: props.request_approvals.length },
 ])
 
 const actions = [
@@ -134,6 +212,26 @@ const actions = [
   },
 ]
 
+const requestActions = [
+  {
+    label: 'Chi tiết',
+    buttonProps: { title: 'Xem chi tiết đơn' },
+    onClick: (item) => openRequestDetail(item),
+  },
+  {
+    label: 'Duyệt đơn',
+    buttonProps: { title: 'Duyệt đơn chấm công' },
+    hidden: (item) => item.status !== 'pending',
+    onClick: (item) => reviewRequest(item, 'approve'),
+  },
+  {
+    label: 'Từ chối',
+    buttonProps: { title: 'Từ chối đơn chấm công' },
+    hidden: (item) => item.status !== 'pending',
+    onClick: (item) => reviewRequest(item, 'reject'),
+  },
+]
+
 function applyFilters() {
   router.get(route('attendance.approvals'), {
     month: filterForm.month,
@@ -147,10 +245,36 @@ function applyFilters() {
 
 function decide(item, action) {
   const note = window.prompt(action === 'approve' ? 'Ghi chú duyệt:' : 'Lý do từ chối:', item.approval_note || item.note || '')
-  decisionForm.note = note || ''
+  if (note === null) return
+  if (String(note).trim().length < 5) {
+    window.alert('Ghi chú tối thiểu 5 ký tự.')
+    return
+  }
+  decisionForm.note = String(note).trim()
   decisionForm.post(route(action === 'approve' ? 'attendance.confirm' : 'attendance.reject', item.id), {
     preserveScroll: true,
   })
+}
+
+function reviewRequest(item, action) {
+  const note = window.prompt(action === 'approve' ? 'Ghi chú duyệt đơn:' : 'Lý do từ chối đơn:', item.reason || '')
+  if (note === null) return
+  if (String(note).trim().length < 5) {
+    window.alert('Ghi chú tối thiểu 5 ký tự.')
+    return
+  }
+  requestDecisionForm.note = String(note).trim()
+  requestDecisionForm.post(route(action === 'approve' ? 'attendance.request-approvals.approve' : 'attendance.request-approvals.reject', item.id), {
+    preserveScroll: true,
+  })
+}
+
+function openRequestDetail(item) {
+  selectedRequest.value = item
+}
+
+function closeRequestDetail() {
+  selectedRequest.value = null
 }
 
 function formatDate(value) {
@@ -221,3 +345,4 @@ function approvalStatusClass(value) {
   return classes[value] || 'bg-slate-50 text-slate-700'
 }
 </script>
+

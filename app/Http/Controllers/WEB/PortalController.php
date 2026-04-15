@@ -12,6 +12,7 @@ use App\Models\ProjectImplementationDetail;
 use App\Models\ProjectMember;
 use App\Models\User;
 use App\Support\AccessMatrix;
+use App\Repositories\AttendanceRepository;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -23,6 +24,10 @@ use Intervention\Image\Exceptions\DriverException;
 
 class PortalController extends Controller
 {
+    public function __construct(
+        protected AttendanceRepository $attendanceRepository
+    ) {}
+
     public function dashboard(Request $request): Response
     {
         $user = $request->user();
@@ -85,8 +90,60 @@ class PortalController extends Controller
             ];
         }
 
+        $warnings = [];
+
+        if ($profileId) {
+            $missedPunches = $this->attendanceRepository->getMissedPunchCount($profileId);
+            if ($missedPunches > 0) {
+                $warnings[] = [
+                    'type' => 'danger',
+                    'title' => 'Quên chấm công',
+                    'message' => "Bạn có $missedPunches lần quên chấm công trong 30 ngày qua.",
+                    'cta_label' => 'Xem chi tiết',
+                    'cta_url' => route('attendance.mine'),
+                ];
+            }
+
+            $lateCount = $this->attendanceRepository->getFrequentLateCount($profileId);
+            if ($lateCount >= 3) {
+                $warnings[] = [
+                    'type' => 'warning',
+                    'title' => 'Đi muộn nhiều lần',
+                    'message' => "Bạn đã đi muộn $lateCount lần trong tháng này. Hãy chú ý giờ giấc!",
+                    'cta_label' => 'Xem lịch sử',
+                    'cta_url' => route('attendance.mine'),
+                ];
+            }
+
+            $unconfirmed = $this->attendanceRepository->getUnconfirmedRecordsCount($profileId);
+            if ($unconfirmed > 0 && now()->day >= 25) {
+                $warnings[] = [
+                    'type' => 'info',
+                    'title' => 'Chưa duyệt công cuối tháng',
+                    'message' => "Bạn còn $unconfirmed bản ghi công chưa xác nhận trong tháng này.",
+                    'cta_label' => 'Xác nhận ngay',
+                    'cta_url' => route('attendance.mine'),
+                ];
+            }
+        }
+
+        // Dành cho Quản lý / Admin
+        if ($user->hasRole([AccessMatrix::ROLE_ADMIN, AccessMatrix::ROLE_HR])) {
+            $pendingApprovals = $this->attendanceRepository->getPendingApprovalsCount();
+            if ($pendingApprovals > 0) {
+                $warnings[] = [
+                    'type' => 'primary',
+                    'title' => 'Yêu cầu chờ duyệt',
+                    'message' => "Có $pendingApprovals yêu cầu chấm công đang chờ bạn phê duyệt.",
+                    'cta_label' => 'Tới trang duyệt',
+                    'cta_url' => route('attendance.approvals'),
+                ];
+            }
+        }
+
         return Inertia::render('DashBoard', [
             'stats' => $stats,
+            'warnings' => $warnings,
             'todayAttendance' => $todayRecord ? [
                 'work_date' => $todayRecord->work_date,
                 'check_in_at' => $todayRecord->check_in_at,

@@ -71,6 +71,23 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
         ->middleware('access:admin,hr,employee')
         ->name('projects.mine');
 
+    Route::middleware(['access:admin,hr,employee'])->group(function () {
+        Route::get('/projects', [ProjectController::class, 'index'])
+            ->name('projects.index');
+        Route::post('/projects', [ProjectController::class, 'store'])
+            ->name('projects.store');
+        Route::put('/projects/{project}', [ProjectController::class, 'update'])
+            ->name('projects.update');
+        Route::put('/projects/{project}/toggle-lock', [ProjectController::class, 'toggleLock'])
+            ->name('projects.toggle-lock');
+        Route::post('/projects/{project}/members', [ProjectController::class, 'addMember'])
+            ->name('projects.members.store');
+        Route::put('/projects/{project}/members/{projectMember}', [ProjectController::class, 'updateMemberRole'])
+            ->name('projects.members.update');
+        Route::delete('/projects/{project}/members/{projectMember}', [ProjectController::class, 'removeMember'])
+            ->name('projects.members.destroy');
+    });
+
     Route::middleware(['access:admin,hr'])->group(function () {
         Route::get('/attendance/approvals', [AttendanceController::class, 'approvals'])
             ->name('attendance.approvals');
@@ -81,6 +98,12 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
         Route::post('/attendance/{attendanceRecord}/reject', [AttendanceController::class, 'reject'])
             ->name('attendance.reject');
 
+        Route::post('/attendance/request-approvals/{approvalRequest}/approve', [AttendanceController::class, 'approveRequest'])
+            ->name('attendance.request-approvals.approve');
+
+        Route::post('/attendance/request-approvals/{approvalRequest}/reject', [AttendanceController::class, 'rejectRequest'])
+            ->name('attendance.request-approvals.reject');
+
         Route::get('/attendance/reports', [AttendanceController::class, 'reports'])
             ->name('attendance.reports');
 
@@ -89,10 +112,6 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
 
         Route::get('/attendance/reports/export/pdf', [AttendanceController::class, 'exportPdf'])
             ->name('attendance.reports.export.pdf');
-
-        Route::get('/projects', [ProjectController::class, 'index'])
-            ->middleware('position.capability:' . PositionCapability::VIEW_ALL_PROJECTS)
-            ->name('projects.index');
 
         Route::put('/departments/{department}/toggle', [DepartmentController::class, 'toggleStatus'])->name('departments.toggle');
         Route::resource('departments', DepartmentController::class)->only(['index', 'store', 'update']);

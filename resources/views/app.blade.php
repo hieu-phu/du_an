@@ -11,18 +11,15 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=Lexend:400,500,600" rel="stylesheet" />
-
     <style>
         html {
             overflow-y: scroll;
             scroll-behavior: smooth;
         }
-
         body {
             font-family: 'Lexend', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }
     </style>
-    <!-- Scripts -->
     @routes
     @vite(['resources/css/main.css', 'resources/js/app.js'])
     @inertiaHead
@@ -31,5 +28,4 @@
 <body class="font-sans antialiased">
     @inertia
 </body>
-
 </html>

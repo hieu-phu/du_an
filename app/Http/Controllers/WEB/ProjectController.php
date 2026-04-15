@@ -3,67 +3,554 @@
 namespace App\Http\Controllers\WEB;
 
 use App\Http\Controllers\Controller;
+use App\Models\EmployeeProfile;
 use App\Models\Project;
 use App\Models\ProjectMember;
+use App\Models\ProjectProgressHistory;
+use App\Models\ProjectRole;
 use App\Support\AccessMatrix;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class ProjectController extends Controller
 {
+    private const STATUSES = ['planning', 'in_progress', 'on_hold', 'completed'];
+
     public function index(Request $request): Response
     {
-        $projects = Project::query()
-            ->orderByDesc('id')
-            ->get()
-            ->map(fn (Project $project) => [
-                'id' => $project->id,
-                'name' => $project->name,
-                'status' => $project->status,
-                'start_date' => $project->start_date,
-                'description' => $project->description,
-            ])
-            ->values();
+        abort_unless($this->canViewAllProjects($request->user()), 403);
 
-        return Inertia::render('Projects/Index', [
-            'projects' => $projects,
-            'scope' => 'all',
-            'title' => 'Danh sach du an',
-        ]);
+        return $this->renderProjectsPage($request, 'all');
     }
 
     public function myProjects(Request $request): Response
     {
-        $user = $request->user();
-        $profileId = $user->employeeProfile?->id;
+        return $this->renderProjectsPage($request, 'mine');
+    }
 
-        if ($user->hasAnyRole([AccessMatrix::ROLE_ADMIN, AccessMatrix::ROLE_HR])) {
-            return $this->index($request);
+    public function store(Request $request): RedirectResponse
+    {
+        abort_unless($this->canManageProjects($request->user()), 403);
+
+        $validated = $this->validateProjectPayload($request);
+
+        DB::transaction(function () use ($request, $validated): void {
+            $project = Project::query()->create([
+                'name' => $validated['name'],
+                'start_date' => $validated['start_date'],
+                'status' => $validated['status'],
+                'description' => $validated['description'] ?? null,
+                'created_by' => $request->user()?->id,
+                'updated_by' => $request->user()?->id,
+            ]);
+
+            $this->syncMembers($project, $validated['members'] ?? []);
+            $this->recordStatusHistory($project, null, $validated['status'], $request->user()?->id, 'Tao moi du an');
+        });
+
+        return redirect()->back()->with('success', 'Da tao du an moi thanh cong.');
+    }
+
+    public function update(Request $request, Project $project): RedirectResponse
+    {
+        abort_unless($this->canManageProjects($request->user()), 403);
+
+        if ($project->is_locked) {
+            return redirect()->back()->withErrors([
+                'project' => 'Du an dang bi khoa, khong the cap nhat.',
+            ]);
         }
 
-        $projectIds = ProjectMember::query()
-            ->where('employee_profile_id', $profileId)
-            ->where('is_active', true)
-            ->pluck('project_id');
+        $validated = $this->validateProjectPayload($request, $project->id);
 
-        $projects = Project::query()
-            ->whereIn('id', $projectIds)
+        DB::transaction(function () use ($request, $project, $validated): void {
+            $oldStatus = (string) $project->status;
+
+            $project->update([
+                'name' => $validated['name'],
+                'start_date' => $validated['start_date'],
+                'status' => $validated['status'],
+                'description' => $validated['description'] ?? null,
+                'updated_by' => $request->user()?->id,
+            ]);
+
+            $this->syncMembers($project->fresh(), $validated['members'] ?? []);
+
+            if ($oldStatus !== $validated['status']) {
+                $this->recordStatusHistory($project, $oldStatus, $validated['status'], $request->user()?->id, 'Cap nhat trang thai du an');
+            }
+        });
+
+        return redirect()->back()->with('success', 'Da cap nhat du an thanh cong.');
+    }
+
+    public function toggleLock(Request $request, Project $project): RedirectResponse
+    {
+        abort_unless($this->canManageProjects($request->user()), 403);
+
+        $isLocked = (bool) $project->is_locked;
+
+        $project->update([
+            'is_locked' => !$isLocked,
+            'locked_at' => $isLocked ? null : now(),
+            'locked_by' => $isLocked ? null : $request->user()?->id,
+            'updated_by' => $request->user()?->id,
+        ]);
+
+        return redirect()->back()->with('success', $isLocked
+            ? 'Da mo khoa du an thanh cong.'
+            : 'Da khoa du an thanh cong.');
+    }
+
+    public function addMember(Request $request, Project $project): RedirectResponse
+    {
+        abort_unless($this->canManageProjectMembers($request->user()), 403);
+
+        if ($project->is_locked) {
+            return redirect()->back()->withErrors([
+                'project' => 'Du an dang bi khoa, khong the thay doi thanh vien.',
+            ]);
+        }
+
+        $validated = $request->validate([
+            'employee_profile_id' => ['required', 'integer', 'exists:employee_profiles,id'],
+            'role_name' => ['required', 'string', 'max:100'],
+            'joined_at' => ['nullable', 'date'],
+        ]);
+
+        DB::transaction(function () use ($request, $project, $validated): void {
+            $role = $this->resolveProjectRole($project, (string) $validated['role_name']);
+
+            $member = ProjectMember::query()->where('project_id', $project->id)
+                ->where('employee_profile_id', (int) $validated['employee_profile_id'])
+                ->first();
+
+            if ($member) {
+                $member->update([
+                    'project_role_id' => $role->id,
+                    'joined_at' => $validated['joined_at'] ?? $member->joined_at ?? $project->start_date,
+                    'left_at' => null,
+                    'is_active' => true,
+                ]);
+            } else {
+                ProjectMember::query()->create([
+                    'project_id' => $project->id,
+                    'employee_profile_id' => (int) $validated['employee_profile_id'],
+                    'project_role_id' => $role->id,
+                    'joined_at' => $validated['joined_at'] ?? $project->start_date,
+                    'is_active' => true,
+                ]);
+            }
+
+            $project->update([
+                'updated_by' => $request->user()?->id,
+            ]);
+        });
+
+        return redirect()->back()->with('success', 'Da them nhan su vao du an.');
+    }
+
+    public function updateMemberRole(Request $request, Project $project, ProjectMember $projectMember): RedirectResponse
+    {
+        abort_unless($this->canManageProjectMembers($request->user()), 403);
+
+        if ($projectMember->project_id !== $project->id) {
+            abort(404);
+        }
+
+        if ($project->is_locked) {
+            return redirect()->back()->withErrors([
+                'project' => 'Du an dang bi khoa, khong the thay doi thanh vien.',
+            ]);
+        }
+
+        $validated = $request->validate([
+            'role_name' => ['required', 'string', 'max:100'],
+        ]);
+
+        DB::transaction(function () use ($request, $project, $projectMember, $validated): void {
+            $role = $this->resolveProjectRole($project, (string) $validated['role_name']);
+
+            $projectMember->update([
+                'project_role_id' => $role->id,
+                'is_active' => true,
+                'left_at' => null,
+            ]);
+
+            $project->update([
+                'updated_by' => $request->user()?->id,
+            ]);
+        });
+
+        return redirect()->back()->with('success', 'Da cap nhat vai tro nhan su trong du an.');
+    }
+
+    public function removeMember(Request $request, Project $project, ProjectMember $projectMember): RedirectResponse
+    {
+        abort_unless($this->canManageProjectMembers($request->user()), 403);
+
+        if ($projectMember->project_id !== $project->id) {
+            abort(404);
+        }
+
+        if ($project->is_locked) {
+            return redirect()->back()->withErrors([
+                'project' => 'Du an dang bi khoa, khong the thay doi thanh vien.',
+            ]);
+        }
+
+        $projectMember->update([
+            'is_active' => false,
+            'left_at' => now()->toDateString(),
+        ]);
+
+        $project->update([
+            'updated_by' => $request->user()?->id,
+        ]);
+
+        return redirect()->back()->with('success', 'Da loai nhan su khoi du an.');
+    }
+
+    private function renderProjectsPage(Request $request, string $scope): Response
+    {
+        $filters = [
+            'search' => trim((string) $request->string('search')),
+            'status' => (string) $request->string('status'),
+            'employee_profile_id' => (int) $request->integer('employee_profile_id'),
+        ];
+
+        $query = $this->baseProjectQuery($request, $scope);
+
+        if ($filters['search'] !== '') {
+            $keyword = $filters['search'];
+            $query->where(function (Builder $builder) use ($keyword): void {
+                $builder
+                    ->where('name', 'like', "%{$keyword}%")
+                    ->orWhere('description', 'like', "%{$keyword}%");
+            });
+        }
+
+        if ($filters['status'] !== '') {
+            $query->where('status', $filters['status']);
+        }
+
+        if ($filters['employee_profile_id'] > 0) {
+            $query->whereHas('members', function (Builder $builder) use ($filters): void {
+                $builder
+                    ->where('employee_profile_id', $filters['employee_profile_id'])
+                    ->where('is_active', true);
+            });
+        }
+
+        $projects = $query
+            ->with([
+                'members' => function ($relation): void {
+                    $relation
+                        ->where('is_active', true)
+                        ->with([
+                            'employeeProfile.user:id,name',
+                            'employeeProfile.position:id,name',
+                            'role:id,name',
+                        ])
+                        ->orderBy('id');
+                },
+                'progressHistories' => fn ($relation) => $relation->with('changer:id,name')->latest('changed_at')->limit(30),
+            ])
+            ->withCount([
+                'members as active_members_count' => fn ($relation) => $relation->where('is_active', true),
+            ])
             ->orderByDesc('id')
             ->get()
-            ->map(fn (Project $project) => [
-                'id' => $project->id,
-                'name' => $project->name,
-                'status' => $project->status,
-                'start_date' => $project->start_date,
-                'description' => $project->description,
+            ->map(fn (Project $project) => $this->transformProject($project))
+            ->values();
+
+        $employeeOptions = EmployeeProfile::query()
+            ->where('employment_status', 'active')
+            ->whereHas('user', fn (Builder $builder) => $builder->where('status', 'active'))
+            ->with(['user:id,name', 'position:id,name'])
+            ->orderBy('employee_code')
+            ->get()
+            ->map(fn (EmployeeProfile $profile) => [
+                'id' => $profile->id,
+                'employee_code' => $profile->employee_code,
+                'name' => $profile->user?->name,
+                'position_name' => $profile->position?->name,
+                'label' => trim(($profile->employee_code ? ($profile->employee_code . ' - ') : '') . ($profile->user?->name ?? 'Nhan su')),
             ])
             ->values();
 
+        $employeeProjectOverview = ProjectMember::query()
+            ->where('is_active', true)
+            ->with([
+                'employeeProfile.user:id,name',
+                'project:id,name,status',
+                'role:id,name',
+            ])
+            ->get()
+            ->groupBy('employee_profile_id')
+            ->map(function ($rows, $employeeProfileId) {
+                $first = $rows->first();
+
+                return [
+                    'employee_profile_id' => (int) $employeeProfileId,
+                    'employee_name' => $first?->employeeProfile?->user?->name,
+                    'employee_code' => $first?->employeeProfile?->employee_code,
+                    'project_count' => $rows->count(),
+                    'projects' => $rows->map(fn (ProjectMember $member) => [
+                        'project_id' => $member->project_id,
+                        'project_name' => $member->project?->name,
+                        'project_status' => $member->project?->status,
+                        'project_status_label' => $this->statusLabel($member->project?->status),
+                        'role_name' => $member->role?->name,
+                    ])->values(),
+                ];
+            })
+            ->values();
+
+        $pageUser = $request->user();
+        $canManageProjects = $this->canManageProjects($pageUser);
+        $canManageMembers = $this->canManageProjectMembers($pageUser);
+
         return Inertia::render('Projects/Index', [
             'projects' => $projects,
-            'scope' => 'mine',
-            'title' => 'Du an cua toi',
+            'scope' => $scope,
+            'title' => $scope === 'mine' ? 'Du an cua toi' : 'Danh sach du an',
+            'filters' => $filters,
+            'status_options' => collect(self::STATUSES)
+                ->map(fn (string $status) => ['value' => $status, 'label' => $this->statusLabel($status)])
+                ->values(),
+            'employee_options' => $employeeOptions,
+            'employee_project_overview' => $employeeProjectOverview,
+            'can_manage_projects' => $canManageProjects,
+            'can_manage_members' => $canManageMembers,
         ]);
+    }
+
+    private function baseProjectQuery(Request $request, string $scope): Builder
+    {
+        $query = Project::query();
+
+        if ($scope === 'all') {
+            return $query;
+        }
+
+        $user = $request->user();
+        if (!$user || $user->hasAnyRole([AccessMatrix::ROLE_ADMIN, AccessMatrix::ROLE_HR])) {
+            return $query;
+        }
+
+        $profileId = $user->employeeProfile?->id ?? 0;
+
+        return $query->whereHas('members', function (Builder $builder) use ($profileId): void {
+            $builder
+                ->where('employee_profile_id', $profileId)
+                ->where('is_active', true);
+        });
+    }
+
+    private function validateProjectPayload(Request $request, ?int $projectId = null): array
+    {
+        return $request->validate([
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('projects')->where(fn ($query) => $query->where('start_date', $request->input('start_date')))->ignore($projectId),
+            ],
+            'start_date' => ['required', 'date'],
+            'status' => ['required', Rule::in(self::STATUSES)],
+            'description' => ['nullable', 'string'],
+            'members' => ['nullable', 'array'],
+            'members.*.employee_profile_id' => ['required', 'integer', 'distinct', 'exists:employee_profiles,id'],
+            'members.*.role_name' => ['required', 'string', 'max:100'],
+            'members.*.joined_at' => ['nullable', 'date'],
+        ], [
+            'name.required' => 'Ten du an la bat buoc.',
+            'name.unique' => 'Da ton tai du an cung ten va ngay bat dau.',
+            'start_date.required' => 'Ngay bat dau la bat buoc.',
+            'status.required' => 'Trang thai la bat buoc.',
+            'status.in' => 'Trang thai khong hop le.',
+            'members.*.employee_profile_id.required' => 'Vui long chon nhan su tham gia.',
+            'members.*.employee_profile_id.distinct' => 'Nhan su bi trung trong danh sach.',
+            'members.*.employee_profile_id.exists' => 'Nhan su khong hop le.',
+            'members.*.role_name.required' => 'Vai tro trong du an la bat buoc.',
+        ]);
+    }
+
+    private function syncMembers(Project $project, array $members): void
+    {
+        $existingMembers = ProjectMember::query()
+            ->where('project_id', $project->id)
+            ->get()
+            ->keyBy('employee_profile_id');
+
+        $currentProfileIds = [];
+
+        foreach ($members as $member) {
+            $profileId = (int) $member['employee_profile_id'];
+            $roleName = trim((string) $member['role_name']);
+
+            if ($profileId <= 0 || $roleName === '') {
+                continue;
+            }
+
+            $currentProfileIds[] = $profileId;
+
+            $projectRole = $this->resolveProjectRole($project, $roleName);
+
+            $record = $existingMembers->get($profileId);
+            if ($record) {
+                $record->update([
+                    'project_role_id' => $projectRole->id,
+                    'joined_at' => $member['joined_at'] ?? $record->joined_at ?? $project->start_date,
+                    'left_at' => null,
+                    'is_active' => true,
+                ]);
+
+                continue;
+            }
+
+            ProjectMember::query()->create([
+                'project_id' => $project->id,
+                'employee_profile_id' => $profileId,
+                'project_role_id' => $projectRole->id,
+                'joined_at' => $member['joined_at'] ?? $project->start_date,
+                'is_active' => true,
+            ]);
+        }
+
+        ProjectMember::query()
+            ->where('project_id', $project->id)
+            ->when(!empty($currentProfileIds), fn (Builder $builder) => $builder->whereNotIn('employee_profile_id', $currentProfileIds))
+            ->where('is_active', true)
+            ->update([
+                'is_active' => false,
+                'left_at' => now()->toDateString(),
+            ]);
+    }
+
+    private function resolveProjectRole(Project $project, string $roleName): ProjectRole
+    {
+        return ProjectRole::query()->firstOrCreate([
+            'project_id' => $project->id,
+            'name' => trim($roleName),
+        ]);
+    }
+
+    private function recordStatusHistory(Project $project, ?string $oldStatus, string $newStatus, ?int $changedBy, ?string $note = null): void
+    {
+        ProjectProgressHistory::query()->create([
+            'project_id' => $project->id,
+            'old_progress' => $this->statusToProgress($oldStatus),
+            'new_progress' => $this->statusToProgress($newStatus),
+            'changed_at' => now(),
+            'changed_by' => $changedBy,
+            'note' => $note ?: sprintf('Trang thai: %s -> %s', $this->statusLabel($oldStatus), $this->statusLabel($newStatus)),
+        ]);
+    }
+
+    private function transformProject(Project $project): array
+    {
+        return [
+            'id' => $project->id,
+            'name' => $project->name,
+            'status' => $project->status,
+            'status_label' => $this->statusLabel($project->status),
+            'start_date' => optional($project->start_date)->format('Y-m-d'),
+            'description' => $project->description,
+            'is_locked' => (bool) $project->is_locked,
+            'active_members_count' => (int) ($project->active_members_count ?? 0),
+            'members' => $project->members->map(fn (ProjectMember $member) => [
+                'id' => $member->id,
+                'employee_profile_id' => $member->employee_profile_id,
+                'employee_name' => $member->employeeProfile?->user?->name,
+                'employee_code' => $member->employeeProfile?->employee_code,
+                'position_name' => $member->employeeProfile?->position?->name,
+                'role_name' => $member->role?->name,
+                'joined_at' => optional($member->joined_at)->format('Y-m-d'),
+            ])->values(),
+            'status_histories' => $project->progressHistories->map(fn (ProjectProgressHistory $history) => [
+                'id' => $history->id,
+                'old_progress' => (int) $history->old_progress,
+                'new_progress' => (int) $history->new_progress,
+                'changed_at' => optional($history->changed_at)->format('Y-m-d H:i:s'),
+                'changed_by_name' => $history->changer?->name,
+                'note' => $history->note,
+            ])->values(),
+        ];
+    }
+
+    private function statusToProgress(?string $status): int
+    {
+        return match ($status) {
+            'planning' => 10,
+            'in_progress' => 50,
+            'on_hold' => 50,
+            'completed' => 100,
+            default => 0,
+        };
+    }
+
+    private function statusLabel(?string $status): string
+    {
+        return match ($status) {
+            'planning' => 'Ke hoach',
+            'in_progress' => 'Dang trien khai',
+            'on_hold' => 'Tam dung',
+            'completed' => 'Hoan thanh',
+            default => '-',
+        };
+    }
+
+    private function canViewAllProjects($user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->hasRole(AccessMatrix::ROLE_ADMIN) || $user->hasRole(AccessMatrix::ROLE_HR)) {
+            return true;
+        }
+
+        return $this->canManageProjects($user);
+    }
+
+    private function canManageProjects($user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->hasRole(AccessMatrix::ROLE_ADMIN)) {
+            return true;
+        }
+
+        if ($user->hasRole(AccessMatrix::ROLE_HR)) {
+            return false;
+        }
+
+        if ($user->hasPositionCapability('manage_projects')) {
+            return true;
+        }
+
+        return (bool) ($user->employeeProfile?->is_department_head ?? false);
+    }
+
+    private function canManageProjectMembers($user): bool
+    {
+        if ($this->canManageProjects($user)) {
+            return true;
+        }
+
+        if (!$user || $user->hasRole(AccessMatrix::ROLE_HR)) {
+            return false;
+        }
+
+        return $user->hasPositionCapability('manage_project_members');
     }
 }

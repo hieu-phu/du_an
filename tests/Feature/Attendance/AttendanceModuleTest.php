@@ -7,6 +7,7 @@ use App\Models\AttendanceEvent;
 use App\Models\AttendanceRecord;
 use App\Models\AttendanceRequest;
 use App\Models\AttendanceMonthLock;
+use App\Models\ApprovalRequest;
 use App\Models\EmployeeProfile;
 use Carbon\Carbon;
 use App\Models\Notification;
@@ -291,6 +292,150 @@ class AttendanceModuleTest extends TestCase
             'employee_profile_id' => $employee->employeeProfile->id,
             'status' => 'pending',
             'requested_minutes' => 150,
+        ]);
+    }
+
+    public function test_hr_can_approve_attendance_request(): void
+    {
+        $employee = $this->makeUserWithRole('employee', 'Employee Approval Request');
+        $hr = $this->makeUserWithRole('hr', 'HR Approval Request');
+
+        $this->actingAs($employee)
+            ->post(route('attendance.requests.store'), [
+                'request_type' => 'forgot_check',
+                'request_date' => '2026-04-15',
+                'reason' => 'Quên check out khi mất điện',
+            ])
+            ->assertRedirect();
+
+        $approvalRequest = ApprovalRequest::query()->where('request_type', 'forgot_check')->firstOrFail();
+
+        $this->actingAs($hr)
+            ->post(route('attendance.request-approvals.approve', $approvalRequest), [
+                'note' => 'Đã kiểm tra và đồng ý',
+            ])
+            ->assertRedirect();
+
+        $approvalRequest->refresh();
+        $attendanceRequest = AttendanceRequest::query()->firstOrFail();
+
+        $this->assertSame('approved', $approvalRequest->status);
+        $this->assertSame($hr->id, $approvalRequest->reviewed_by);
+        $this->assertSame('approved', $attendanceRequest->status);
+        $this->assertSame($hr->id, $attendanceRequest->applied_by);
+        $this->assertDatabaseHas('attendance_records', [
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-15',
+            'approval_status' => 'approved',
+            'day_status' => 'present',
+        ]);
+    }
+
+    public function test_hr_can_approve_overtime_request_and_overtime_minutes_are_applied_to_attendance_record(): void
+    {
+        $employee = $this->makeUserWithRole('employee', 'Employee Overtime Approval');
+        $hr = $this->makeUserWithRole('hr', 'HR Overtime Approval');
+
+        $this->actingAs($employee)
+            ->post(route('attendance.requests.store'), [
+                'request_type' => 'overtime',
+                'start_at' => '2026-04-15 18:00:00',
+                'end_at' => '2026-04-15 20:30:00',
+                'reason' => 'Hoan thanh hang muc gap',
+            ])
+            ->assertRedirect();
+
+        $approvalRequest = ApprovalRequest::query()->where('request_type', 'overtime')->firstOrFail();
+
+        $this->actingAs($hr)
+            ->post(route('attendance.request-approvals.approve', $approvalRequest), [
+                'note' => 'Dong y tang ca',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('attendance_records', [
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-15',
+            'overtime_minutes' => 150,
+            'approval_status' => 'approved',
+        ]);
+    }
+
+    public function test_approved_make_up_request_is_preserved_in_report_reconciliation(): void
+    {
+        $employee = $this->makeUserWithRole('employee', 'Employee Make Up');
+        $hr = $this->makeUserWithRole('hr', 'HR Make Up');
+        $admin = $this->makeUserWithRole('admin', 'Admin Report');
+
+        AttendanceRecord::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-15',
+            'check_in_at' => Carbon::create(2026, 4, 15, 9, 30, 0, 'Asia/Ho_Chi_Minh'),
+            'check_out_at' => Carbon::create(2026, 4, 15, 17, 30, 0, 'Asia/Ho_Chi_Minh'),
+            'worked_minutes' => 480,
+            'late_minutes' => 90,
+            'attendance_status' => 'late',
+            'day_status' => 'late',
+            'approval_status' => 'pending',
+            'is_confirmed' => false,
+        ]);
+
+        $this->actingAs($employee)
+            ->post(route('attendance.requests.store'), [
+                'request_type' => 'make_up',
+                'request_date' => '2026-04-15',
+                'reason' => 'Lam bu da duoc phe duyet',
+            ])
+            ->assertRedirect();
+
+        $approvalRequest = ApprovalRequest::query()->where('request_type', 'make_up')->firstOrFail();
+
+        $this->actingAs($hr)
+            ->post(route('attendance.request-approvals.approve', $approvalRequest), [
+                'note' => 'Dong y lam bu',
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($admin)
+            ->get(route('attendance.reports', ['month' => 4, 'year' => 2026, 'employee_profile_id' => $employee->employeeProfile->id]))
+            ->assertOk();
+
+        $record = AttendanceRecord::query()
+            ->where('employee_profile_id', $employee->employeeProfile->id)
+            ->whereDate('work_date', '2026-04-15')
+            ->firstOrFail();
+
+        $this->assertSame('late', $record->attendance_status);
+        $this->assertSame('late', $record->day_status);
+        $this->assertGreaterThan(0, (int) $record->late_minutes);
+    }
+
+    public function test_approved_overtime_counts_only_minutes_outside_work_shift(): void
+    {
+        $employee = $this->makeUserWithRole('employee', 'Employee OT Outside Shift');
+        $hr = $this->makeUserWithRole('hr', 'HR OT Outside Shift');
+
+        $this->actingAs($employee)
+            ->post(route('attendance.requests.store'), [
+                'request_type' => 'overtime',
+                'start_at' => '2026-04-15 13:37:00',
+                'end_at' => '2026-04-15 18:00:00',
+                'reason' => 'Lam them buoi chieu',
+            ])
+            ->assertRedirect();
+
+        $approvalRequest = ApprovalRequest::query()->where('request_type', 'overtime')->latest('id')->firstOrFail();
+
+        $this->actingAs($hr)
+            ->post(route('attendance.request-approvals.approve', $approvalRequest), [
+                'note' => 'Duyet tang ca',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('overtime_requests', [
+            'id' => $approvalRequest->target_id,
+            'approved_minutes' => 60,
+            'status' => 'approved',
         ]);
     }
 
