@@ -13,9 +13,12 @@ use App\Models\ProjectMember;
 use App\Models\User;
 use App\Support\AccessMatrix;
 use App\Repositories\AttendanceRepository;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -141,9 +144,12 @@ class PortalController extends Controller
             }
         }
 
+        $dashboardSummary = $this->buildDashboardSummary($user, $profileId);
+
         return Inertia::render('DashBoard', [
             'stats' => $stats,
             'warnings' => $warnings,
+            'dashboardSummary' => $dashboardSummary,
             'todayAttendance' => $todayRecord ? [
                 'work_date' => $todayRecord->work_date,
                 'check_in_at' => $todayRecord->check_in_at,
@@ -161,6 +167,156 @@ class PortalController extends Controller
             'late', 'half_day' => 'Trễ',
             'absent', 'leave', 'pending' => 'Vắng',
             default => 'Chưa chấm công',
+        };
+    }
+
+    private function buildDashboardSummary(User $user, ?int $profileId): array
+    {
+        $projectBaseQuery = $this->projectBaseQueryForUser($user, $profileId);
+
+        return [
+            'total_employees' => User::query()->where('is_employee', 1)->count(),
+            'total_projects' => (clone $projectBaseQuery)->count(),
+            'project_status_counts' => $this->buildProjectStatusCounts($projectBaseQuery),
+            'active_project_progress' => $this->buildActiveProjectProgress($projectBaseQuery),
+            'attendance_month_report' => $this->buildAttendanceMonthReport($user, $profileId),
+        ];
+    }
+
+    private function projectBaseQueryForUser(User $user, ?int $profileId): Builder
+    {
+        $query = Project::query();
+
+        if ($user->hasRole(AccessMatrix::ROLE_EMPLOYEE) && $profileId) {
+            $query->whereHas('members', function (Builder $builder) use ($profileId) {
+                $builder
+                    ->where('employee_profile_id', $profileId)
+                    ->where('is_active', true);
+            });
+        }
+
+        return $query;
+    }
+
+    private function buildProjectStatusCounts(Builder $projectBaseQuery): array
+    {
+        $statusMap = [
+            'planning' => 'Ke hoach',
+            'in_progress' => 'Dang trien khai',
+            'on_hold' => 'Tam dung',
+            'completed' => 'Hoan thanh',
+        ];
+
+        $counts = (clone $projectBaseQuery)
+            ->select('status', DB::raw('COUNT(*) as total'))
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        return collect($statusMap)->map(function (string $label, string $status) use ($counts) {
+            return [
+                'status' => $status,
+                'label' => $label,
+                'count' => (int) ($counts[$status] ?? 0),
+            ];
+        })->values()->all();
+    }
+
+    private function buildActiveProjectProgress(Builder $projectBaseQuery): array
+    {
+        $projects = (clone $projectBaseQuery)
+            ->whereIn('status', ['planning', 'in_progress', 'on_hold'])
+            ->orderByDesc('start_date')
+            ->limit(10)
+            ->get(['id', 'name', 'status', 'start_date']);
+
+        if ($projects->isEmpty()) {
+            return [];
+        }
+
+        $projectIds = $projects->pluck('id')->all();
+
+        $detailSummaries = ProjectImplementationDetail::query()
+            ->select(
+                'project_id',
+                DB::raw("SUM(CASE WHEN detail_status <> 'cancelled' THEN COALESCE(duration_days, 0) ELSE 0 END) as total_duration"),
+                DB::raw("SUM(CASE WHEN detail_status = 'completed' THEN COALESCE(duration_days, 0) ELSE 0 END) as completed_duration"),
+                DB::raw("SUM(CASE WHEN detail_status <> 'cancelled' THEN 1 ELSE 0 END) as total_tasks"),
+                DB::raw("SUM(CASE WHEN detail_status = 'completed' THEN 1 ELSE 0 END) as completed_tasks")
+            )
+            ->whereIn('project_id', $projectIds)
+            ->groupBy('project_id')
+            ->get()
+            ->keyBy('project_id');
+
+        return $projects->map(function (Project $project) use ($detailSummaries) {
+            $summary = $detailSummaries->get($project->id);
+            $totalDuration = max(0, (int) ($summary?->total_duration ?? 0));
+            $completedDuration = max(0, (int) ($summary?->completed_duration ?? 0));
+            $progressPercent = $totalDuration > 0
+                ? (int) round(($completedDuration / $totalDuration) * 100)
+                : 0;
+
+            return [
+                'id' => $project->id,
+                'name' => $project->name,
+                'status' => $project->status,
+                'status_label' => $this->projectStatusLabel($project->status),
+                'start_date' => optional($project->start_date)->toDateString(),
+                'progress_percent' => max(0, min(100, $progressPercent)),
+                'completed_tasks' => (int) ($summary?->completed_tasks ?? 0),
+                'total_tasks' => (int) ($summary?->total_tasks ?? 0),
+            ];
+        })->values()->all();
+    }
+
+    private function buildAttendanceMonthReport(User $user, ?int $profileId): array
+    {
+        $now = Carbon::now('Asia/Ho_Chi_Minh');
+        $month = (int) $now->month;
+        $year = (int) $now->year;
+
+        $query = AttendanceRecord::query()
+            ->whereMonth('work_date', $month)
+            ->whereYear('work_date', $year);
+
+        $scope = 'company';
+        if ($user->hasRole(AccessMatrix::ROLE_EMPLOYEE) && $profileId) {
+            $query->where('employee_profile_id', $profileId);
+            $scope = 'personal';
+        }
+
+        $report = (clone $query)
+            ->selectRaw('COUNT(*) as total_records')
+            ->selectRaw("SUM(CASE WHEN attendance_status IN ('on_time', 'present') THEN 1 ELSE 0 END) as on_time_records")
+            ->selectRaw("SUM(CASE WHEN attendance_status = 'late' OR COALESCE(late_minutes, 0) > 0 THEN 1 ELSE 0 END) as late_records")
+            ->selectRaw("SUM(CASE WHEN attendance_status = 'absent' THEN 1 ELSE 0 END) as absent_records")
+            ->selectRaw("SUM(CASE WHEN day_status = 'early_leave' OR COALESCE(early_leave_minutes, 0) > 0 THEN 1 ELSE 0 END) as early_leave_records")
+            ->selectRaw("SUM(CASE WHEN approval_status = 'approved' THEN 1 ELSE 0 END) as approved_records")
+            ->selectRaw('SUM(COALESCE(worked_minutes, 0)) as total_worked_minutes')
+            ->first();
+
+        return [
+            'scope' => $scope,
+            'month' => $month,
+            'year' => $year,
+            'total_records' => (int) ($report?->total_records ?? 0),
+            'on_time_records' => (int) ($report?->on_time_records ?? 0),
+            'late_records' => (int) ($report?->late_records ?? 0),
+            'absent_records' => (int) ($report?->absent_records ?? 0),
+            'early_leave_records' => (int) ($report?->early_leave_records ?? 0),
+            'approved_records' => (int) ($report?->approved_records ?? 0),
+            'total_worked_minutes' => (int) ($report?->total_worked_minutes ?? 0),
+        ];
+    }
+
+    private function projectStatusLabel(?string $status): string
+    {
+        return match ((string) $status) {
+            'planning' => 'Ke hoach',
+            'in_progress' => 'Dang trien khai',
+            'on_hold' => 'Tam dung',
+            'completed' => 'Hoan thanh',
+            default => '-',
         };
     }
 

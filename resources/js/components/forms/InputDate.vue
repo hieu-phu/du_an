@@ -57,8 +57,8 @@
       enter-from-class="transform -translate-y-2 opacity-0" enter-to-class="transform translate-y-0 opacity-100"
       leave-active-class="transition-all duration-150 ease-in" leave-from-class="transform translate-y-0 opacity-100"
       leave-to-class="transform -translate-y-2 opacity-0">
-      <p v-if="error" class="text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
-        <span>{{ error[0] }}</span>
+      <p v-if="errorMessage" class="text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+        <span>{{ errorMessage }}</span>
       </p>
     </transition>
     <transition enter-active-class="transition-all duration-200 ease-out"
@@ -91,7 +91,10 @@ const props = defineProps({
   modelValue: [String, Date, null],
   label: String,
   placeholder: { type: String, default: 'Chọn ngày' },
-  error: String,
+  error: {
+    type: [String, Array],
+    default: ''
+  },
   required: Boolean,
   disabled: Boolean,
   clearable: { type: Boolean, default: true },
@@ -103,6 +106,11 @@ const emit = defineEmits(['update:modelValue', 'change'])
 const internalValue = computed({
   get: () => props.modelValue,
   set: (val) => emit('update:modelValue', val)
+})
+
+const errorMessage = computed(() => {
+  if (Array.isArray(props.error)) return props.error[0] || ''
+  return props.error || ''
 })
 
 const defaultConfig = {

@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\Position;
 use App\Models\User;
 use App\Repositories\UserRepository;
+use App\Support\PositionRoleResolver;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Hash;
@@ -29,6 +31,7 @@ class UserService extends BaseService
     {
         return $this->handleTransaction(function () use ($validatedData, $avatarFile) {
             $validatedData = $this->normalizeEmploymentData($validatedData);
+            $validatedData = $this->normalizeRoleByPosition($validatedData);
             $avatarPath = $avatarFile ? $this->handleAvatarUpload($avatarFile) : null;
 
             $user = $this->userRepository->createUser([
@@ -73,6 +76,7 @@ class UserService extends BaseService
     {
         return $this->handleTransaction(function () use ($user, $validatedData, $avatarFile) {
             $validatedData = $this->normalizeEmploymentData($validatedData);
+            $validatedData = $this->normalizeRoleByPosition($validatedData);
             $avatarPath = $user->avatar;
 
             if ($avatarFile) {
@@ -184,6 +188,24 @@ class UserService extends BaseService
         if (($validatedData['employment_status'] ?? null) !== 'terminated') {
             $validatedData['termination_date'] = null;
         }
+
+        return $validatedData;
+    }
+
+    private function normalizeRoleByPosition(array $validatedData): array
+    {
+        $positionId = $validatedData['position_id'] ?? null;
+        if (blank($positionId)) {
+            return $validatedData;
+        }
+
+        $position = Position::query()->find($positionId);
+        if (!$position) {
+            return $validatedData;
+        }
+
+        $minimumRole = PositionRoleResolver::resolveMinimumRole($position);
+        $validatedData['role_name'] = $minimumRole;
 
         return $validatedData;
     }

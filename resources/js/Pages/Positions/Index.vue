@@ -1,26 +1,24 @@
-<script setup>
-import { computed, reactive, ref } from 'vue'
+﻿<script setup>
+import { computed, reactive, ref, watch } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import { toast } from 'vue3-toastify'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import Modal from '@/components/ui/Modal.vue'
-
 const props = defineProps({
     positions: { type: Array, default: () => [] },
     filters: { type: Object, default: () => ({}) },
+    capabilityOptions: { type: Array, default: () => [] },
+    authorityLevels: { type: Array, default: () => [] },
+    authorityLevelCatalog: { type: Array, default: () => [] },
 })
-
 const page = usePage()
 const roles = computed(() => page.props.auth?.user?.roles || [])
 const isAdmin = computed(() => roles.value.includes('admin'))
-
-// ─── FILTER ────────────────────────────────────────────────────────────────
 const filters = reactive({
     search: props.filters?.search ?? '',
     status: props.filters?.status ?? '',
 })
-
 const applyFilter = () => {
     router.get(
         route('positions.index'),
@@ -31,44 +29,105 @@ const applyFilter = () => {
         { preserveState: true, preserveScroll: true, replace: true }
     )
 }
-
 const resetFilter = () => {
     filters.search = ''
     filters.status = ''
     applyFilter()
 }
+const authorityOptions = computed(() => {
+    if (Array.isArray(props.authorityLevels) && props.authorityLevels.length > 0) {
+        return props.authorityLevels.map((item) => ({
+            value: Number(item.value),
+            label: String(item.label || `Mức ${item.value}`),
+        }))
+    }
 
-// ─── STATIC DATA ────────────────────────────────────────────────────────────
-const authorityOptions = [
-    { value: 1, label: 'Mức 1 — Nhân viên' },
-    { value: 2, label: 'Mức 2 — Tổ phó / Senior' },
-    { value: 3, label: 'Mức 3 — Trưởng nhóm' },
-    { value: 4, label: 'Mức 4 — Trưởng phòng' },
-    { value: 5, label: 'Mức 5 — Giám đốc / Quản lý cao' },
-]
-
+    return [
+        { value: 1, label: 'Mức 1 - Nhân viên' },
+        { value: 2, label: 'Mức 2 - Tổ phó / Senior' },
+        { value: 3, label: 'Mức 3 - Trưởng nhóm' },
+        { value: 4, label: 'Mức 4 - Trưởng phòng' },
+        { value: 5, label: 'Mức 5 - Giám đốc / Quản lý cao' },
+    ]
+})
 const authorityLabelMap = computed(() =>
-    Object.fromEntries(authorityOptions.map((o) => [o.value, o.label]))
+    Object.fromEntries(authorityOptions.value.map((o) => [o.value, o.label]))
 )
+const capabilityGroups = computed(() => {
+    const baseGroups = (page.props.auth?.capability_definitions || []).map((group) => ({
+        ...group,
+        items: [...(group.items || [])],
+    }))
 
-const capabilityGroups = computed(() => page.props.auth?.capability_definitions || [])
+    const existingKeys = new Set(
+        baseGroups.flatMap((group) => (group.items || []).map((item) => item.key))
+    )
 
+    const extras = (props.capabilityOptions || []).filter((item) => !existingKeys.has(item.key))
+    if (!extras.length) {
+        return baseGroups
+    }
+
+    const moduleLabel = (module) => {
+        const normalized = String(module || 'custom').replace(/_/g, ' ')
+        return normalized.charAt(0).toUpperCase() + normalized.slice(1)
+    }
+
+    const grouped = new Map()
+    for (const item of extras) {
+        const groupName = `Mở rộng: ${moduleLabel(item.module)}`
+        if (!grouped.has(groupName)) {
+            grouped.set(groupName, [])
+        }
+        grouped.get(groupName).push({
+            key: item.key,
+            label: item.label || item.key,
+            desc: item.desc || 'Quyền tùy chỉnh do Admin thêm.',
+        })
+    }
+
+    for (const [groupName, items] of grouped.entries()) {
+        baseGroups.push({
+            group: groupName,
+            icon: '🧩',
+            items,
+        })
+    }
+
+    return baseGroups
+})
 const allCapabilities = computed(() =>
     capabilityGroups.value.flatMap((g) => g.items)
 )
-
 const capabilityLabelMap = computed(() =>
     Object.fromEntries(allCapabilities.value.map((c) => [c.key, c.label]))
 )
-
-// ─── MODAL STATE ────────────────────────────────────────────────────────────
+const capabilityMinAuthority = {
+    manage_positions: 5,
+    view_activity_logs: 5,
+    sign_documents: 5,
+    manage_employees: 4,
+    manage_salary: 4,
+    view_salary: 4,
+    manage_departments: 4,
+    transfer_employee: 4,
+    approve_attendance: 4,
+    approve_leave: 4,
+    approve_requests: 4,
+}
+const impliedCapabilities = {
+    manage_salary: ['view_salary'],
+    export_attendance: ['view_all_attendance'],
+    manage_project_roles: ['manage_project_members', 'manage_projects'],
+    export_reports: ['view_reports'],
+}
 const isFormModalOpen = ref(false)
 const isDetailModalOpen = ref(false)
+const isAuthorityLevelModalOpen = ref(false)
 const isEditing = ref(false)
 const selectedPosition = ref(null)
 const editingId = ref(null)
-const activeTab = ref('info') // 'info' | 'capabilities'
-
+const activeTab = ref('info')
 const form = useForm({
     name: '',
     description: '',
@@ -76,45 +135,112 @@ const form = useForm({
     capabilities: [],
     is_active: true,
 })
-
-// ─── HELPERS ────────────────────────────────────────────────────────────────
+const capabilityCreateForm = useForm({
+    name: '',
+    module: 'custom',
+    description: '',
+})
+const authorityLevelForm = useForm({
+    rank: '',
+    name: '',
+    is_active: true,
+})
+const showCapabilityCreator = ref(false)
 const emptyMessage = computed(() =>
     filters.search || filters.status
         ? 'Không tìm thấy chức vụ phù hợp.'
         : 'Chưa có dữ liệu chức vụ.'
 )
-
+const capabilityRequiredAuthority = (key) => Number(capabilityMinAuthority[key] || 1)
 const hasCapability = (capabilities, key) =>
     Array.isArray(capabilities) && capabilities.includes(key)
-
+const roleFromAuthorityLevel = (authorityLevel) => {
+    const level = Number(authorityLevel || 0)
+    if (level >= 5) return 'admin'
+    if (level >= 4) return 'hr'
+    return 'employee'
+}
+const roleRank = (role) => ({ employee: 1, hr: 2, admin: 3 }[role] || 1)
+const minimumRoleByCapabilities = computed(() => {
+    const maxRequiredLevel = form.capabilities.reduce((carry, key) => {
+        return Math.max(carry, capabilityRequiredAuthority(key))
+    }, 1)
+    return roleFromAuthorityLevel(maxRequiredLevel)
+})
+const minimumRoleByAuthority = computed(() =>
+    roleFromAuthorityLevel(Number(form.authority_level || 0))
+)
+const finalMinimumRole = computed(() => {
+    return roleRank(minimumRoleByCapabilities.value) > roleRank(minimumRoleByAuthority.value)
+        ? minimumRoleByCapabilities.value
+        : minimumRoleByAuthority.value
+})
+const finalMinimumRoleLabel = computed(() => ({
+    employee: 'Nhân viên',
+    hr: 'HR',
+    admin: 'Admin',
+}[finalMinimumRole.value] || 'Nhân viên'))
+const ensureAuthorityForCapability = (key) => {
+    const required = capabilityRequiredAuthority(key)
+    const current = Number(form.authority_level || 0)
+    if (current < required) {
+        form.authority_level = required
+    }
+}
+const addCapability = (key) => {
+    if (!form.capabilities.includes(key)) {
+        form.capabilities.push(key)
+    }
+}
+const applyImpliedCapabilities = () => {
+    let changed = false
+    do {
+        changed = false
+        for (const key of [...form.capabilities]) {
+            for (const impliedKey of impliedCapabilities[key] || []) {
+                ensureAuthorityForCapability(impliedKey)
+                if (!form.capabilities.includes(impliedKey)) {
+                    form.capabilities.push(impliedKey)
+                    changed = true
+                }
+            }
+        }
+    } while (changed)
+}
+const removeCapabilitiesAboveAuthority = (authorityLevel) => {
+    const level = Number(authorityLevel || 0)
+    const before = form.capabilities.length
+    form.capabilities = form.capabilities.filter((key) => capabilityRequiredAuthority(key) <= level)
+    const removed = before - form.capabilities.length
+    if (removed > 0) {
+        toast.info(`Đã bỏ ${removed} quyền không phù hợp với mức quyền hạn.`)
+    }
+}
 const toggleCapability = (key) => {
     const idx = form.capabilities.indexOf(key)
     if (idx === -1) {
-        form.capabilities.push(key)
+        ensureAuthorityForCapability(key)
+        addCapability(key)
+        applyImpliedCapabilities()
     } else {
         form.capabilities.splice(idx, 1)
     }
 }
-
 const selectAllInGroup = (group) => {
     group.items.forEach(({ key }) => {
-        if (!form.capabilities.includes(key)) {
-            form.capabilities.push(key)
-        }
+        ensureAuthorityForCapability(key)
+        addCapability(key)
     })
+    applyImpliedCapabilities()
 }
-
 const clearAllInGroup = (group) => {
     group.items.forEach(({ key }) => {
         const idx = form.capabilities.indexOf(key)
         if (idx !== -1) form.capabilities.splice(idx, 1)
     })
 }
-
 const isGroupFullySelected = (group) =>
     group.items.every(({ key }) => form.capabilities.includes(key))
-
-// ─── MODAL ACTIONS ───────────────────────────────────────────────────────────
 const openCreateModal = () => {
     isEditing.value = false
     editingId.value = null
@@ -124,9 +250,12 @@ const openCreateModal = () => {
     form.is_active = true
     form.authority_level = ''
     form.capabilities = []
+    showCapabilityCreator.value = false
+    capabilityCreateForm.reset()
+    capabilityCreateForm.clearErrors()
+    capabilityCreateForm.module = 'custom'
     isFormModalOpen.value = true
 }
-
 const openEditModal = (position) => {
     isEditing.value = true
     editingId.value = position.id
@@ -137,26 +266,29 @@ const openEditModal = (position) => {
     form.authority_level = position.authority_level ?? ''
     form.capabilities = Array.isArray(position.capabilities) ? [...position.capabilities] : []
     form.is_active = !!position.is_active
+    applyImpliedCapabilities()
+    showCapabilityCreator.value = false
+    capabilityCreateForm.reset()
+    capabilityCreateForm.clearErrors()
+    capabilityCreateForm.module = 'custom'
     isFormModalOpen.value = true
 }
-
 const openDetailModal = (position) => {
     selectedPosition.value = position
     isDetailModalOpen.value = true
 }
-
 const closeFormModal = () => {
     isFormModalOpen.value = false
     form.clearErrors()
+    capabilityCreateForm.clearErrors()
+    showCapabilityCreator.value = false
 }
-
-// ─── SUBMIT ─────────────────────────────────────────────────────────────────
 const submit = () => {
+    applyImpliedCapabilities()
     const payload = {
         ...form.data(),
         authority_level: form.authority_level === '' ? null : Number(form.authority_level),
     }
-
     const options = {
         preserveScroll: true,
         onSuccess: () => {
@@ -164,36 +296,101 @@ const submit = () => {
             form.reset()
             toast.success(isEditing.value ? 'Đã cập nhật chức vụ.' : 'Đã tạo chức vụ mới.')
         },
-        onError: () => toast.error('Không thể lưu chức vụ.'),
+        onError: (errors) => {
+            if (errors.name || errors.authority_level || errors.description) {
+                activeTab.value = 'info'
+            }
+            if (errors.capabilities || Object.keys(errors).some((key) => key.startsWith('capabilities.'))) {
+                activeTab.value = 'capabilities'
+            }
+            toast.error('Vui lòng sửa các trường đang báo lỗi trong form.')
+        },
     }
-
     if (isEditing.value) {
         return form.transform(() => payload).put(route('positions.update', editingId.value), options)
     }
-
     return form.transform(() => payload).post(route('positions.store'), options)
 }
+const submitNewCapability = () => {
+    capabilityCreateForm.post(route('positions.capabilities.store'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            toast.success('Đã thêm quyền mới.')
+            capabilityCreateForm.reset()
+            capabilityCreateForm.module = 'custom'
+            showCapabilityCreator.value = false
+        },
+        onError: () => {
+            toast.error('Không thể thêm quyền. Vui lòng kiểm tra lại.')
+        },
+    })
+}
+const openAuthorityLevelModal = () => {
+    authorityLevelForm.reset()
+    authorityLevelForm.clearErrors()
+    authorityLevelForm.is_active = true
+    isAuthorityLevelModalOpen.value = true
+}
+const closeAuthorityLevelModal = () => {
+    isAuthorityLevelModalOpen.value = false
+    authorityLevelForm.clearErrors()
+}
+const submitAuthorityLevel = () => {
+    const payload = {
+        rank: authorityLevelForm.rank === '' ? null : Number(authorityLevelForm.rank),
+        name: authorityLevelForm.name,
+        is_active: !!authorityLevelForm.is_active,
+    }
 
-// ─── TOGGLE / DELETE ─────────────────────────────────────────────────────────
+    authorityLevelForm.transform(() => payload).post(route('positions.authority-levels.store'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            toast.success('Đã thêm mức quyền hạn.')
+            authorityLevelForm.reset()
+            authorityLevelForm.is_active = true
+        },
+        onError: () => {
+            toast.error('Không thể thêm mức quyền hạn.')
+        },
+    })
+}
+const toggleAuthorityLevel = (level) => {
+    const nextAction = level.is_active ? 'khóa' : 'mở'
+    if (!window.confirm(`Bạn có chắc muốn ${nextAction} mức "${level.name}"?`)) return
+    router.put(route('positions.authority-levels.toggle', level.id), {}, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(`Đã ${nextAction} mức quyền hạn.`),
+        onError: () => toast.error(`Không thể ${nextAction} mức quyền hạn.`),
+    })
+}
+watch(() => form.authority_level, (nextLevel, prevLevel) => {
+    const next = Number(nextLevel || 0)
+    const prev = Number(prevLevel || 0)
+    if (next <= 0) {
+        return
+    }
+    if (prev > 0 && next < prev) {
+        removeCapabilitiesAboveAuthority(next)
+    }
+})
+watch(() => form.capabilities, () => {
+    applyImpliedCapabilities()
+}, { deep: true })
 const toggleStatus = (position) => {
     const nextAction = position.is_active ? 'khóa' : 'mở lại'
     if (!window.confirm(`Bạn có chắc muốn ${nextAction} chức vụ "${position.name}"?`)) return
-
     router.put(route('positions.toggle', position.id), {}, {
         preserveScroll: true,
         onSuccess: () => toast.success(`Đã ${nextAction} chức vụ.`),
         onError: () => toast.error(`Không thể ${nextAction} chức vụ.`),
     })
 }
-
 const confirmDelete = (position) => {
     if (position.employee_profiles_count > 0) {
         window.alert(`Chức vụ "${position.name}" đang có ${position.employee_profiles_count} nhân viên. Không thể xóa.`)
         return
     }
-
     if (!window.confirm(`Bạn có chắc muốn xóa chức vụ "${position.name}"?`)) return
-
     router.delete(route('positions.destroy', position.id), {
         preserveScroll: true,
         onSuccess: () => toast.success('Đã xóa chức vụ.'),
@@ -211,7 +408,7 @@ const confirmDelete = (position) => {
             :items="[{ text: 'HCNS', link: null }, { text: 'Chức vụ', link: null }]"
         />
 
-        <!-- ── Filter Bar ── -->
+        <!-- Filter Bar -->
         <div class="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div class="grid flex-1 grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
@@ -250,6 +447,12 @@ const confirmDelete = (position) => {
                         @click="applyFilter"
                     >Tìm kiếm</button>
                     <button
+                        v-if="isAdmin"
+                        type="button"
+                        class="rounded-xl border border-indigo-300 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100"
+                        @click="openAuthorityLevelModal"
+                    >Mức quyền hạn</button>
+                    <button
                         type="button"
                         class="rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
                         @click="openCreateModal"
@@ -258,7 +461,7 @@ const confirmDelete = (position) => {
             </div>
         </div>
 
-        <!-- ── Table ── -->
+        <!-- Table -->
         <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -351,9 +554,9 @@ const confirmDelete = (position) => {
             </div>
         </div>
 
-        <!-- ── Form Modal (Create / Edit) ── -->
+        <!-- Form Modal (Create / Edit) -->
         <Modal :show="isFormModalOpen" @close="closeFormModal" max-width="2xl">
-            <div class="p-6">
+            <div class="max-h-[85vh] overflow-y-auto p-6">
                 <h2 class="mb-5 text-lg font-semibold text-gray-900">
                     {{ isEditing ? 'Chỉnh sửa chức vụ' : 'Tạo chức vụ mới' }}
                 </h2>
@@ -366,7 +569,7 @@ const confirmDelete = (position) => {
                         :class="activeTab === 'info' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
                         @click="activeTab = 'info'"
                     >
-                        📋 Thông tin cơ bản
+                        Thông tin cơ bản
                     </button>
                     <button
                         type="button"
@@ -374,7 +577,7 @@ const confirmDelete = (position) => {
                         :class="activeTab === 'capabilities' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
                         @click="activeTab = 'capabilities'"
                     >
-                        🔑 Quyền hạn
+                        Quyền hạn
                         <span
                             v-if="form.capabilities.length"
                             class="ml-1.5 inline-flex items-center justify-center rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-bold text-white"
@@ -410,6 +613,9 @@ const confirmDelete = (position) => {
                                 </option>
                             </select>
                             <div v-if="form.errors.authority_level" class="mt-1 text-sm text-rose-600">{{ form.errors.authority_level }}</div>
+                            <div class="mt-1 text-xs text-gray-500">
+                                Role tối thiểu suy ra từ mức + quyền hạn: <span class="font-semibold text-gray-700">{{ finalMinimumRoleLabel }}</span>
+                            </div>
                         </div>
 
                         <div>
@@ -448,7 +654,63 @@ const confirmDelete = (position) => {
                             Chọn các quyền hạn nghiệp vụ mà nhân viên giữ chức vụ này được phép thực hiện.
                         </p>
 
-                        <div class="max-h-[420px] space-y-4 overflow-y-auto pr-1">
+                        <div v-if="isAdmin" class="rounded-xl border border-indigo-200 bg-indigo-50/60 p-3">
+                            <div class="flex items-center justify-between gap-3">
+                                <div class="text-sm font-semibold text-indigo-700">Quản lý quyền tùy chỉnh</div>
+                                <button
+                                    type="button"
+                                    class="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700"
+                                    @click="showCapabilityCreator = !showCapabilityCreator"
+                                >
+                                    {{ showCapabilityCreator ? 'Ẩn form thêm quyền' : '+ Thêm quyền mới' }}
+                                </button>
+                            </div>
+
+                            <div v-show="showCapabilityCreator" class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                <div>
+                                    <label class="mb-1 block text-xs font-semibold text-gray-700">Tên quyền</label>
+                                    <input
+                                        v-model="capabilityCreateForm.name"
+                                        type="text"
+                                        class="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                                        placeholder="Ví dụ: Quản lý thiết bị"
+                                    />
+                                    <div v-if="capabilityCreateForm.errors.name" class="mt-1 text-xs text-rose-600">
+                                        {{ capabilityCreateForm.errors.name }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-xs font-semibold text-gray-700">Nhóm module</label>
+                                    <input
+                                        v-model="capabilityCreateForm.module"
+                                        type="text"
+                                        class="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                                        placeholder="vd: custom"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="mb-1 block text-xs font-semibold text-gray-700">Mô tả</label>
+                                    <input
+                                        v-model="capabilityCreateForm.description"
+                                        type="text"
+                                        class="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                                        placeholder="Mô tả ngắn về quyền"
+                                    />
+                                </div>
+                                <div class="md:col-span-2 flex justify-end">
+                                    <button
+                                        type="button"
+                                        class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
+                                        :disabled="capabilityCreateForm.processing"
+                                        @click="submitNewCapability"
+                                    >
+                                        {{ capabilityCreateForm.processing ? 'Đang thêm...' : 'Thêm quyền mới' }}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="max-h-[360px] space-y-4 overflow-y-auto pr-1">
                             <div
                                 v-for="group in capabilityGroups"
                                 :key="group.group"
@@ -499,6 +761,7 @@ const confirmDelete = (position) => {
                         <div class="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
                             Đã chọn <strong>{{ form.capabilities.length }}</strong> / {{ allCapabilities.length }} quyền hạn
                         </div>
+                        <div v-if="form.errors.capabilities" class="text-sm text-rose-600">{{ form.errors.capabilities }}</div>
                     </div>
 
                     <!-- Actions -->
@@ -520,7 +783,106 @@ const confirmDelete = (position) => {
             </div>
         </Modal>
 
-        <!-- ── Detail Modal ── -->
+        <!-- Authority Level Modal -->
+        <Modal :show="isAuthorityLevelModalOpen" @close="closeAuthorityLevelModal" max-width="2xl">
+            <div class="p-6">
+                <div class="mb-4 flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-900">Quản lý mức quyền hạn</h2>
+                        <p class="mt-0.5 text-sm text-gray-500">Admin có thể thêm và khóa/mở các mức quyền hạn.</p>
+                    </div>
+                </div>
+
+                <form class="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4" @submit.prevent="submitAuthorityLevel">
+                    <div class="mb-3 text-sm font-semibold text-indigo-700">Thêm mức mới</div>
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div>
+                            <label class="mb-1 block text-xs font-semibold text-gray-700">Thứ bậc (rank)</label>
+                            <input
+                                v-model="authorityLevelForm.rank"
+                                type="number"
+                                min="1"
+                                class="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                                placeholder="Ví dụ: 6"
+                            />
+                            <div v-if="authorityLevelForm.errors.rank" class="mt-1 text-xs text-rose-600">{{ authorityLevelForm.errors.rank }}</div>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-xs font-semibold text-gray-700">Tên mức</label>
+                            <input
+                                v-model="authorityLevelForm.name"
+                                type="text"
+                                class="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                                placeholder="Ví dụ: Mức 6 - Phó tổng"
+                            />
+                            <div v-if="authorityLevelForm.errors.name" class="mt-1 text-xs text-rose-600">{{ authorityLevelForm.errors.name }}</div>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-center justify-between">
+                        <label class="flex items-center gap-2 text-sm text-gray-700">
+                            <input v-model="authorityLevelForm.is_active" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                            Kích hoạt ngay
+                        </label>
+                        <button
+                            type="submit"
+                            class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
+                            :disabled="authorityLevelForm.processing"
+                        >
+                            {{ authorityLevelForm.processing ? 'Đang thêm...' : 'Thêm mức' }}
+                        </button>
+                    </div>
+                </form>
+
+                <div class="mt-4 overflow-hidden rounded-xl border border-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Rank</th>
+                                <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Tên mức</th>
+                                <th class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Trạng thái</th>
+                                <th class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 bg-white">
+                            <tr v-for="level in authorityLevelCatalog" :key="level.id">
+                                <td class="px-3 py-2 text-sm font-semibold text-gray-800">{{ level.rank }}</td>
+                                <td class="px-3 py-2 text-sm text-gray-700">{{ level.name }}</td>
+                                <td class="px-3 py-2 text-center">
+                                    <span
+                                        :class="level.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'"
+                                        class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
+                                    >
+                                        {{ level.is_active ? 'Đang bật' : 'Đang khóa' }}
+                                    </span>
+                                </td>
+                                <td class="px-3 py-2 text-center">
+                                    <button
+                                        type="button"
+                                        class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50"
+                                        @click="toggleAuthorityLevel(level)"
+                                    >
+                                        {{ level.is_active ? 'Khóa' : 'Mở' }}
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr v-if="!authorityLevelCatalog.length">
+                                <td colspan="4" class="px-3 py-4 text-center text-sm text-gray-500">Chưa có mức quyền hạn.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-5 flex justify-end">
+                    <button
+                        type="button"
+                        class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                        @click="closeAuthorityLevelModal"
+                    >Đóng</button>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- Detail Modal -->
         <Modal :show="isDetailModalOpen" @close="isDetailModalOpen = false" max-width="2xl">
             <div v-if="selectedPosition" class="p-6">
                 <div class="mb-5 flex items-start justify-between">
@@ -539,7 +901,7 @@ const confirmDelete = (position) => {
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <!-- Thông tin chung -->
                     <div class="rounded-xl border border-gray-200 p-4">
-                        <div class="mb-3 text-sm font-semibold text-gray-900">📋 Thông tin chung</div>
+                        <div class="mb-3 text-sm font-semibold text-gray-900">Thông tin chung</div>
                         <div class="space-y-2 text-sm text-gray-700">
                             <div>
                                 <span class="font-medium text-gray-500">Mức quyền hạn:</span>
@@ -562,7 +924,7 @@ const confirmDelete = (position) => {
 
                     <!-- Tổng quan quyền hạn -->
                     <div class="rounded-xl border border-gray-200 p-4">
-                        <div class="mb-3 text-sm font-semibold text-gray-900">🔑 Tổng quan quyền hạn</div>
+                        <div class="mb-3 text-sm font-semibold text-gray-900">Tổng quan quyền hạn</div>
                         <div v-if="selectedPosition.capabilities?.length" class="space-y-1">
                             <div class="mb-2 text-xs text-gray-500">
                                 Đã cấp <strong class="text-blue-600">{{ selectedPosition.capabilities.length }}</strong> / {{ allCapabilities.length }} quyền
@@ -589,7 +951,7 @@ const confirmDelete = (position) => {
 
                 <!-- Chi tiết quyền hạn theo nhóm -->
                 <div v-if="selectedPosition.capabilities?.length" class="mt-4 rounded-xl border border-gray-200 p-4">
-                    <div class="mb-3 text-sm font-semibold text-gray-900">🗂️ Chi tiết quyền hạn theo nhóm</div>
+                    <div class="mb-3 text-sm font-semibold text-gray-900">Chi tiết quyền hạn theo nhóm</div>
                     <div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
                         <div
                             v-for="group in capabilityGroups"

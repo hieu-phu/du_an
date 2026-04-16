@@ -9,4 +9,14 @@ class SalaryHistory extends Model
 {
     /** @use HasFactory<\Database\Factories\SalaryHistoryFactory> */
     use HasFactory;
+
+    protected $fillable = [
+        'employee_profile_id',
+        'old_salary',
+        'new_salary',
+        'currency',
+        'effective_date',
+        'approved_by',
+        'note',
+    ];
 }

@@ -74,6 +74,11 @@
             {{ formatApprovalStatus(item.approval_status) }}
           </span>
         </template>
+        <template #cell-request_presence="{ item }">
+          <span :class="requestPresenceClass(item.request_presence)" class="rounded-full px-3 py-1 text-xs font-semibold">
+            {{ item.request_presence_label || 'Khong co don' }}
+          </span>
+        </template>
       </DataTable>
     </div>
 
@@ -176,6 +181,7 @@ const columns = [
   { label: 'Đi muộn', key: 'late_minutes', align: 'text-center' },
   { label: 'Về sớm', key: 'early_leave_minutes', align: 'text-center' },
   { label: 'Trạng thái ngày', key: 'day_status', align: 'text-center' },
+  { label: 'Don', key: 'request_presence', align: 'text-center' },
   { label: 'Duyệt', key: 'approval_status', align: 'text-center' },
 ]
 
@@ -341,6 +347,14 @@ function approvalStatusClass(value) {
     pending: 'bg-amber-50 text-amber-700',
     approved: 'bg-emerald-50 text-emerald-700',
     rejected: 'bg-rose-50 text-rose-700',
+  }
+  return classes[value] || 'bg-slate-50 text-slate-700'
+}
+
+function requestPresenceClass(value) {
+  const classes = {
+    has_request: 'bg-emerald-50 text-emerald-700',
+    no_request: 'bg-rose-50 text-rose-700',
   }
   return classes[value] || 'bg-slate-50 text-slate-700'
 }

@@ -12,18 +12,11 @@ class UpdateUserRequest extends BaseRequest
         if ($this->input('employment_status') === 'terminated') {
             $this->merge(['status' => 'blocked']);
         }
-
-        if (!$this->filled('role_name')) {
-            $this->merge(['role_name' => 'employee']);
-        }
     }
 
     public function rules(): array
     {
         $userId = $this->route('user')?->id ?? $this->route('user');
-        $allowedRoles = auth()->user()?->hasRole('admin')
-            ? ['admin', 'hr', 'employee']
-            : ['hr', 'employee'];
 
         return [
             'name' => ['required', 'string', 'max:255'],
@@ -43,7 +36,6 @@ class UpdateUserRequest extends BaseRequest
             'base_salary' => ['nullable', 'numeric', 'min:0'],
             'employment_status' => ['required', 'in:active,inactive,terminated'],
             'employment_type' => ['required', 'in:probation,official,intern,collaborator'],
-            'role_name' => ['required', Rule::in($allowedRoles)],
             'status' => ['required', 'in:active,inactive,pending,blocked'],
             'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,gif', 'max:2048'],
         ];
@@ -52,17 +44,40 @@ class UpdateUserRequest extends BaseRequest
     public function messages(): array
     {
         return [
-            'email.unique' => 'Email đã tồn tại.',
-            'phone.unique' => 'Số điện thoại đã tồn tại.',
-            'base_salary.numeric' => 'Lương cơ bản phải là số.',
-            'base_salary.min' => 'Lương cơ bản không được âm.',
-            'date_of_birth.before' => 'Ngày sinh phải nhỏ hơn ngày vào làm.',
-            'department_id.required' => 'Vui lòng chọn phòng ban.',
-            'position_id.required' => 'Vui lòng chọn chức vụ.',
-            'employment_type.required' => 'Vui lòng chọn loại nhân sự.',
-            'role_name.required' => 'Vui lòng chọn quyền tài khoản.',
-            'termination_date.required' => 'Nhân viên nghỉ việc phải có ngày nghỉ.',
-            'termination_date.after_or_equal' => 'Ngày nghỉ phải lớn hơn hoặc bằng ngày vào làm.',
+            'name.required' => 'Vui long nhap ho va ten.',
+            'email.required' => 'Vui long nhap email.',
+            'email.unique' => 'Email da ton tai.',
+            'email.regex' => 'Email phai dung dinh dang Gmail.',
+            'phone.required' => 'Vui long nhap so dien thoai.',
+            'phone.unique' => 'So dien thoai da ton tai.',
+            'phone.regex' => 'So dien thoai khong dung dinh dang.',
+            'hire_date.required' => 'Vui long chon ngay vao lam.',
+            'base_salary.numeric' => 'Luong co ban phai la so.',
+            'base_salary.min' => 'Luong co ban khong duoc am.',
+            'date_of_birth.before' => 'Ngay sinh phai nho hon ngay vao lam.',
+            'department_id.required' => 'Vui long chon phong ban.',
+            'position_id.required' => 'Vui long chon chuc vu.',
+            'employment_type.required' => 'Vui long chon loai nhan su.',
+            'termination_date.required' => 'Nhan vien nghi viec phai co ngay nghi.',
+            'termination_date.after_or_equal' => 'Ngay nghi phai lon hon hoac bang ngay vao lam.',
+        ];
+    }
+
+    public function attributes(): array
+    {
+        return [
+            'name' => 'ho va ten',
+            'email' => 'email',
+            'phone' => 'so dien thoai',
+            'date_of_birth' => 'ngay sinh',
+            'hire_date' => 'ngay vao lam',
+            'termination_date' => 'ngay nghi viec',
+            'department_id' => 'phong ban',
+            'position_id' => 'chuc vu',
+            'base_salary' => 'luong co ban',
+            'employment_status' => 'trang thai lam viec',
+            'employment_type' => 'loai nhan su',
+            'status' => 'trang thai tai khoan',
         ];
     }
 }

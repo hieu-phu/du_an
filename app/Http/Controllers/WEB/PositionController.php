@@ -3,11 +3,15 @@
 namespace App\Http\Controllers\WEB;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuthorityLevel;
 use App\Models\Position;
+use App\Models\PositionCapability as PositionCapabilityModel;
 use App\Services\PositionService;
 use App\Support\PositionCapability;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class PositionController extends Controller
@@ -26,25 +30,31 @@ class PositionController extends Controller
         return Inertia::render('Positions/Index', [
             'positions' => $positions,
             'filters' => $request->only(['search', 'status']),
+            'capabilityOptions' => $this->capabilityOptions(),
+            'authorityLevels' => $this->authorityLevelOptions(),
+            'authorityLevelCatalog' => $this->authorityLevelCatalog(),
         ]);
     }
 
     public function store(Request $request)
     {
+        $allowedCapabilities = $this->allowedCapabilityKeys();
+        $allowedAuthorityLevels = $this->allowedAuthorityLevelValues();
+
         $validated = $request->validate([
-            'name'            => 'required|string|max:255|unique:positions,name',
-            'description'     => 'nullable|string',
-            'authority_level' => 'nullable|integer|min:1|max:10',
-            'capabilities'    => 'nullable|array',
-            'capabilities.*'  => ['string', Rule::in(PositionCapability::all())],
-            'is_active'       => 'boolean',
+            'name' => ['required', 'string', 'max:255', 'unique:positions,name'],
+            'description' => ['nullable', 'string'],
+            'authority_level' => ['required', 'integer', Rule::in($allowedAuthorityLevels)],
+            'capabilities' => ['nullable', 'array'],
+            'capabilities.*' => ['string', Rule::in($allowedCapabilities)],
+            'is_active' => ['boolean'],
         ], [
             'name.required' => 'Tên chức vụ là bắt buộc.',
-            'name.max'      => 'Tên chức vụ không được vượt quá 255 ký tự.',
-            'name.unique'   => 'Tên chức vụ này đã tồn tại.',
+            'name.max' => 'Tên chức vụ không được vượt quá 255 ký tự.',
+            'name.unique' => 'Tên chức vụ này đã tồn tại.',
+            'authority_level.required' => 'Vui lòng chọn mức quyền hạn.',
             'authority_level.integer' => 'Mức quyền hạn phải là số nguyên.',
-            'authority_level.min'     => 'Mức quyền hạn tối thiểu là 1.',
-            'authority_level.max'     => 'Mức quyền hạn tối đa là 10.',
+            'authority_level.in' => 'Mức quyền hạn không hợp lệ.',
         ]);
 
         $this->positionService->store($validated);
@@ -52,22 +62,25 @@ class PositionController extends Controller
         return redirect()->back()->with('success', 'Chức vụ đã được tạo thành công.');
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, int $id)
     {
+        $allowedCapabilities = $this->allowedCapabilityKeys();
+        $allowedAuthorityLevels = $this->allowedAuthorityLevelValues();
+
         $validated = $request->validate([
-            'name'            => 'required|string|max:255|unique:positions,name,' . $id,
-            'description'     => 'nullable|string',
-            'authority_level' => 'nullable|integer|min:1|max:10',
-            'capabilities'    => 'nullable|array',
-            'capabilities.*'  => ['string', Rule::in(PositionCapability::all())],
-            'is_active'       => 'boolean',
+            'name' => ['required', 'string', 'max:255', "unique:positions,name,{$id}"],
+            'description' => ['nullable', 'string'],
+            'authority_level' => ['required', 'integer', Rule::in($allowedAuthorityLevels)],
+            'capabilities' => ['nullable', 'array'],
+            'capabilities.*' => ['string', Rule::in($allowedCapabilities)],
+            'is_active' => ['boolean'],
         ], [
             'name.required' => 'Tên chức vụ là bắt buộc.',
-            'name.max'      => 'Tên chức vụ không được vượt quá 255 ký tự.',
-            'name.unique'   => 'Tên chức vụ này đã tồn tại.',
+            'name.max' => 'Tên chức vụ không được vượt quá 255 ký tự.',
+            'name.unique' => 'Tên chức vụ này đã tồn tại.',
+            'authority_level.required' => 'Vui lòng chọn mức quyền hạn.',
             'authority_level.integer' => 'Mức quyền hạn phải là số nguyên.',
-            'authority_level.min'     => 'Mức quyền hạn tối thiểu là 1.',
-            'authority_level.max'     => 'Mức quyền hạn tối đa là 10.',
+            'authority_level.in' => 'Mức quyền hạn không hợp lệ.',
         ]);
 
         $this->positionService->update($id, $validated);
@@ -75,14 +88,14 @@ class PositionController extends Controller
         return redirect()->back()->with('success', 'Chức vụ đã được cập nhật thành công.');
     }
 
-    public function toggleStatus($id)
+    public function toggleStatus(int $id)
     {
         $this->positionService->toggleStatus($id);
 
         return redirect()->back()->with('success', 'Đã cập nhật trạng thái chức vụ.');
     }
 
-    public function destroy($id)
+    public function destroy(int $id)
     {
         $position = Position::withCount('employeeProfiles')->findOrFail($id);
 
@@ -95,5 +108,193 @@ class PositionController extends Controller
         $this->positionService->delete($id);
 
         return redirect()->back()->with('success', 'Chức vụ đã được xóa thành công.');
+    }
+
+    public function storeCapability(Request $request)
+    {
+        if (!Schema::hasTable('position_capabilities')) {
+            return back()->withErrors(['error' => 'Bảng danh mục quyền chưa sẵn sàng. Vui lòng chạy migrate.']);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'module' => ['nullable', 'string', 'max:100'],
+            'description' => ['nullable', 'string', 'max:500'],
+        ], [
+            'name.required' => 'Vui lòng nhập tên quyền.',
+        ]);
+
+        $baseCode = Str::of((string) $validated['name'])
+            ->ascii()
+            ->lower()
+            ->slug('_')
+            ->toString();
+
+        if ($baseCode === '') {
+            $baseCode = 'custom_capability';
+        }
+
+        $code = $baseCode;
+        $suffix = 2;
+        while (PositionCapabilityModel::query()->where('code', $code)->exists()) {
+            $code = $baseCode . '_' . $suffix;
+            $suffix++;
+        }
+
+        PositionCapabilityModel::query()->create([
+            'code' => $code,
+            'name' => $validated['name'],
+            'module' => $validated['module'] ?: 'custom',
+            'description' => $validated['description'] ?? null,
+            'is_system' => false,
+            'is_active' => true,
+        ]);
+
+        return back()->with('success', "Đã thêm quyền mới thành công (mã: {$code}).");
+    }
+
+    public function storeAuthorityLevel(Request $request)
+    {
+        if (!Schema::hasTable('authority_levels')) {
+            return back()->withErrors(['error' => 'Bang muc quyen han chua san sang. Vui long chay migrate.']);
+        }
+
+        $validated = $request->validate([
+            'rank' => ['required', 'integer', 'min:1', 'max:32767', 'unique:authority_levels,rank'],
+            'name' => ['required', 'string', 'max:120'],
+            'is_active' => ['boolean'],
+        ], [
+            'rank.required' => 'Vui long nhap so thu bac.',
+            'rank.unique' => 'So thu bac nay da ton tai.',
+            'name.required' => 'Vui long nhap ten muc quyen han.',
+        ]);
+
+        AuthorityLevel::query()->create([
+            'rank' => (int) $validated['rank'],
+            'name' => (string) $validated['name'],
+            'is_active' => (bool) ($validated['is_active'] ?? true),
+        ]);
+
+        return back()->with('success', 'Da them muc quyen han moi.');
+    }
+
+    public function toggleAuthorityLevel(AuthorityLevel $authorityLevel)
+    {
+        $next = !$authorityLevel->is_active;
+
+        if (!$next) {
+            $inUse = Position::query()
+                ->where('authority_level', (int) $authorityLevel->rank)
+                ->exists();
+
+            if ($inUse) {
+                return back()->withErrors([
+                    'authority_level' => 'Khong the khoa muc nay vi dang co chuc vu su dung.',
+                ]);
+            }
+        }
+
+        $authorityLevel->update([
+            'is_active' => $next,
+        ]);
+
+        return back()->with('success', $next ? 'Da mo muc quyen han.' : 'Da khoa muc quyen han.');
+    }
+
+    private function allowedCapabilityKeys(): array
+    {
+        $keys = PositionCapability::all();
+
+        if (Schema::hasTable('position_capabilities')) {
+            $dbKeys = PositionCapabilityModel::query()->pluck('code')->all();
+            $keys = array_values(array_unique(array_merge($keys, $dbKeys)));
+        }
+
+        return $keys;
+    }
+
+    private function capabilityOptions(): array
+    {
+        if (Schema::hasTable('position_capabilities')) {
+            return PositionCapabilityModel::query()
+                ->where('is_active', true)
+                ->orderBy('module')
+                ->orderBy('name')
+                ->get(['code', 'name', 'module', 'description'])
+                ->map(fn ($item) => [
+                    'key' => $item->code,
+                    'label' => $item->name,
+                    'desc' => $item->description,
+                    'module' => $item->module ?: 'custom',
+                ])
+                ->values()
+                ->all();
+        }
+
+        return collect(PositionCapability::definitions())
+            ->map(fn ($meta, $code) => [
+                'key' => $code,
+                'label' => (string) ($meta['name'] ?? $code),
+                'desc' => (string) ($meta['description'] ?? ''),
+                'module' => (string) ($meta['module'] ?? 'custom'),
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function authorityLevelOptions(): array
+    {
+        if (Schema::hasTable('authority_levels')) {
+            return AuthorityLevel::query()
+                ->where('is_active', true)
+                ->orderBy('rank')
+                ->get(['rank', 'name'])
+                ->map(fn ($item) => [
+                    'value' => (int) $item->rank,
+                    'label' => (string) $item->name,
+                ])
+                ->values()
+                ->all();
+        }
+
+        return [
+            ['value' => 1, 'label' => 'Mức 1 - Nhân viên'],
+            ['value' => 2, 'label' => 'Mức 2 - Tổ phó / Senior'],
+            ['value' => 3, 'label' => 'Mức 3 - Trưởng nhóm'],
+            ['value' => 4, 'label' => 'Mức 4 - Trưởng phòng'],
+            ['value' => 5, 'label' => 'Mức 5 - Giám đốc / Quản lý cao'],
+        ];
+    }
+
+    private function allowedAuthorityLevelValues(): array
+    {
+        $values = collect($this->authorityLevelOptions())
+            ->pluck('value')
+            ->map(fn ($value) => (int) $value)
+            ->filter(fn ($value) => $value > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        return empty($values) ? [1, 2, 3, 4, 5] : $values;
+    }
+
+    private function authorityLevelCatalog(): array
+    {
+        if (Schema::hasTable('authority_levels')) {
+            return AuthorityLevel::query()
+                ->orderBy('rank')
+                ->get(['id', 'rank', 'name', 'is_active'])
+                ->map(fn ($item) => [
+                    'id' => (int) $item->id,
+                    'rank' => (int) $item->rank,
+                    'name' => (string) $item->name,
+                    'is_active' => (bool) $item->is_active,
+                ])
+                ->values()
+                ->all();
+        }
+
+        return [];
     }
 }

@@ -168,7 +168,6 @@
             :user-data="selectedUser"
             :departments="departments"
             :positions="positions"
-            :roles="roles"
             :provinces="provinces"
             :store-route="route('web.users.store')"
             :update-route="route('web.users.update', ':id')"
@@ -191,6 +190,10 @@
                                 <div><span class="font-medium text-gray-800">Mã nhân viên:</span> {{ selectedUser.employee_code || '-' }}</div>
                                 <div><span class="font-medium text-gray-800">Người tạo:</span> <span class="text-blue-600 font-semibold">{{ selectedUser.creator_name || 'Hệ thống' }}</span></div>
                                 <div><span class="font-medium text-gray-800">Quyền tài khoản:</span> {{ getRoleLabel(selectedUser.role_name) }}</div>
+                                <div><span class="font-medium text-gray-800">Quyền tối thiểu theo chức vụ:</span> {{ getRoleLabel(selectedUser.minimum_role_name || 'employee') }}</div>
+                                <div v-if="selectedUser.is_role_mismatch" class="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-700">
+                                    Quyền tài khoản đang thấp hơn chức vụ. Hệ thống cần đồng bộ lại role.
+                                </div>
                                 <div><span class="font-medium text-gray-800">Email:</span> {{ selectedUser.email }}</div>
                                 <div><span class="font-medium text-gray-800">Số điện thoại:</span> {{ selectedUser.phone || '-' }}</div>
                                 <div><span class="font-medium text-gray-800">Trạng thái tài khoản:</span> {{ getStatusText(selectedUser.status) }}</div>
@@ -209,6 +212,104 @@
                                 <div><span class="font-medium text-gray-800">Lương cơ bản:</span> {{ formatCurrency(selectedUser.base_salary) }}</div>
                             </div>
                         </div>
+
+                        <div class="rounded-xl border border-gray-200 p-4 md:col-span-2">
+                            <div class="mb-3 text-sm font-semibold text-gray-800">Quyền theo chức vụ</div>
+                            <div class="space-y-3 text-sm text-gray-600">
+                                <div>
+                                    <span class="font-medium text-gray-800">Mức quyền hạn:</span>
+                                    {{ selectedUser.position?.authority_level ?? 'Chưa thiết lập' }}
+                                </div>
+                                <div v-if="!selectedUser.position?.capabilities?.length" class="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                                    Chức vụ này chưa cấu hình capability.
+                                </div>
+                                <div v-else class="flex flex-wrap gap-2">
+                                    <span
+                                        v-for="capability in selectedUser.position.capabilities"
+                                        :key="capability"
+                                        class="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700"
+                                    >
+                                        {{ getCapabilityLabel(capability) }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>                        <div class="rounded-xl border border-gray-200 p-4 md:col-span-2">
+                            <div class="mb-3 text-sm font-semibold text-gray-800">Ghi đè quyền theo cá nhân</div>
+                            <div class="space-y-3 text-sm text-gray-600">
+                                <div v-if="!selectedUser.position_capability_overrides?.length" class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                                    Chưa có ghi đè. Người dùng đang dùng quyền theo chức vụ.
+                                </div>
+                                <div v-else class="space-y-2">
+                                    <div
+                                        v-for="override in selectedUser.position_capability_overrides"
+                                        :key="override.id"
+                                        class="flex items-start justify-between gap-3 rounded-md border border-gray-200 px-3 py-2"
+                                    >
+                                        <div class="min-w-0">
+                                            <div class="text-sm font-medium text-gray-800">
+                                                {{ getCapabilityLabel(override.capability_code) }}
+                                                <span class="text-xs text-gray-500">({{ override.capability_code }})</span>
+                                            </div>
+                                            <div class="mt-0.5 text-xs" :class="override.effect === 'allow' ? 'text-emerald-700' : 'text-rose-700'">
+                                                {{ override.effect === 'allow' ? 'Cho phép' : 'Từ chối' }}
+                                                <span v-if="override.expires_at" class="text-gray-500"> - hết hạn: {{ formatDate(override.expires_at) }}</span>
+                                            </div>
+                                            <div v-if="override.reason" class="mt-0.5 text-xs text-gray-500">
+                                                Lý do: {{ override.reason }}
+                                            </div>
+                                        </div>
+                                        <button
+                                            v-if="canManageOverrides"
+                                            type="button"
+                                            class="rounded-md border border-rose-200 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50"
+                                            @click="removeOverride(override)"
+                                        >
+                                            Xóa
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div v-if="canManageOverrides" class="mt-2 rounded-md border border-blue-100 bg-blue-50/40 p-3">
+                                    <div class="mb-2 text-xs font-semibold text-blue-700">Thêm / cập nhật ghi đè</div>
+                                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                        <FormSelect
+                                            v-model="overrideForm.capability_code"
+                                            :options="capabilityOptionItems"
+                                            label="Quyen"
+                                            placeholder="Chon quyen"
+                                            :searchable="true"
+                                            :can-clear="true"
+                                        />
+                                        <FormSelect
+                                            v-model="overrideForm.effect"
+                                            :options="effectOptionItems"
+                                            label="Hieu luc"
+                                            placeholder="Chon hieu luc"
+                                            :searchable="false"
+                                            :can-clear="false"
+                                        />
+                                        <div>
+                                            <label class="mb-1 block text-xs font-medium text-gray-700">Hết hạn (nếu có)</label>
+                                            <input v-model="overrideForm.expires_at" type="datetime-local" class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm" />
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <label class="mb-1 block text-xs font-medium text-gray-700">Lý do</label>
+                                            <input v-model="overrideForm.reason" type="text" placeholder="Nhập lý do (không bắt buộc)" class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm" />
+                                        </div>
+                                    </div>
+                                    <div class="mt-3 flex justify-end">
+                                        <button
+                                            type="button"
+                                            class="rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+                                            @click="submitOverride"
+                                        >
+                                            Lưu ghi đè
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
 
                         <div class="rounded-xl border border-gray-200 p-4 md:col-span-2">
                             <div class="mb-3 text-sm font-semibold text-gray-800">Thông tin bổ sung</div>
@@ -235,6 +336,7 @@ import DataTable from '@/components/tables/DataTable.vue'
 import Pagination from '@/components/tables/Pagination.vue'
 import UserFormModal from '@/components/users/UserFormModal.vue'
 import CustomModal from '@/components/modals/CustomModal.vue'
+import FormSelect from '@/components/forms/FormSelect.vue'
 import { toast } from 'vue3-toastify'
 import AddIcon from '@/icons/AddIcon.vue'
 import EditButtonIcon from '@/icons/EditButtonIcon.vue'
@@ -249,7 +351,7 @@ const props = defineProps({
     detailUser: { type: Object, default: null },
     departments: { type: Array, default: () => [] },
     positions: { type: Array, default: () => [] },
-    roles: { type: Array, default: () => [] },
+    capabilityOptions: { type: Array, default: () => [] },
     provinces: { type: Array, default: () => [] },
 })
 
@@ -265,6 +367,12 @@ const isDetailModalOpen = ref(false)
 const selectedUser = ref(null)
 const imageErrors = ref({})
 const activeRole = ref(props.filters?.role || '')
+const overrideForm = ref({
+    capability_code: '',
+    effect: 'allow',
+    reason: '',
+    expires_at: '',
+})
 
 const roleTabs = computed(() => {
     if (!isAdmin.value && authRoles.value.includes('hr')) {
@@ -394,6 +502,29 @@ const getRoleLabel = (roleName) => ({
     employee: 'Nhân viên',
 }[roleName] || '-')
 
+const getCapabilityLabel = (capability) => ({
+    manage_employees: 'Quản lý nhân sự',
+    view_salary: 'Xem lương',
+    manage_salary: 'Quản lý lương',
+    approve_attendance: 'Duyệt chấm công',
+    view_all_attendance: 'Xem toàn bộ chấm công',
+    export_attendance: 'Xuất chấm công',
+    approve_leave: 'Duyệt nghỉ phép',
+    manage_leave_policy: 'Quản lý chính sách nghỉ',
+    manage_projects: 'Quản lý dự án',
+    manage_project_members: 'Quản lý thành viên dự án',
+    manage_project_roles: 'Quản lý vai trò dự án',
+    view_all_projects: 'Xem tất cả dự án',
+    manage_departments: 'Quản lý phòng ban',
+    manage_positions: 'Quản lý chức vụ',
+    transfer_employee: 'Điều chuyển nhân sự',
+    approve_requests: 'Duyệt yêu cầu',
+    sign_documents: 'Ký tài liệu',
+    view_reports: 'Xem báo cáo',
+    export_reports: 'Xuất báo cáo',
+    view_activity_logs: 'Xem nhật ký hệ thống',
+}[capability] || capability)
+
 const formatCurrency = (value) => {
     if (value === null || value === undefined || value === '') return '-'
     return `${new Intl.NumberFormat('vi-VN').format(Number(value))} VND`
@@ -422,6 +553,91 @@ const canManageUser = (user) => {
     if (!permissions.value['users.edit']) return false
     if (user.role_name === 'admin' && !isAdmin.value) return false
     return true
+}
+
+const canManageOverrides = computed(() =>
+    !!selectedUser.value
+    && canManageUser(selectedUser.value)
+    && !!permissions.value['users.edit']
+)
+
+const capabilityOptionItems = computed(() =>
+    (props.capabilityOptions || []).map((item) => ({
+        value: item.code,
+        label: `${item.name || getCapabilityLabel(item.code)} (${item.code})`,
+    }))
+)
+
+const effectOptionItems = [
+    { value: 'allow', label: 'Cho phep' },
+    { value: 'deny', label: 'Tu choi' },
+]
+
+const refreshDetailUser = (userId) => {
+    const query = {
+        ...props.filters,
+        role: activeRole.value,
+        detail_user: userId,
+        page: props.users?.current_page ?? 1,
+        per_page: props.users?.per_page ?? props.filters?.per_page ?? 15,
+    }
+
+    router.get(currentRouteName.value, query, {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    })
+}
+
+const resetOverrideForm = () => {
+    overrideForm.value = {
+        capability_code: '',
+        effect: 'allow',
+        reason: '',
+        expires_at: '',
+    }
+}
+
+const submitOverride = () => {
+    if (!selectedUser.value?.id || !overrideForm.value.capability_code) {
+        toast.error('Vui lòng chọn quyền cần ghi đè.')
+        return
+    }
+
+    router.post(
+        route('web.users.capability-overrides.upsert', { user: selectedUser.value.id }),
+        {
+            capability_code: overrideForm.value.capability_code,
+            effect: overrideForm.value.effect,
+            reason: overrideForm.value.reason || null,
+            expires_at: overrideForm.value.expires_at || null,
+        },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success('Đã lưu ghi đè quyền.')
+                resetOverrideForm()
+                refreshDetailUser(selectedUser.value.id)
+            },
+            onError: () => toast.error('Không thể lưu ghi đè quyền.'),
+        }
+    )
+}
+
+const removeOverride = (override) => {
+    if (!selectedUser.value?.id || !override?.id) return
+
+    router.delete(
+        route('web.users.capability-overrides.destroy', { user: selectedUser.value.id, override: override.id }),
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success('Đã xóa ghi đè quyền.')
+                refreshDetailUser(selectedUser.value.id)
+            },
+            onError: () => toast.error('Không thể xóa ghi đè quyền.'),
+        }
+    )
 }
 
 const changeAccountStatus = (user, status) => {
@@ -502,6 +718,7 @@ const openEditUserModal = async (user) => {
 
 const openDetailModal = (user) => {
     selectedUser.value = user
+    resetOverrideForm()
     isDetailModalOpen.value = true
 }
 
@@ -525,3 +742,6 @@ watch(() => props.detailUser, (detailUser) => {
     openDetailModal(detailUser)
 }, { immediate: true })
 </script>
+
+
+

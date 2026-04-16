@@ -10,14 +10,15 @@ import Modal from '@/components/ui/Modal.vue'
 const props = defineProps({
     approvalRequests: { type: Object, required: true },
     filters: { type: Object, default: () => ({}) },
+    stats: { type: Object, default: () => ({}) },
 })
 
 const selectedRequest = ref(null)
 
 const statusLabel = (status) => ({
-    pending: 'Chờ duyệt',
-    approved: 'Đã duyệt',
-    rejected: 'Từ chối',
+    pending: 'Cho duyet',
+    approved: 'Da duyet',
+    rejected: 'Tu choi',
 }[status] || '-')
 
 const statusClass = (status) => ({
@@ -27,12 +28,19 @@ const statusClass = (status) => ({
 }[status] || 'bg-gray-100 text-gray-700')
 
 const requestTypeLabel = (type) => ({
-    department_create: 'Tạo mới',
-    department_update: 'Cập nhật',
-    department_toggle: 'Khóa / mở',
+    department_create: 'Tao moi',
+    department_update: 'Cap nhat',
+    department_toggle: 'Khoa / mo',
 }[type] || '-')
 
 const formatDateTime = (value) => value ? new Date(value).toLocaleString('vi-VN') : '-'
+const displayValue = (value) => {
+    if (value === null || value === undefined || value === '') return '-'
+    if (typeof value === 'boolean') return value ? 'Co' : 'Khong'
+    if (typeof value === 'number') return String(value)
+    if (Array.isArray(value)) return value.join(', ')
+    return String(value)
+}
 
 const applyFilter = (params = {}) => {
     router.get(route('web.department-approvals.index'), { ...props.filters, ...params }, {
@@ -49,30 +57,24 @@ const openDetail = (item) => {
 }
 
 const approve = (item) => {
-    const reviewNote = window.prompt('Ghi chú duyệt (có thể bỏ trống):', '')
-
-    if (reviewNote === null) {
-        return
-    }
+    const reviewNote = window.prompt('Ghi chu duyet (co the bo trong):', '')
+    if (reviewNote === null) return
 
     router.post(route('web.department-approvals.approve', item.id), { review_note: reviewNote }, {
         preserveScroll: true,
-        onSuccess: () => toast.success('Đã duyệt yêu cầu phòng ban.'),
-        onError: () => toast.error('Không thể duyệt yêu cầu phòng ban.'),
+        onSuccess: () => toast.success('Da duyet yeu cau phong ban.'),
+        onError: () => toast.error('Khong the duyet yeu cau phong ban.'),
     })
 }
 
 const reject = (item) => {
-    const reviewNote = window.prompt('Lý do từ chối:', '')
-
-    if (reviewNote === null) {
-        return
-    }
+    const reviewNote = window.prompt('Ly do tu choi:', '')
+    if (reviewNote === null) return
 
     router.post(route('web.department-approvals.reject', item.id), { review_note: reviewNote }, {
         preserveScroll: true,
-        onSuccess: () => toast.success('Đã từ chối yêu cầu phòng ban.'),
-        onError: () => toast.error('Không thể từ chối yêu cầu phòng ban.'),
+        onSuccess: () => toast.success('Da tu choi yeu cau phong ban.'),
+        onError: () => toast.error('Khong the tu choi yeu cau phong ban.'),
     })
 }
 </script>
@@ -80,30 +82,49 @@ const reject = (item) => {
 <template>
     <AdminLayout>
         <PageBreadcrumb
-            title="Duyệt phòng ban"
+            title="Duyet phong ban"
             :items="[
                 { text: 'HCNS', link: null },
-                { text: 'Duyệt phòng ban', link: null },
+                { text: 'Duyet phong ban', link: null },
             ]"
         />
+
+        <div class="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div class="rounded-xl border border-gray-200 bg-white p-4">
+                <div class="text-xs text-gray-500">Tong yeu cau</div>
+                <div class="text-2xl font-semibold text-gray-900">{{ stats.total || 0 }}</div>
+            </div>
+            <div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div class="text-xs text-amber-700">Cho duyet</div>
+                <div class="text-2xl font-semibold text-amber-800">{{ stats.pending || 0 }}</div>
+            </div>
+            <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <div class="text-xs text-emerald-700">Da duyet</div>
+                <div class="text-2xl font-semibold text-emerald-800">{{ stats.approved || 0 }}</div>
+            </div>
+            <div class="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                <div class="text-xs text-rose-700">Tu choi</div>
+                <div class="text-2xl font-semibold text-rose-800">{{ stats.rejected || 0 }}</div>
+            </div>
+        </div>
 
         <div class="mb-6 rounded-xl border border-gray-200 bg-white p-4">
             <div class="grid grid-cols-1 gap-4 md:grid-cols-[240px_180px]">
                 <div>
-                    <label class="mb-1 block text-sm font-medium text-gray-700">Trạng thái</label>
+                    <label class="mb-1 block text-sm font-medium text-gray-700">Trang thai</label>
                     <select
                         :value="filters.status || ''"
                         @change="applyFilter({ status: $event.target.value, page: 1 })"
                         class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                     >
-                        <option value="">Tất cả trạng thái</option>
-                        <option value="pending">Chờ duyệt</option>
-                        <option value="approved">Đã duyệt</option>
-                        <option value="rejected">Từ chối</option>
+                        <option value="">Tat ca trang thai</option>
+                        <option value="pending">Cho duyet</option>
+                        <option value="approved">Da duyet</option>
+                        <option value="rejected">Tu choi</option>
                     </select>
                 </div>
                 <div>
-                    <label class="mb-1 block text-sm font-medium text-gray-700">Số dòng / trang</label>
+                    <label class="mb-1 block text-sm font-medium text-gray-700">So dong / trang</label>
                     <select
                         :value="approvalRequests.per_page"
                         @change="applyFilter({ per_page: Number($event.target.value), page: 1 })"
@@ -122,12 +143,12 @@ const reject = (item) => {
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Người gửi</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Loại yêu cầu</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Phòng ban</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Gửi lúc</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Trạng thái</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Thao tác</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Nguoi gui</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Loai yeu cau</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Phong ban</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Gui luc</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Trang thai</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Thao tac</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200">
@@ -142,13 +163,13 @@ const reject = (item) => {
                             </td>
                             <td class="px-4 py-4 text-sm text-gray-700">
                                 <div class="font-semibold text-gray-900">{{ item.payload.name || item.department?.name || '-' }}</div>
-                                <div>Trưởng phòng: {{ item.payload.manager_name || '-' }}</div>
-                                <div class="text-xs text-gray-500">Trạng thái mới: {{ item.payload.is_active_label || '-' }}</div>
+                                <div>Truong phong: {{ item.payload.manager_name || '-' }}</div>
+                                <div class="text-xs text-gray-500">Trang thai moi: {{ item.payload.is_active_label || '-' }}</div>
                             </td>
                             <td class="px-4 py-4 text-sm text-gray-700">
                                 <div>{{ formatDateTime(item.submitted_at) }}</div>
                                 <div v-if="item.reviewed_at" class="mt-1 text-xs text-gray-500">
-                                    Xử lý: {{ formatDateTime(item.reviewed_at) }}
+                                    Xu ly: {{ formatDateTime(item.reviewed_at) }}
                                 </div>
                             </td>
                             <td class="px-4 py-4">
@@ -174,7 +195,7 @@ const reject = (item) => {
                                         class="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white"
                                         @click="approve(item)"
                                     >
-                                        Duyệt
+                                        Duyet
                                     </button>
                                     <button
                                         v-if="item.status === 'pending'"
@@ -182,14 +203,14 @@ const reject = (item) => {
                                         class="rounded-lg bg-rose-600 px-3 py-2 text-sm font-medium text-white"
                                         @click="reject(item)"
                                     >
-                                        Từ chối
+                                        Tu choi
                                     </button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="!approvalRequests.data.length">
                             <td colspan="6" class="px-4 py-10 text-center text-sm text-gray-500">
-                                Không có yêu cầu phòng ban nào.
+                                Khong co yeu cau phong ban nao.
                             </td>
                         </tr>
                     </tbody>
@@ -203,33 +224,56 @@ const reject = (item) => {
 
         <Modal :show="!!selectedRequest" @close="selectedRequest = null">
             <div v-if="selectedRequest" class="p-6">
-                <h2 class="mb-5 text-lg font-semibold text-gray-900">Chi tiết yêu cầu phòng ban</h2>
+                <h2 class="mb-5 text-lg font-semibold text-gray-900">Chi tiet yeu cau phong ban</h2>
 
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div class="rounded-xl border border-gray-200 p-4">
-                        <div class="mb-3 text-sm font-semibold text-gray-900">Thông tin yêu cầu</div>
+                        <div class="mb-3 text-sm font-semibold text-gray-900">Thong tin yeu cau</div>
                         <div class="space-y-2 text-sm text-gray-700">
-                            <div><span class="font-medium text-gray-900">Loại yêu cầu:</span> {{ requestTypeLabel(selectedRequest.request_type) }}</div>
-                            <div><span class="font-medium text-gray-900">Người gửi:</span> {{ selectedRequest.requested_by?.name || '-' }}</div>
-                            <div><span class="font-medium text-gray-900">Gửi lúc:</span> {{ formatDateTime(selectedRequest.submitted_at) }}</div>
-                            <div><span class="font-medium text-gray-900">Trạng thái:</span> {{ statusLabel(selectedRequest.status) }}</div>
+                            <div><span class="font-medium text-gray-900">Loai yeu cau:</span> {{ requestTypeLabel(selectedRequest.request_type) }}</div>
+                            <div><span class="font-medium text-gray-900">Nguoi gui:</span> {{ selectedRequest.requested_by?.name || '-' }}</div>
+                            <div><span class="font-medium text-gray-900">Gui luc:</span> {{ formatDateTime(selectedRequest.submitted_at) }}</div>
+                            <div><span class="font-medium text-gray-900">Trang thai:</span> {{ statusLabel(selectedRequest.status) }}</div>
                         </div>
                     </div>
 
                     <div class="rounded-xl border border-gray-200 p-4">
-                        <div class="mb-3 text-sm font-semibold text-gray-900">Thông tin phòng ban</div>
+                        <div class="mb-3 text-sm font-semibold text-gray-900">Thong tin phong ban</div>
                         <div class="space-y-2 text-sm text-gray-700">
-                            <div><span class="font-medium text-gray-900">Tên phòng ban:</span> {{ selectedRequest.payload.name || selectedRequest.department?.name || '-' }}</div>
-                            <div><span class="font-medium text-gray-900">Trưởng phòng:</span> {{ selectedRequest.payload.manager_name || '-' }}</div>
-                            <div><span class="font-medium text-gray-900">Trạng thái sau duyệt:</span> {{ selectedRequest.payload.is_active_label || '-' }}</div>
+                            <div><span class="font-medium text-gray-900">Ten phong ban:</span> {{ selectedRequest.payload.name || selectedRequest.department?.name || '-' }}</div>
+                            <div><span class="font-medium text-gray-900">Truong phong:</span> {{ selectedRequest.payload.manager_name || '-' }}</div>
+                            <div><span class="font-medium text-gray-900">Trang thai sau duyet:</span> {{ selectedRequest.payload.is_active_label || '-' }}</div>
                         </div>
                     </div>
 
                     <div class="rounded-xl border border-gray-200 p-4 md:col-span-2">
-                        <div class="mb-3 text-sm font-semibold text-gray-900">Mô tả</div>
+                        <div class="mb-3 text-sm font-semibold text-gray-900">Mo ta</div>
                         <div class="text-sm text-gray-700">
-                            {{ selectedRequest.payload.description || 'Không có mô tả.' }}
+                            {{ selectedRequest.payload.description || 'Khong co mo ta.' }}
                         </div>
+                    </div>
+
+                    <div class="rounded-xl border border-gray-200 p-4 md:col-span-2">
+                        <div class="mb-3 text-sm font-semibold text-gray-900">Noi dung thay doi truoc / sau</div>
+                        <div v-if="selectedRequest.changes?.length" class="overflow-x-auto">
+                            <table class="min-w-full text-sm">
+                                <thead>
+                                    <tr class="text-left text-xs uppercase text-gray-500">
+                                        <th class="px-2 py-2">Truong</th>
+                                        <th class="px-2 py-2">Truoc</th>
+                                        <th class="px-2 py-2">Sau</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="change in selectedRequest.changes" :key="change.field" class="border-t border-gray-100">
+                                        <td class="px-2 py-2 font-medium text-gray-800">{{ change.label }}</td>
+                                        <td class="px-2 py-2 text-gray-600">{{ displayValue(change.old_value) }}</td>
+                                        <td class="px-2 py-2 text-gray-900">{{ displayValue(change.new_value) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div v-else class="text-sm text-gray-500">Khong co du lieu thay doi.</div>
                     </div>
                 </div>
             </div>

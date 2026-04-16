@@ -56,15 +56,12 @@
                             placeholder="Chọn chức vụ"
                             :error="form.errors.position_id"
                         />
-                        <FormSelect
-                            id="role_name"
-                            v-model="form.role_name"
-                            :options="roleOptions"
-                            label="Quyền tài khoản"
-                            :required="true"
-                            placeholder="Chọn quyền tài khoản"
-                            :error="form.errors.role_name"
-                        />
+                        <div v-if="minimumRoleHint" class="md:col-span-2 -mt-2">
+                            <p class="text-xs text-gray-500">
+                                Quyền tài khoản sẽ tự động gán theo chức vụ:
+                                <span class="font-semibold text-gray-700">{{ minimumRoleHint }}</span>
+                            </p>
+                        </div>
                         <div>
                             <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Trạng thái tài khoản</label>
                             <select
@@ -168,7 +165,6 @@ const props = defineProps({
     userData: { type: Object, default: null },
     departments: { type: Array, default: () => [] },
     positions: { type: Array, default: () => [] },
-    roles: { type: Array, default: () => [] },
     provinces: { type: Array, default: () => [] },
     storeRoute: { type: String, default: '' },
     updateRoute: { type: String, default: '' },
@@ -203,10 +199,39 @@ const provinceOptions = computed(() => props.provinces.map((item) => ({
 
 const wardOptions = ref([])
 
-const roleOptions = computed(() => props.roles.map((item) => ({
-    value: item.name,
-    label: getRoleLabel(item.name),
-})))
+const getSelectedPosition = () => props.positions.find((item) => Number(item.id) === Number(form.position_id))
+
+const resolveMinimumRoleByPosition = (position) => {
+    if (!position) return 'employee'
+
+    const caps = Array.isArray(position.capabilities) ? position.capabilities : []
+    const adminOnlyCaps = ['manage_positions', 'view_activity_logs', 'sign_documents']
+    const hrCaps = [
+        'manage_employees',
+        'manage_salary',
+        'view_salary',
+        'manage_departments',
+        'transfer_employee',
+        'approve_attendance',
+        'approve_leave',
+        'approve_requests',
+    ]
+
+    if (caps.some((cap) => adminOnlyCaps.includes(cap))) return 'admin'
+    if (caps.some((cap) => hrCaps.includes(cap))) return 'hr'
+
+    const authorityLevel = Number(position.authority_level || 0)
+    if (authorityLevel >= 5) return 'admin'
+    if (authorityLevel >= 4) return 'hr'
+    return 'employee'
+}
+
+const minimumRoleHint = computed(() => {
+    const selectedPosition = getSelectedPosition()
+    if (!selectedPosition) return null
+    const minRole = resolveMinimumRoleByPosition(selectedPosition)
+    return getRoleLabel(minRole)
+})
 
 const form = useForm({
     name: '',
@@ -226,7 +251,6 @@ const form = useForm({
     base_salary: '',
     employment_status: 'active',
     employment_type: 'official',
-    role_name: 'employee',
     avatar: null,
 })
 
@@ -269,7 +293,6 @@ const resetForm = () => {
     form.status = 'active'
     form.employment_status = 'active'
     form.employment_type = 'official'
-    form.role_name = 'employee'
     form.department_id = ''
     form.position_id = ''
     salaryDisplay.value = ''
@@ -296,7 +319,6 @@ const populateForm = (user) => {
     salaryDisplay.value = form.base_salary ? formatNumber(form.base_salary) : ''
     form.employment_status = user.employment_status || 'active'
     form.employment_type = user.employment_type || 'official'
-    form.role_name = user.role_name || 'employee'
     form.password = ''
     form.password_confirmation = ''
     lastManualStatus.value = form.status === 'blocked' && form.employment_status === 'terminated'
@@ -343,6 +365,17 @@ const close = () => {
     resetForm()
 }
 
+const resolveFirstErrorMessage = (errors = {}) => {
+    const first = Object.values(errors || {}).find((value) => {
+        if (Array.isArray(value)) return value.length > 0
+        return typeof value === 'string' && value.trim() !== ''
+    })
+
+    if (Array.isArray(first)) return first[0] || 'Vui lòng kiểm tra lại thông tin!'
+    if (typeof first === 'string' && first.trim() !== '') return first
+    return 'Vui lòng kiểm tra lại thông tin!'
+}
+
 const submitForm = () => {
     const payload = {
         ...form.data(),
@@ -362,7 +395,7 @@ const submitForm = () => {
                 close()
                 emit('success')
             },
-            onError: () => toast.error('Vui lòng kiểm tra lại thông tin!')
+            onError: (errors) => toast.error(resolveFirstErrorMessage(errors))
         })
         return
     }
@@ -374,7 +407,7 @@ const submitForm = () => {
             close()
             emit('success')
         },
-        onError: () => toast.error('Vui lòng kiểm tra lại thông tin!')
+        onError: (errors) => toast.error(resolveFirstErrorMessage(errors))
     })
 }
 </script>

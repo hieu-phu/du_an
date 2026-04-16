@@ -22,6 +22,7 @@ class DepartmentApprovalController extends Controller
         return Inertia::render('Departments/Approvals', [
             'approvalRequests' => $this->departmentApprovalService->getRequests($filters, $perPage),
             'filters' => $filters,
+            'stats' => $this->departmentApprovalService->getRequestStats(),
         ]);
     }
 

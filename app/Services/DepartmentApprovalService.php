@@ -6,6 +6,7 @@ use App\Models\ApprovalRequest;
 use App\Models\Department;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 class DepartmentApprovalService extends BaseService
@@ -15,7 +16,8 @@ class DepartmentApprovalService extends BaseService
     public const REQUEST_TYPE_TOGGLE = 'department_toggle';
 
     public function __construct(
-        protected DepartmentService $departmentService
+        protected DepartmentService $departmentService,
+        protected NotificationService $notificationService
     ) {}
 
     public function submitCreateRequest(array $validatedData): ApprovalRequest
@@ -115,6 +117,7 @@ class DepartmentApprovalService extends BaseService
                         'email' => $request->reviewer->email,
                     ] : null,
                     'payload' => $this->formatPayload($payload),
+                    'changes' => $this->mapChangesForDisplay($request->changes),
                     'department' => $department ? [
                         'id' => $department->id,
                         'name' => $department->name,
@@ -122,6 +125,23 @@ class DepartmentApprovalService extends BaseService
                     ] : null,
                 ];
             });
+    }
+
+    public function getRequestStats(): array
+    {
+        $baseQuery = ApprovalRequest::query()
+            ->whereIn('request_type', [
+                self::REQUEST_TYPE_CREATE,
+                self::REQUEST_TYPE_UPDATE,
+                self::REQUEST_TYPE_TOGGLE,
+            ]);
+
+        return [
+            'total' => (clone $baseQuery)->count(),
+            'pending' => (clone $baseQuery)->where('status', 'pending')->count(),
+            'approved' => (clone $baseQuery)->where('status', 'approved')->count(),
+            'rejected' => (clone $baseQuery)->where('status', 'rejected')->count(),
+        ];
     }
 
     public function approve(ApprovalRequest $approvalRequest, ?string $reviewNote = null): Department
@@ -140,6 +160,8 @@ class DepartmentApprovalService extends BaseService
                 'review_note' => $reviewNote,
             ]);
 
+            $this->notifyRequesterDecision($approvalRequest, true, $reviewNote);
+
             return $department;
         });
     }
@@ -155,6 +177,8 @@ class DepartmentApprovalService extends BaseService
                 'reviewed_at' => now(),
                 'review_note' => $reviewNote,
             ]);
+
+            $this->notifyRequesterDecision($approvalRequest, false, $reviewNote);
         });
     }
 
@@ -283,5 +307,68 @@ class DepartmentApprovalService extends BaseService
                 'name' => 'Tên phòng ban đã tồn tại, không thể duyệt yêu cầu.',
             ]);
         }
+    }
+
+    private function mapChangesForDisplay(Collection $changes): array
+    {
+        return $changes->map(function ($change) {
+            return [
+                'field' => $change->field_name,
+                'label' => $this->fieldLabel($change->field_name),
+                'old_value' => json_decode($change->old_value ?? 'null', true),
+                'new_value' => json_decode($change->new_value ?? 'null', true),
+            ];
+        })->values()->all();
+    }
+
+    private function fieldLabel(string $field): string
+    {
+        return match ($field) {
+            'name' => 'Ten phong ban',
+            'description' => 'Mo ta',
+            'manager_user_id' => 'Truong phong',
+            'is_active' => 'Trang thai',
+            default => $field,
+        };
+    }
+
+    private function notifyRequesterDecision(ApprovalRequest $approvalRequest, bool $approved, ?string $reviewNote = null): void
+    {
+        if (!$approvalRequest->requested_by) {
+            return;
+        }
+
+        $reviewerName = $this->user()?->name ?? 'Admin';
+        $title = $approved ? 'Yeu cau phong ban da duoc duyet' : 'Yeu cau phong ban bi tu choi';
+        $decisionLabel = $approved ? 'duoc duyet' : 'bi tu choi';
+
+        $this->notificationService->create(
+            $approvalRequest->requested_by,
+            $title,
+            "Yeu cau {$this->requestTypeLabel($approvalRequest->request_type)} cua ban {$decisionLabel} boi {$reviewerName}.",
+            [
+                'approval_request_id' => $approvalRequest->id,
+                'request_type' => $approvalRequest->request_type,
+                'decision' => $approved ? 'approved' : 'rejected',
+                'review_note' => $reviewNote,
+                'action_url' => '/departments/approvals',
+            ],
+            '/departments/approvals',
+            null,
+            'approval',
+            $this->user()?->id,
+            ApprovalRequest::class,
+            $approvalRequest->id
+        );
+    }
+
+    private function requestTypeLabel(string $requestType): string
+    {
+        return match ($requestType) {
+            self::REQUEST_TYPE_CREATE => 'tao phong ban',
+            self::REQUEST_TYPE_UPDATE => 'cap nhat phong ban',
+            self::REQUEST_TYPE_TOGGLE => 'khoa/mo phong ban',
+            default => 'phe duyet phong ban',
+        };
     }
 }

@@ -30,8 +30,70 @@ class AccessMatrix
         'positions.view' => [self::ROLE_ADMIN],
         'positions.manage' => [self::ROLE_ADMIN],
         'projects.all.view' => [self::ROLE_ADMIN, self::ROLE_HR],
-        'projects.mine.view' => [self::ROLE_ADMIN, self::ROLE_HR, self::ROLE_EMPLOYEE],
+        'projects.mine.view' => [],
         'settings.view' => [self::ROLE_ADMIN],
+    ];
+
+    /**
+     * Capability map để bật permission UI theo chức vụ.
+     */
+    private const ABILITY_CAPABILITIES = [
+        'attendance.manage.view' => [
+            PositionCapability::APPROVE_ATTENDANCE,
+            PositionCapability::VIEW_ALL_ATTENDANCE,
+            PositionCapability::EXPORT_ATTENDANCE,
+        ],
+        'users.view' => [
+            PositionCapability::MANAGE_EMPLOYEES,
+        ],
+        'users.create' => [
+            PositionCapability::MANAGE_EMPLOYEES,
+        ],
+        'users.edit' => [
+            PositionCapability::MANAGE_EMPLOYEES,
+        ],
+        'users.manage_status' => [
+            PositionCapability::MANAGE_EMPLOYEES,
+        ],
+        'users.approvals.view' => [
+            PositionCapability::APPROVE_REQUESTS,
+        ],
+        'users.approvals.review' => [
+            PositionCapability::APPROVE_REQUESTS,
+        ],
+        'departments.view' => [
+            PositionCapability::MANAGE_DEPARTMENTS,
+        ],
+        'departments.manage' => [
+            PositionCapability::MANAGE_DEPARTMENTS,
+        ],
+        'departments.approvals.view' => [
+            PositionCapability::APPROVE_REQUESTS,
+        ],
+        'departments.approvals.review' => [
+            PositionCapability::APPROVE_REQUESTS,
+        ],
+        'positions.view' => [
+            PositionCapability::MANAGE_POSITIONS,
+        ],
+        'positions.manage' => [
+            PositionCapability::MANAGE_POSITIONS,
+        ],
+        'projects.all.view' => [
+            PositionCapability::VIEW_ALL_PROJECTS,
+            PositionCapability::MANAGE_PROJECTS,
+            PositionCapability::MANAGE_PROJECT_MEMBERS,
+            PositionCapability::MANAGE_PROJECT_ROLES,
+        ],
+        'projects.mine.view' => [
+            PositionCapability::VIEW_ALL_PROJECTS,
+            PositionCapability::MANAGE_PROJECTS,
+            PositionCapability::MANAGE_PROJECT_MEMBERS,
+            PositionCapability::MANAGE_PROJECT_ROLES,
+        ],
+        'settings.view' => [
+            PositionCapability::VIEW_ACTIVITY_LOGS,
+        ],
     ];
 
     public static function roleLabels(): array
@@ -54,9 +116,23 @@ class AccessMatrix
             return false;
         }
 
-        $allowedRoles = self::allowedRoles($ability);
+        $allowedCapabilities = self::ABILITY_CAPABILITIES[$ability] ?? [];
 
-        return !empty($allowedRoles) && $user->hasAnyRole($allowedRoles);
+        if (in_array($ability, ['dashboard.view', 'profile.view', 'attendance.mine.view', 'attendance.mine.action'], true)) {
+            return true;
+        }
+
+        foreach ($allowedCapabilities as $capability) {
+            if ($user->hasPositionCapability($capability)) {
+                return true;
+            }
+        }
+
+        if ($ability === 'projects.mine.view') {
+            return $user->hasActiveProjectMembership();
+        }
+
+        return false;
     }
 
     public static function permissionsFor(?User $user): array

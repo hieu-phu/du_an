@@ -220,7 +220,6 @@ Xây dựng hệ thống HRM trên nền tảng web để quản lý toàn diệ
 ---
 
 ## Module 8. Quản lý chi tiết triển khai dự án
-
 ### Chức năng cần làm
 - Thêm chi tiết triển khai cho dự án
 - Sửa chi tiết triển khai
@@ -250,7 +249,6 @@ Xây dựng hệ thống HRM trên nền tảng web để quản lý toàn diệ
 - Admin có quyền chỉnh sửa thời gian thực hiện
 
 ---
-
 ## Module 9. Quản lý tiến độ dự án
 
 ### Chức năng cần làm
@@ -284,7 +282,6 @@ Xây dựng hệ thống HRM trên nền tảng web để quản lý toàn diệ
 - Quản lý lịch sử duyệt
 - Xem nội dung thay đổi trước và sau
 - Gửi thông báo sau khi duyệt / từ chối
-
 ---
 
 ## Module 11. Quản lý báo cáo và tổng quan
@@ -307,9 +304,7 @@ Xây dựng hệ thống HRM trên nền tảng web để quản lý toàn diệ
   - Admin xem tất cả
   - HR xem dữ liệu nhân sự và chấm công
   - Nhân viên xem dữ liệu cá nhân
-
 ---
-
 ## Module 12. Quản lý phản hồi và trao đổi
 
 ### Chức năng cần làm

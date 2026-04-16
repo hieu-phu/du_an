@@ -3,11 +3,14 @@
 namespace App\Models;
 
 use App\Support\AccessMatrix;
+use App\Models\ProjectMember;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -15,6 +18,9 @@ class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable, HasRoles, HasApiTokens;
+
+    protected ?array $positionCapabilityDecisionCache = null;
+    protected static ?bool $hasUserCapabilityOverridesTable = null;
 
     /**
      * The attributes that are mass assignable.
@@ -122,6 +128,11 @@ class User extends Authenticatable
         return $this->hasOne(EmployeeProfile::class);
     }
 
+    public function positionCapabilityOverrides(): HasMany
+    {
+        return $this->hasMany(UserPositionCapabilityOverride::class);
+    }
+
     /**
      * Scope a query to only include active users.
      */
@@ -182,22 +193,76 @@ class User extends Authenticatable
      */
     public function hasPositionCapability(string $capability): bool
     {
-        if ($this->hasRole('admin')) {
-            return true;
-        }
-
-        $profile = $this->employeeProfile;
-
-        if (!$profile) {
+        if ($capability === '') {
             return false;
         }
 
-        $position = $profile->position;
+        if ($this->positionCapabilityDecisionCache === null) {
+            $this->positionCapabilityDecisionCache = $this->buildPositionCapabilityDecisionCache();
+        }
 
-        if (!$position || !$position->is_active) {
+        return (bool) ($this->positionCapabilityDecisionCache[$capability] ?? false);
+    }
+
+    private function buildPositionCapabilityDecisionCache(): array
+    {
+        $profile = $this->relationLoaded('employeeProfile')
+            ? $this->employeeProfile
+            : $this->employeeProfile()->with('position.capabilitiesCatalog')->first();
+
+        if (!$profile || !$profile->position || !$profile->position->is_active) {
+            return [];
+        }
+
+        $decision = array_fill_keys($profile->position->resolvedCapabilities(), true);
+
+        if ($this->canUseCapabilityOverrideTable()) {
+            $overrides = $this->positionCapabilityOverrides()
+                ->with('capability:id,code')
+                ->where(function (Builder $query) {
+                    $query->whereNull('expires_at')
+                        ->orWhere('expires_at', '>', now());
+                })
+                ->get();
+
+            foreach ($overrides as $override) {
+                $code = $override->capability?->code;
+                if (!is_string($code) || $code === '') {
+                    continue;
+                }
+                $decision[$code] = $override->effect === 'allow';
+            }
+        }
+
+        return $decision;
+    }
+
+    private function canUseCapabilityOverrideTable(): bool
+    {
+        if (self::$hasUserCapabilityOverridesTable !== null) {
+            return self::$hasUserCapabilityOverridesTable;
+        }
+
+        self::$hasUserCapabilityOverridesTable = Schema::hasTable('user_position_capability_overrides');
+
+        return self::$hasUserCapabilityOverridesTable;
+    }
+
+    public function hasActiveProjectMembership(): bool
+    {
+        $profileId = $this->employeeProfile?->id;
+
+        if (!$profileId) {
+            $profileId = (int) $this->employeeProfile()->value('id');
+        }
+
+        if ($profileId <= 0) {
             return false;
         }
 
-        return in_array($capability, $position->capabilities ?? [], true);
+        return ProjectMember::query()
+            ->where('employee_profile_id', $profileId)
+            ->where('is_active', true)
+            ->exists();
     }
 }

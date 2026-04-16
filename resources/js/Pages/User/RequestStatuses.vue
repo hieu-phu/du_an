@@ -1,6 +1,6 @@
 <template>
-    <AdminLayout title="Yêu cầu tài khoản">
-        <PageBreadcrumb title="Yêu cầu tài khoản" :items="breadcrumbItems" />
+    <AdminLayout title="Yeu cau cua toi">
+        <PageBreadcrumb title="Yeu cau cua toi" :items="breadcrumbItems" />
 
         <div class="rounded-xl border border-gray-200 bg-white p-4">
             <div class="mb-4 flex flex-wrap gap-3">
@@ -37,9 +37,9 @@
                     >
                         <div class="flex items-start justify-between gap-3">
                             <div>
-                                <div class="font-medium text-gray-900">{{ item.payload.name || '-' }}</div>
-                                <div class="text-sm text-gray-600">{{ item.payload.email || '-' }}</div>
-                                <div class="text-sm text-gray-600">{{ item.payload.role_label || '-' }}</div>
+                                <div class="font-medium text-gray-900">{{ requestTypeLabel(item.request_type) }}</div>
+                                <div class="text-sm text-gray-600">{{ requestHeadline(item) }}</div>
+                                <div class="text-sm text-gray-600">{{ requestSubline(item) }}</div>
                             </div>
                             <span class="rounded-full px-2.5 py-1 text-xs font-semibold" :class="activeApprovalPanel.statusBadgeClass">
                                 {{ activeApprovalPanel.badgeLabel }}
@@ -51,11 +51,11 @@
                         </div>
 
                         <div v-if="activeApprovalTab === 'rejected'" class="mt-2 rounded-lg px-3 py-2 text-sm" :class="activeApprovalPanel.noteClass">
-                            {{ item.review_note || 'Admin chưa nhập lý do từ chối.' }}
+                            {{ item.review_note || 'Admin chua nhap ly do tu choi.' }}
                         </div>
 
                         <div v-if="activeApprovalTab === 'approved'" class="mt-2 text-sm text-emerald-700">
-                            Đã được {{ item.reviewed_by?.name || 'Admin' }} duyệt.
+                            Da duoc {{ item.reviewed_by?.name || 'Admin' }} duyet.
                         </div>
                     </div>
                 </div>
@@ -84,13 +84,13 @@ const rejectedApprovals = computed(() => props.approvalSummary?.rejected || [])
 
 const breadcrumbItems = [
     { text: 'HCNS', link: null },
-    { text: 'Yêu cầu tài khoản', link: null },
+    { text: 'Yeu cau cua toi', link: null },
 ]
 
 const approvalTabs = computed(() => [
     {
         key: 'approved',
-        label: 'Tài khoản được duyệt',
+        label: 'Da duyet',
         count: approvedApprovals.value.length,
         activeClass: 'border-emerald-200 bg-emerald-50 text-emerald-800',
         inactiveClass: 'border-gray-200 bg-white text-gray-700 hover:border-emerald-200 hover:text-emerald-700',
@@ -99,7 +99,7 @@ const approvalTabs = computed(() => [
     },
     {
         key: 'rejected',
-        label: 'Tài khoản từ chối',
+        label: 'Tu choi',
         count: rejectedApprovals.value.length,
         activeClass: 'border-rose-200 bg-rose-50 text-rose-800',
         inactiveClass: 'border-gray-200 bg-white text-gray-700 hover:border-rose-200 hover:text-rose-700',
@@ -108,7 +108,7 @@ const approvalTabs = computed(() => [
     },
     {
         key: 'pending',
-        label: 'Tài khoản chờ duyệt',
+        label: 'Cho duyet',
         count: pendingApprovals.value.length,
         activeClass: 'border-amber-200 bg-amber-50 text-amber-800',
         inactiveClass: 'border-gray-200 bg-white text-gray-700 hover:border-amber-200 hover:text-amber-700',
@@ -125,48 +125,76 @@ const activeApprovalItems = computed(() => ({
 
 const activeApprovalPanel = computed(() => ({
     approved: {
-        title: 'Tài khoản đã được duyệt',
-        description: 'Các yêu cầu đã được Admin phê duyệt và tạo tài khoản thành công',
+        title: 'Yeu cau da duyet',
+        description: 'Cac yeu cau da duoc Admin phe duyet',
         wrapperClass: 'border-emerald-200 bg-emerald-50/70',
         titleClass: 'text-emerald-900',
         subtitleClass: 'text-emerald-700',
         itemBorderClass: 'border-emerald-200',
         statusBadgeClass: 'bg-emerald-100 text-emerald-800',
-        badgeLabel: 'Được duyệt',
-        timeLabel: 'Duyệt lúc:',
+        badgeLabel: 'Duoc duyet',
+        timeLabel: 'Duyet luc:',
         emptyClass: 'border-emerald-200 text-emerald-800',
-        emptyText: 'Hiện chưa có tài khoản nào được duyệt.',
+        emptyText: 'Hien chua co yeu cau nao duoc duyet.',
         noteClass: '',
     },
     rejected: {
-        title: 'Tài khoản bị từ chối',
-        description: 'Các yêu cầu đã bị Admin từ chối và ghi chú phản hồi',
+        title: 'Yeu cau bi tu choi',
+        description: 'Cac yeu cau da bi tu choi',
         wrapperClass: 'border-rose-200 bg-rose-50/70',
         titleClass: 'text-rose-900',
         subtitleClass: 'text-rose-700',
         itemBorderClass: 'border-rose-200',
         statusBadgeClass: 'bg-rose-100 text-rose-800',
-        badgeLabel: 'Từ chối',
-        timeLabel: 'Xử lý lúc:',
+        badgeLabel: 'Tu choi',
+        timeLabel: 'Xu ly luc:',
         emptyClass: 'border-rose-200 text-rose-800',
-        emptyText: 'Hiện chưa có tài khoản nào bị từ chối.',
+        emptyText: 'Hien chua co yeu cau nao bi tu choi.',
         noteClass: 'bg-rose-50 text-rose-900',
     },
     pending: {
-        title: 'Tài khoản đang chờ duyệt',
-        description: 'Các yêu cầu tạo tài khoản Nhân sự đang chờ Admin xử lý',
+        title: 'Yeu cau cho duyet',
+        description: 'Cac yeu cau dang cho Admin xu ly',
         wrapperClass: 'border-amber-200 bg-amber-50/70',
         titleClass: 'text-amber-900',
         subtitleClass: 'text-amber-700',
         itemBorderClass: 'border-amber-200',
         statusBadgeClass: 'bg-amber-100 text-amber-800',
-        badgeLabel: 'Chờ duyệt',
-        timeLabel: 'Gửi lúc:',
+        badgeLabel: 'Cho duyet',
+        timeLabel: 'Gui luc:',
         emptyClass: 'border-amber-200 text-amber-800',
-        emptyText: 'Hiện chưa có tài khoản nào đang chờ duyệt.',
+        emptyText: 'Hien chua co yeu cau nao dang cho duyet.',
         noteClass: '',
     },
 }[activeApprovalTab.value]))
+
+const requestTypeLabel = (type) => ({
+    user_create: 'Tao tai khoan',
+    user_salary_change: 'Doi luong co ban',
+}[type] || '-')
+
+const requestHeadline = (item) => {
+    if (item.request_type === 'user_create') {
+        return item.payload?.name || '-'
+    }
+
+    return item.payload?.employee_name || '-'
+}
+
+const requestSubline = (item) => {
+    if (item.request_type === 'user_create') {
+        return item.payload?.email || '-'
+    }
+
+    const oldSalary = item.payload?.old_salary
+    const newSalary = item.payload?.new_salary
+    return `${formatCurrency(oldSalary)} -> ${formatCurrency(newSalary)}`
+}
+
+const formatCurrency = (value) => {
+    if (value === null || value === undefined || value === '') return '-'
+    return `${new Intl.NumberFormat('vi-VN').format(Number(value))} VND`
+}
 
 const formatDateTime = (value) => {
     if (!value) return '-'

@@ -1,25 +1,56 @@
 <template>
-    <AdminLayout title="Duyệt tài khoản">
-        <PageBreadcrumb title="Duyệt tài khoản" :items="breadcrumbItems" />
+    <AdminLayout title="Duyet yeu cau nhan su">
+        <PageBreadcrumb title="Duyet yeu cau nhan su" :items="breadcrumbItems" />
+
+        <div class="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div class="rounded-xl border border-gray-200 bg-white p-4">
+                <div class="text-xs text-gray-500">Tong yeu cau</div>
+                <div class="text-2xl font-semibold text-gray-900">{{ stats.total || 0 }}</div>
+            </div>
+            <div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div class="text-xs text-amber-700">Cho duyet</div>
+                <div class="text-2xl font-semibold text-amber-800">{{ stats.pending || 0 }}</div>
+            </div>
+            <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <div class="text-xs text-emerald-700">Da duyet</div>
+                <div class="text-2xl font-semibold text-emerald-800">{{ stats.approved || 0 }}</div>
+            </div>
+            <div class="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                <div class="text-xs text-rose-700">Tu choi</div>
+                <div class="text-2xl font-semibold text-rose-800">{{ stats.rejected || 0 }}</div>
+            </div>
+        </div>
 
         <div class="mb-6 rounded-xl border border-gray-200 bg-white p-4">
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-[240px_180px]">
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div>
-                    <label class="mb-1 block text-sm font-medium text-gray-700">Trạng thái</label>
+                    <label class="mb-1 block text-sm font-medium text-gray-700">Loai yeu cau</label>
+                    <select
+                        :value="filters.request_type || ''"
+                        @change="applyFilter({ request_type: $event.target.value, page: 1 })"
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    >
+                        <option value="">Tat ca</option>
+                        <option value="user_create">Tao tai khoan</option>
+                        <option value="user_salary_change">Doi luong co ban</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-gray-700">Trang thai</label>
                     <select
                         :value="filters.status || ''"
                         @change="applyFilter({ status: $event.target.value, page: 1 })"
                         class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                     >
-                        <option value="">Tất cả trạng thái</option>
-                        <option value="pending">Chờ duyệt</option>
-                        <option value="approved">Đã duyệt</option>
-                        <option value="rejected">Từ chối</option>
-                        <option value="cancelled">Đã hủy</option>
+                        <option value="">Tat ca trang thai</option>
+                        <option value="pending">Cho duyet</option>
+                        <option value="approved">Da duyet</option>
+                        <option value="rejected">Tu choi</option>
+                        <option value="cancelled">Da huy</option>
                     </select>
                 </div>
                 <div>
-                    <label class="mb-1 block text-sm font-medium text-gray-700">Số dòng / trang</label>
+                    <label class="mb-1 block text-sm font-medium text-gray-700">So dong / trang</label>
                     <select
                         :value="approvalRequests.per_page"
                         @change="applyFilter({ per_page: Number($event.target.value), page: 1 })"
@@ -38,12 +69,12 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Người gửi</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Tài khoản đề nghị</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Công việc</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Gửi lúc</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Trạng thái</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Thao tác</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Nguoi gui</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Loai yeu cau</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Thong tin</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Gui luc</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Trang thai</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Thao tac</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200">
@@ -53,22 +84,25 @@
                                 <div>{{ item.requested_by?.email || '-' }}</div>
                             </td>
                             <td class="px-4 py-4 text-sm text-gray-700">
-                                <div class="font-semibold text-gray-900">{{ item.payload.name || '-' }}</div>
-                                <div>{{ item.payload.email || '-' }}</div>
-                                <div>{{ item.payload.phone || '-' }}</div>
-                                <div class="mt-1 inline-flex rounded-full bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700">
-                                    {{ item.payload.role_label || '-' }}
-                                </div>
+                                <div class="font-semibold text-gray-900">{{ requestTypeLabel(item.request_type) }}</div>
+                                <div class="text-xs text-gray-500">{{ item.reason || '-' }}</div>
                             </td>
                             <td class="px-4 py-4 text-sm text-gray-700">
-                                <div>{{ item.payload.department_name || '-' }}</div>
-                                <div>{{ item.payload.position_name || '-' }}</div>
-                                <div class="text-xs text-gray-500">Vào làm: {{ formatDate(item.payload.hire_date) }}</div>
+                                <template v-if="item.request_type === 'user_create'">
+                                    <div class="font-semibold text-gray-900">{{ item.payload.name || '-' }}</div>
+                                    <div>{{ item.payload.email || '-' }}</div>
+                                    <div>{{ item.payload.department_name || '-' }}</div>
+                                </template>
+                                <template v-else>
+                                    <div class="font-semibold text-gray-900">{{ item.payload.employee_name || '-' }}</div>
+                                    <div>{{ item.payload.employee_code || '-' }}</div>
+                                    <div>{{ formatCurrency(item.payload.old_salary) }} -> {{ formatCurrency(item.payload.new_salary) }}</div>
+                                </template>
                             </td>
                             <td class="px-4 py-4 text-sm text-gray-700">
                                 <div>{{ formatDateTime(item.submitted_at) }}</div>
                                 <div v-if="item.reviewed_at" class="mt-1 text-xs text-gray-500">
-                                    Xử lý: {{ formatDateTime(item.reviewed_at) }}
+                                    Xu ly: {{ formatDateTime(item.reviewed_at) }}
                                 </div>
                             </td>
                             <td class="px-4 py-4">
@@ -94,7 +128,7 @@
                                         class="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white"
                                         @click="approve(item)"
                                     >
-                                        Duyệt
+                                        Duyet
                                     </button>
                                     <button
                                         v-if="item.status === 'pending'"
@@ -102,14 +136,14 @@
                                         class="rounded-lg bg-rose-600 px-3 py-2 text-sm font-medium text-white"
                                         @click="reject(item)"
                                     >
-                                        Từ chối
+                                        Tu choi
                                     </button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="!approvalRequests.data.length">
                             <td colspan="6" class="px-4 py-10 text-center text-sm text-gray-500">
-                                Không có yêu cầu nào.
+                                Khong co yeu cau nao.
                             </td>
                         </tr>
                     </tbody>
@@ -123,38 +157,82 @@
 
         <CustomModal
             v-if="selectedRequest"
-            title="Chi tiết yêu cầu tạo tài khoản"
+            title="Chi tiết yêu cầu"
             @close="selectedRequest = null"
             :custom_class="['relative', 'w-full', 'max-w-[760px]', 'rounded-xl', 'bg-white', 'shadow-2xl']"
         >
             <template #body>
                 <div class="max-h-[80vh] overflow-y-auto px-6 pb-6">
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div class="rounded-xl border border-gray-200 p-4">
-                            <div class="mb-3 text-sm font-semibold text-gray-900">Thông tin tài khoản</div>
-                            <div class="space-y-2 text-sm text-gray-700">
-                                <div><span class="font-medium text-gray-900">Họ tên:</span> {{ selectedRequest.payload.name || '-' }}</div>
-                                <div><span class="font-medium text-gray-900">Email:</span> {{ selectedRequest.payload.email || '-' }}</div>
-                                <div><span class="font-medium text-gray-900">Số điện thoại:</span> {{ selectedRequest.payload.phone || '-' }}</div>
-                                <div><span class="font-medium text-gray-900">Vai trò:</span> {{ selectedRequest.payload.role_label || '-' }}</div>
-                                <div><span class="font-medium text-gray-900">Trạng thái TK:</span> {{ statusLabel(selectedRequest.payload.status) }}</div>
-                            </div>
-                        </div>
-                        <div class="rounded-xl border border-gray-200 p-4">
-                            <div class="mb-3 text-sm font-semibold text-gray-900">Thông tin nhân sự</div>
-                            <div class="space-y-2 text-sm text-gray-700">
-                                <div><span class="font-medium text-gray-900">Phòng ban:</span> {{ selectedRequest.payload.department_name || '-' }}</div>
-                                <div><span class="font-medium text-gray-900">Chức vụ:</span> {{ selectedRequest.payload.position_name || '-' }}</div>
-                                <div><span class="font-medium text-gray-900">Ngày vào làm:</span> {{ formatDate(selectedRequest.payload.hire_date) }}</div>
-                                <div><span class="font-medium text-gray-900">Loại nhân sự:</span> {{ employmentTypeLabel(selectedRequest.payload.employment_type) }}</div>
-                                <div><span class="font-medium text-gray-900">Lương cơ bản:</span> {{ formatCurrency(selectedRequest.payload.base_salary) }}</div>
-                            </div>
-                        </div>
                         <div class="rounded-xl border border-gray-200 p-4 md:col-span-2">
-                            <div class="mb-3 text-sm font-semibold text-gray-900">Địa chỉ</div>
-                            <div class="space-y-2 text-sm text-gray-700">
-                                <div>{{ fullAddress(selectedRequest.payload) }}</div>
+                            <div class="mb-3 text-sm font-semibold text-gray-900">Thông tin yêu cầu</div>
+                            <div class="grid grid-cols-1 gap-2 text-sm text-gray-700 md:grid-cols-2">
+                                <div><span class="font-medium text-gray-900">Loại:</span> {{ requestTypeLabel(selectedRequest.request_type) }}</div>
+                                <div><span class="font-medium text-gray-900">Trạng thái:</span> {{ statusLabel(selectedRequest.status) }}</div>
+                                <div><span class="font-medium text-gray-900">Người gửi:</span> {{ selectedRequest.requested_by?.name || '-' }}</div>
+                                <div><span class="font-medium text-gray-900">Gửi lúc:</span> {{ formatDateTime(selectedRequest.submitted_at) }}</div>
                             </div>
+                        </div>
+
+                        <template v-if="selectedRequest.request_type === 'user_create'">
+                            <div class="rounded-xl border border-gray-200 p-4">
+                                <div class="mb-3 text-sm font-semibold text-gray-900">Tai khoan de nghi</div>
+                                <div class="space-y-2 text-sm text-gray-700">
+                                    <div><span class="font-medium text-gray-900">Ho ten:</span> {{ selectedRequest.payload.name || '-' }}</div>
+                                    <div><span class="font-medium text-gray-900">Email:</span> {{ selectedRequest.payload.email || '-' }}</div>
+                                    <div><span class="font-medium text-gray-900">Dien thoai:</span> {{ selectedRequest.payload.phone || '-' }}</div>
+                                    <div><span class="font-medium text-gray-900">Vai tro:</span> {{ selectedRequest.payload.role_label || '-' }}</div>
+                                </div>
+                            </div>
+                            <div class="rounded-xl border border-gray-200 p-4">
+                                <div class="mb-3 text-sm font-semibold text-gray-900">Thong tin nhan su</div>
+                                <div class="space-y-2 text-sm text-gray-700">
+                                    <div><span class="font-medium text-gray-900">Phong ban:</span> {{ selectedRequest.payload.department_name || '-' }}</div>
+                                    <div><span class="font-medium text-gray-900">Chuc vu:</span> {{ selectedRequest.payload.position_name || '-' }}</div>
+                                    <div><span class="font-medium text-gray-900">Ngay vao lam:</span> {{ formatDate(selectedRequest.payload.hire_date) }}</div>
+                                    <div><span class="font-medium text-gray-900">Luong co ban:</span> {{ formatCurrency(selectedRequest.payload.base_salary) }}</div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <template v-else>
+                            <div class="rounded-xl border border-gray-200 p-4 md:col-span-2">
+                                <div class="mb-3 text-sm font-semibold text-gray-900">Chi tiết đổi lương</div>
+                                <div class="grid grid-cols-1 gap-2 text-sm text-gray-700 md:grid-cols-2">
+                                    <div><span class="font-medium text-gray-900">Nhân sự:</span> {{ selectedRequest.payload.employee_name || '-' }}</div>
+                                    <div><span class="font-medium text-gray-900">Ma NV:</span> {{ selectedRequest.payload.employee_code || '-' }}</div>
+                                    <div><span class="font-medium text-gray-900">Lương hiện tại:</span> {{ formatCurrency(selectedRequest.payload.old_salary) }}</div>
+                                    <div><span class="font-medium text-gray-900">Lương đề nghị:</span> {{ formatCurrency(selectedRequest.payload.new_salary) }}</div>
+                                    <div><span class="font-medium text-gray-900">Hiệu lực:</span> {{ formatDate(selectedRequest.payload.effective_date) }}</div>
+                                    <div><span class="font-medium text-gray-900">Đơn vị:</span> {{ selectedRequest.payload.currency || 'VND' }}</div>
+                                </div>
+                                <div class="mt-3 text-sm text-gray-700">
+                                    <span class="font-medium text-gray-900">Lý do:</span> {{ selectedRequest.payload.request_reason || selectedRequest.reason || '-' }}
+                                </div>
+                            </div>
+                        </template>
+
+                        <div class="rounded-xl border border-gray-200 p-4 md:col-span-2">
+                            <div class="mb-3 text-sm font-semibold text-gray-900">Nội dung thay đổi trước / sau</div>
+                            <div v-if="selectedRequest.changes?.length" class="overflow-x-auto">
+                                <table class="min-w-full text-sm">
+                                    <thead>
+                                        <tr class="text-left text-xs uppercase text-gray-500">
+                                            <th class="px-2 py-2">Trường</th>
+                                            <th class="px-2 py-2">Trước</th>
+                                            <th class="px-2 py-2">Sau</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="change in selectedRequest.changes" :key="change.field" class="border-t border-gray-100">
+                                            <td class="px-2 py-2 font-medium text-gray-800">{{ change.label }}</td>
+                                            <td class="px-2 py-2 text-gray-600">{{ displayValue(change.field, change.old_value) }}</td>
+                                            <td class="px-2 py-2 text-gray-900">{{ displayValue(change.field, change.new_value) }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div v-else class="text-sm text-gray-500">Không có dữ liệu thay đổi.</div>
                         </div>
                     </div>
                 </div>
@@ -175,14 +253,20 @@ import CustomModal from '@/components/modals/CustomModal.vue'
 const props = defineProps({
     approvalRequests: { type: Object, required: true },
     filters: { type: Object, default: () => ({}) },
+    stats: { type: Object, default: () => ({}) },
 })
 
 const breadcrumbItems = [
     { text: 'HCNS', link: null },
-    { text: 'Duyệt tài khoản', link: null },
+    { text: 'Duyet nhan su', link: null },
 ]
 
 const selectedRequest = ref(null)
+
+const requestTypeLabel = (type) => ({
+    user_create: 'Tạo tài khoản',
+    user_salary_change: 'Đổi lương cơ bản',
+}[type] || '-')
 
 const statusLabel = (status) => ({
     active: 'Hoạt động',
@@ -201,13 +285,6 @@ const statusClass = (status) => ({
     cancelled: 'bg-gray-100 text-gray-700',
 }[status] || 'bg-gray-100 text-gray-700')
 
-const employmentTypeLabel = (type) => ({
-    probation: 'Thử việc',
-    official: 'Chính thức',
-    intern: 'Thực tập',
-    collaborator: 'Cộng tác viên',
-}[type] || '-')
-
 const formatDate = (value) => value ? new Date(value).toLocaleDateString('vi-VN') : '-'
 const formatDateTime = (value) => value ? new Date(value).toLocaleString('vi-VN') : '-'
 
@@ -216,15 +293,14 @@ const formatCurrency = (value) => {
     return `${new Intl.NumberFormat('vi-VN').format(Number(value))} VND`
 }
 
-const fullAddress = (payload) => {
-    const parts = [
-        payload.address_line,
-        payload.ward_name,
-        payload.province_name,
-        payload.address,
-    ].filter(Boolean)
-
-    return parts.length ? parts.join(', ') : '-'
+const displayValue = (field, value) => {
+    if (value === null || value === undefined || value === '') return '-'
+    if (['old_salary', 'new_salary', 'base_salary'].includes(field)) return formatCurrency(value)
+    if (field === 'effective_date') return formatDate(value)
+    if (typeof value === 'boolean') return value ? 'Co' : 'Khong'
+    if (typeof value === 'number') return String(value)
+    if (Array.isArray(value)) return value.join(', ')
+    return String(value)
 }
 
 const applyFilter = (params = {}) => {
@@ -242,7 +318,7 @@ const openDetail = (item) => {
 }
 
 const approve = (item) => {
-    const reviewNote = window.prompt('Ghi chú duyệt (có thể bỏ trống):', '')
+    const reviewNote = window.prompt('Ghi chu duyet (co the bo trong):', '')
 
     if (reviewNote === null) {
         return
@@ -250,13 +326,13 @@ const approve = (item) => {
 
     router.post(route('web.user-approvals.approve', item.id), { review_note: reviewNote }, {
         preserveScroll: true,
-        onSuccess: () => toast.success('Đã duyệt yêu cầu tạo tài khoản.'),
-        onError: () => toast.error('Không thể duyệt yêu cầu.'),
+        onSuccess: () => toast.success('Da duyet yeu cau.'),
+        onError: () => toast.error('Khong the duyet yeu cau.'),
     })
 }
 
 const reject = (item) => {
-    const reviewNote = window.prompt('Lý do từ chối:', '')
+    const reviewNote = window.prompt('Ly do tu choi:', '')
 
     if (reviewNote === null) {
         return
@@ -264,8 +340,8 @@ const reject = (item) => {
 
     router.post(route('web.user-approvals.reject', item.id), { review_note: reviewNote }, {
         preserveScroll: true,
-        onSuccess: () => toast.success('Đã từ chối yêu cầu.'),
-        onError: () => toast.error('Không thể từ chối yêu cầu.'),
+        onSuccess: () => toast.success('Da tu choi yeu cau.'),
+        onError: () => toast.error('Khong the tu choi yeu cau.'),
     })
 }
 </script>

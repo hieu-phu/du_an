@@ -2,9 +2,11 @@
 
 namespace App\Repositories;
 
+use App\Support\PositionRoleResolver;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Schema;
 
 class UserRepository extends BaseRepository
 {
@@ -95,20 +97,38 @@ class UserRepository extends BaseRepository
 
     private function detailRelations(): array
     {
-        return [
+        $relations = [
             'roles:id,name',
             'creator:id,name',
             'employeeProfile.department:id,name',
-            'employeeProfile.position:id,name',
+            'employeeProfile.position:id,name,authority_level,capabilities',
             'employeeProfile.province:id,name',
             'employeeProfile.district:id,name',
             'employeeProfile.ward:id,name',
         ];
+
+        if (Schema::hasTable('user_position_capability_overrides')) {
+            $relations[] = 'positionCapabilityOverrides:id,user_id,capability_id,effect,reason,expires_at,created_by,created_at,updated_at';
+            $relations[] = 'positionCapabilityOverrides.capability:id,code,name,module';
+        }
+
+        if (Schema::hasTable('position_capabilities') && Schema::hasTable('position_capability_position')) {
+            $relations[] = 'employeeProfile.position.capabilitiesCatalog:id,code';
+        }
+
+        return $relations;
     }
 
     private function transformUser(User $user): array
     {
         $profile = $user->employeeProfile;
+        $position = $profile?->position;
+        $roleName = $user->roles->first()?->name ?? PositionRoleResolver::ROLE_EMPLOYEE;
+        $minimumRole = PositionRoleResolver::resolveMinimumRole($position);
+        $roleMismatch = !PositionRoleResolver::allowsRoleForPosition($roleName, $position);
+        $effectiveRole = PositionRoleResolver::roleRank($roleName) >= PositionRoleResolver::roleRank($minimumRole)
+            ? $roleName
+            : $minimumRole;
 
         return [
             'id' => $user->id,
@@ -123,7 +143,10 @@ class UserRepository extends BaseRepository
             'last_login_at' => $user->last_login_at,
             'is_employee' => (bool) $user->is_employee,
             'has_employee_profile' => (bool) $profile,
-            'role_name' => $user->roles->first()?->name,
+            'role_name' => $roleName,
+            'minimum_role_name' => $minimumRole,
+            'effective_role_name' => $effectiveRole,
+            'is_role_mismatch' => $roleMismatch,
             'creator_name' => $user->creator?->name,
             'employee_code' => $profile?->employee_code,
             'date_of_birth' => $profile?->date_of_birth?->format('Y-m-d'),
@@ -145,7 +168,25 @@ class UserRepository extends BaseRepository
             'position' => $profile?->position ? [
                 'id' => $profile->position->id,
                 'name' => $profile->position->name,
+                'authority_level' => $profile->position->authority_level,
+                'capabilities' => $profile->position->resolvedCapabilities(),
             ] : null,
+            'position_capability_overrides' => Schema::hasTable('user_position_capability_overrides') && $user->relationLoaded('positionCapabilityOverrides')
+                ? $user->positionCapabilityOverrides
+                    ->map(fn ($override) => [
+                        'id' => $override->id,
+                        'capability_id' => $override->capability_id,
+                        'capability_code' => $override->capability?->code,
+                        'capability_name' => $override->capability?->name,
+                        'module' => $override->capability?->module,
+                        'effect' => $override->effect,
+                        'reason' => $override->reason,
+                        'expires_at' => $override->expires_at?->format('Y-m-d H:i:s'),
+                        'created_by' => $override->created_by,
+                    ])
+                    ->values()
+                    ->all()
+                : [],
             'province' => $profile?->province ? [
                 'id' => $profile->province->id,
                 'name' => $profile->province->name,

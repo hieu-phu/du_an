@@ -83,6 +83,7 @@
             <tr>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Ten du an</th>
               <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Trang thai</th>
+              <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Tien do</th>
               <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Ngay bat dau</th>
               <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Thanh vien</th>
               <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Khoa</th>
@@ -99,6 +100,22 @@
                 <span class="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700">
                   {{ project.status_label || '-' }}
                 </span>
+              </td>
+              <td class="px-4 py-4 text-center text-sm text-gray-700">
+                <div class="mx-auto w-32 rounded-full bg-gray-100">
+                  <div
+                    class="rounded-full bg-emerald-500 px-2 py-1 text-center text-xs font-semibold text-black"
+                    :style="{ width: `${project.progress_percent > 0 ? Math.max(8, project.progress_percent) : 0}%` }"
+                  >
+                    {{ project.progress_percent || 0 }}%
+                  </div>
+                </div>
+                <div class="mt-1 text-xs text-gray-500">
+                  {{ project.task_summary?.completed || 0 }}/{{ project.task_summary?.total || 0 }} hoan thanh
+                </div>
+                <div v-if="project.is_delayed" class="mt-1 text-xs font-semibold text-rose-600">
+                  Cham tien do
+                </div>
               </td>
               <td class="px-4 py-4 text-center text-sm text-gray-700">{{ formatDate(project.start_date) }}</td>
               <td class="px-4 py-4 text-center text-sm text-gray-700">
@@ -145,7 +162,7 @@
               </td>
             </tr>
             <tr v-if="!projects.length">
-              <td colspan="6" class="px-4 py-12 text-center text-sm text-gray-500">
+              <td colspan="7" class="px-4 py-12 text-center text-sm text-gray-500">
                 Chua co du an phu hop.
               </td>
             </tr>
@@ -273,13 +290,16 @@
                   </option>
                 </select>
 
-                <input
+                <select
                   v-model="member.role_name"
-                  type="text"
                   class="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                  placeholder="Vai tro"
                   :disabled="!canManageMembers"
-                />
+                >
+                  <option value="">Chon vai tro</option>
+                  <option v-for="option in formRoleOptions" :key="`form-role-${option.value}`" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
 
                 <input
                   v-model="member.joined_at"
@@ -329,7 +349,7 @@
     </Modal>
 
     <Modal :show="isDetailModalOpen" @close="isDetailModalOpen = false">
-      <div v-if="selectedProject" class="p-6">
+      <div v-if="selectedProject" class="max-h-[82vh] overflow-y-auto p-6">
         <h2 class="mb-5 text-lg font-semibold text-gray-900">Chi tiet du an</h2>
 
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -348,17 +368,84 @@
             <div class="text-sm text-gray-700">{{ selectedProject.description || 'Chua co mo ta cho du an nay.' }}</div>
           </div>
 
-          <div class="rounded-xl border border-gray-200 p-4 md:col-span-2">
+          <div class="rounded-xl border border-gray-200 p-3 md:col-span-2">
+            <div class="flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="rounded-lg px-3 py-1.5 text-xs font-semibold transition"
+                :class="activeDetailTab === 'members' ? 'bg-blue-600 text-white' : 'border border-gray-300 text-gray-700 hover:bg-gray-50'"
+                @click="activeDetailTab = 'members'"
+              >
+                Nhan su
+              </button>
+              <button
+                type="button"
+                class="rounded-lg px-3 py-1.5 text-xs font-semibold transition"
+                :class="activeDetailTab === 'implementation' ? 'bg-blue-600 text-white' : 'border border-gray-300 text-gray-700 hover:bg-gray-50'"
+                @click="activeDetailTab = 'implementation'"
+              >
+                Trien khai
+              </button>
+              <button
+                type="button"
+                class="rounded-lg px-3 py-1.5 text-xs font-semibold transition"
+                :class="activeDetailTab === 'history' ? 'bg-blue-600 text-white' : 'border border-gray-300 text-gray-700 hover:bg-gray-50'"
+                @click="activeDetailTab = 'history'"
+              >
+                Lich su
+              </button>
+            </div>
+          </div>
+
+          <div v-if="activeDetailTab === 'members'" class="rounded-xl border border-gray-200 p-4 md:col-span-2">
             <div class="mb-3 flex items-center justify-between">
               <div class="text-sm font-semibold text-gray-900">Nhan su theo tung du an</div>
-              <button
-                v-if="canManageMembers"
-                type="button"
-                class="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
-                @click="addMemberToProject"
-              >
-                Them nhan su vao du an
-              </button>
+              <div class="flex items-center gap-2">
+                <button
+                  v-if="canManageMembers"
+                  type="button"
+                  class="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                  @click="addMemberToProject"
+                >
+                  Them nhan su vao du an
+                </button>
+              </div>
+            </div>
+
+            <div v-if="canManageProjectRoles" class="mb-3 rounded-xl border border-gray-200 p-3">
+              <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-600">Quan ly vai tro du an</div>
+              <div class="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+                <input
+                  v-model="newRole.name"
+                  type="text"
+                  class="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  placeholder="Nhap ten vai tro moi"
+                />
+                <button
+                  type="button"
+                  class="rounded-lg border border-indigo-200 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
+                  @click="addRoleToProject"
+                >
+                  Them vai tro
+                </button>
+              </div>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <span
+                  v-for="role in selectedProject.roles || []"
+                  :key="`project-role-${role.id}`"
+                  class="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-medium text-gray-700"
+                >
+                  {{ role.name }}
+                  <button
+                    type="button"
+                    class="text-rose-600 hover:text-rose-700"
+                    title="Xoa vai tro"
+                    @click="removeRoleFromProject(role)"
+                  >
+                    x
+                  </button>
+                </span>
+              </div>
             </div>
 
             <div v-if="canManageMembers" class="mb-3 grid grid-cols-1 gap-2 rounded-xl border border-gray-200 p-3 md:grid-cols-[minmax(0,1fr)_200px_170px]">
@@ -371,12 +458,15 @@
                   {{ option.label }}
                 </option>
               </select>
-              <input
+              <select
                 v-model="newMember.role_name"
-                type="text"
                 class="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                placeholder="Vai tro"
-              />
+              >
+                <option value="">Chon vai tro</option>
+                <option v-for="option in selectedProjectRoleOptions" :key="`new-role-${option.value}`" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
               <input
                 v-model="newMember.joined_at"
                 type="date"
@@ -400,11 +490,15 @@
                     <td class="px-3 py-2 text-sm text-gray-700">{{ member.employee_code }} - {{ member.employee_name }}</td>
                     <td class="px-3 py-2 text-sm text-gray-700">
                       <template v-if="canManageMembers">
-                        <input
+                        <select
                           v-model="memberRoleDrafts[member.id]"
-                          type="text"
                           class="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm outline-none focus:border-blue-500"
-                        />
+                        >
+                          <option value="">Chon vai tro</option>
+                          <option v-for="option in selectedProjectRoleOptions" :key="`draft-role-${member.id}-${option.value}`" :value="option.value">
+                            {{ option.label }}
+                          </option>
+                        </select>
                       </template>
                       <template v-else>
                         {{ member.role_name || '-' }}
@@ -440,7 +534,232 @@
             </div>
           </div>
 
-          <div class="rounded-xl border border-gray-200 p-4 md:col-span-2">
+          <div v-if="activeDetailTab === 'implementation'" class="rounded-xl border border-gray-200 p-4 md:col-span-2">
+            <div class="mb-3 text-sm font-semibold text-gray-900">Chi tiet trien khai du an</div>
+
+            <div class="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+              <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                <div class="text-[11px] uppercase tracking-wide text-gray-500">Tien do</div>
+                <div class="text-sm font-semibold text-gray-900">{{ selectedProject.progress_percent || 0 }}%</div>
+              </div>
+              <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                <div class="text-[11px] uppercase tracking-wide text-gray-500">Tong dau viec</div>
+                <div class="text-sm font-semibold text-gray-900">{{ selectedProject.task_summary?.total || 0 }}</div>
+              </div>
+              <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                <div class="text-[11px] uppercase tracking-wide text-gray-500">Da hoan thanh</div>
+                <div class="text-sm font-semibold text-emerald-700">{{ selectedProject.task_summary?.completed || 0 }}</div>
+              </div>
+              <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                <div class="text-[11px] uppercase tracking-wide text-gray-500">Cham tien do</div>
+                <div class="text-sm font-semibold" :class="selectedProject.is_delayed ? 'text-rose-700' : 'text-gray-900'">
+                  {{ selectedProject.task_summary?.delayed || 0 }}
+                </div>
+              </div>
+            </div>
+
+            <div v-if="selectedProject.delay_warning" class="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+              {{ selectedProject.delay_warning }}
+            </div>
+
+            <div v-if="canManageImplementationDetails" class="mb-3 rounded-xl border border-gray-200 p-3">
+              <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-600">
+                {{ editingImplementationId ? 'Cap nhat dau viec' : 'Them dau viec moi' }}
+              </div>
+              <div class="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-gray-600">Noi dung cong viec</label>
+                  <input
+                    v-model="implementationForm.content"
+                    type="text"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                    placeholder="Nhap noi dung cong viec"
+                  />
+                </div>
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-gray-600">Nhan su thuc hien</label>
+                  <select
+                    v-model="implementationForm.assigned_to"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  >
+                    <option value="">Khong giao cu the</option>
+                    <option v-for="option in selectedProjectMemberOptions" :key="`impl-employee-${option.id}`" :value="option.id">
+                      {{ option.label }}
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-gray-600">Ngay thuc hien</label>
+                  <input
+                    v-model="implementationForm.execution_date"
+                    type="date"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                    :disabled="!canEditImplementationSchedule"
+                  />
+                </div>
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-gray-600">So ngay thuc hien</label>
+                  <input
+                    v-model="implementationForm.duration_days"
+                    type="number"
+                    min="1"
+                    max="365"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                    :disabled="!canEditImplementationSchedule"
+                  />
+                </div>
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-gray-600">Trang thai dau viec</label>
+                  <select
+                    v-model="implementationForm.detail_status"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  >
+                    <option v-for="option in implementationStatusOptions" :key="`impl-status-${option.value}`" :value="option.value">
+                      {{ option.label }}
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-gray-600">Tien do (%)</label>
+                  <input
+                    v-model="implementationForm.progress_percent"
+                    type="number"
+                    min="0"
+                    max="100"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div class="flex gap-2 xl:col-span-2">
+                  <button
+                    type="button"
+                    class="rounded-lg border border-indigo-200 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
+                    @click="saveImplementationDetail"
+                  >
+                    {{ editingImplementationId ? 'Luu' : 'Them' }}
+                  </button>
+                  <button
+                    v-if="editingImplementationId"
+                    type="button"
+                    class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                    @click="resetImplementationForm"
+                  >
+                    Huy
+                  </button>
+                </div>
+              </div>
+              <p v-if="!canEditImplementationSchedule" class="mt-2 text-xs text-amber-600">
+                Chi admin moi duoc thay doi ngay thuc hien va so ngay thuc hien.
+              </p>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Noi dung</th>
+                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Nhan su</th>
+                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Thuc hien</th>
+                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Du kien xong</th>
+                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Tien do</th>
+                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Trang thai</th>
+                    <th class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Thao tac</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                  <tr v-for="detail in selectedImplementationDetails" :key="`impl-detail-${detail.id}`" class="align-top">
+                    <td class="px-3 py-2 text-sm text-gray-700">
+                      <div class="font-medium text-gray-900">{{ detail.content }}</div>
+                      <div class="mt-1 text-xs text-gray-500">
+                        So ngay: {{ detail.duration_days }} |
+                        Thuc te xong: {{ formatDate(detail.actual_end_date) }}
+                      </div>
+                    </td>
+                    <td class="px-3 py-2 text-sm text-gray-700">{{ detail.assigned_code }} - {{ detail.assigned_name || '-' }}</td>
+                    <td class="px-3 py-2 text-sm text-gray-700">{{ formatDate(detail.execution_date) }}</td>
+                    <td class="px-3 py-2 text-sm text-gray-700">{{ formatDate(detail.expected_end_date) }}</td>
+                    <td class="px-3 py-2 text-sm text-gray-700">
+                      <template v-if="detail.can_update_status">
+                        <input
+                          v-model="implementationDrafts[detail.id].progress_percent"
+                          type="number"
+                          min="0"
+                          max="100"
+                          class="w-20 rounded-lg border border-gray-300 px-2 py-1 text-sm outline-none focus:border-blue-500"
+                        />
+                      </template>
+                      <template v-else>
+                        {{ detail.progress_percent }}%
+                      </template>
+                    </td>
+                    <td class="px-3 py-2 text-sm text-gray-700">
+                      <template v-if="detail.can_update_status">
+                        <select
+                          v-model="implementationDrafts[detail.id].detail_status"
+                          class="rounded-lg border border-gray-300 px-2 py-1 text-sm outline-none focus:border-blue-500"
+                        >
+                          <option v-for="option in implementationStatusOptions" :key="`impl-row-status-${detail.id}-${option.value}`" :value="option.value">
+                            {{ option.label }}
+                          </option>
+                        </select>
+                      </template>
+                      <template v-else>
+                        {{ detail.detail_status_label }}
+                      </template>
+                    </td>
+                    <td class="px-3 py-2 text-center text-sm text-gray-700">
+                      <div class="flex flex-wrap items-center justify-center gap-2">
+                        <button
+                          v-if="detail.can_update_status"
+                          type="button"
+                          class="rounded-lg border border-blue-200 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                          @click="updateImplementationStatus(detail)"
+                        >
+                          Cap nhat
+                        </button>
+                        <button
+                          v-if="canManageImplementationDetails"
+                          type="button"
+                          class="rounded-lg border border-gray-300 px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                          :disabled="detail.is_locked"
+                          @click="editImplementationDetail(detail)"
+                        >
+                          Sua
+                        </button>
+                        <button
+                          v-if="canManageImplementationDetails"
+                          type="button"
+                          class="rounded-lg border border-amber-200 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                          @click="toggleImplementationLock(detail)"
+                        >
+                          {{ detail.is_locked ? 'Mo khoa' : 'Khoa' }}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr v-if="!selectedImplementationDetails.length">
+                    <td colspan="7" class="px-3 py-4 text-center text-sm text-gray-500">
+                      Chua co dau viec trien khai.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div v-for="detail in selectedImplementationDetails" :key="`impl-log-${detail.id}`" class="mt-3 rounded-xl border border-gray-200 p-3">
+              <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-600">
+                Lich su cap nhat - #{{ detail.id }}
+              </div>
+              <div class="space-y-1 text-xs text-gray-600">
+                <div v-for="log in detail.logs || []" :key="`detail-log-${log.id}`">
+                  {{ log.updated_at }} - {{ log.updated_by_name || 'He thong' }}:
+                  {{ log.field_label }} ({{ log.old_value || '-' }} -> {{ log.new_value || '-' }})
+                </div>
+                <div v-if="!(detail.logs || []).length">Chua co lich su cap nhat.</div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="activeDetailTab === 'history'" class="rounded-xl border border-gray-200 p-4 md:col-span-2">
             <div class="mb-3 text-sm font-semibold text-gray-900">Theo doi trang thai du an theo thoi gian</div>
             <div class="overflow-x-auto">
               <table class="min-w-full divide-y divide-gray-200">
@@ -487,9 +806,14 @@ const props = defineProps({
   filters: { type: Object, default: () => ({}) },
   status_options: { type: Array, default: () => [] },
   employee_options: { type: Array, default: () => [] },
+  project_role_options: { type: Array, default: () => [] },
+  implementation_status_options: { type: Array, default: () => [] },
   employee_project_overview: { type: Array, default: () => [] },
   can_manage_projects: { type: Boolean, default: false },
   can_manage_members: { type: Boolean, default: false },
+  can_manage_project_roles: { type: Boolean, default: false },
+  can_manage_implementation_details: { type: Boolean, default: false },
+  can_edit_implementation_schedule: { type: Boolean, default: false },
 })
 
 const isFormModalOpen = ref(false)
@@ -497,12 +821,28 @@ const isDetailModalOpen = ref(false)
 const isEditing = ref(false)
 const editingId = ref(null)
 const selectedProject = ref(null)
+const activeDetailTab = ref('members')
 const memberRoleDrafts = ref({})
+const implementationDrafts = ref({})
+const editingImplementationId = ref(null)
 
 const newMember = reactive({
   employee_profile_id: '',
   role_name: '',
   joined_at: '',
+})
+
+const newRole = reactive({
+  name: '',
+})
+
+const implementationForm = reactive({
+  content: '',
+  assigned_to: '',
+  execution_date: '',
+  duration_days: 1,
+  detail_status: 'planned',
+  progress_percent: 0,
 })
 
 const localFilters = reactive({
@@ -521,9 +861,23 @@ const form = useForm({
 
 const statusOptions = computed(() => props.status_options || [])
 const employeeOptions = computed(() => props.employee_options || [])
+const projectRoleOptions = computed(() => props.project_role_options || [])
+const implementationStatusOptions = computed(() => props.implementation_status_options || [])
 const employeeProjectOverview = computed(() => props.employee_project_overview || [])
 const canManageProjects = computed(() => props.can_manage_projects)
 const canManageMembers = computed(() => props.can_manage_members || props.can_manage_projects)
+const canManageProjectRoles = computed(() => props.can_manage_project_roles || props.can_manage_projects)
+const canManageImplementationDetails = computed(() => props.can_manage_implementation_details || props.can_manage_projects)
+const canEditImplementationSchedule = computed(() => props.can_edit_implementation_schedule)
+const formRoleOptions = computed(() => projectRoleOptions.value)
+const selectedProjectRoleOptions = computed(() => selectedProject.value?.role_options || projectRoleOptions.value)
+const selectedImplementationDetails = computed(() => selectedProject.value?.implementation_details || [])
+const selectedProjectMemberOptions = computed(() => {
+  return (selectedProject.value?.members || []).map((member) => ({
+    id: String(member.employee_profile_id),
+    label: `${member.employee_code || ''} - ${member.employee_name || 'Nhan su'}`.trim(),
+  }))
+})
 
 const memberErrors = computed(() => {
   return Object.entries(form.errors)
@@ -583,10 +937,17 @@ function openEditModal(project) {
 
 function openDetailModal(project) {
   selectedProject.value = project
+  activeDetailTab.value = 'members'
   memberRoleDrafts.value = Object.fromEntries((project.members || []).map((member) => [member.id, member.role_name || '']))
+  implementationDrafts.value = Object.fromEntries((project.implementation_details || []).map((detail) => [detail.id, {
+    detail_status: detail.detail_status || 'planned',
+    progress_percent: detail.progress_percent ?? 0,
+  }]))
   newMember.employee_profile_id = ''
   newMember.role_name = ''
   newMember.joined_at = ''
+  newRole.name = ''
+  resetImplementationForm()
   isDetailModalOpen.value = true
 }
 
@@ -657,12 +1018,21 @@ function toggleLock(project) {
 
 function addMemberToProject() {
   if (!selectedProject.value) return
+  if (!newMember.employee_profile_id) {
+    toast.error('Vui long chon nhan su.')
+    return
+  }
+  if (!newMember.role_name) {
+    toast.error('Vui long chon vai tro.')
+    return
+  }
 
   router.post(route('projects.members.store', selectedProject.value.id), {
     employee_profile_id: newMember.employee_profile_id || null,
     role_name: newMember.role_name,
     joined_at: newMember.joined_at || null,
   }, {
+    preserveState: false,
     preserveScroll: true,
     onSuccess: () => {
       toast.success('Da them nhan su vao du an.')
@@ -671,8 +1041,190 @@ function addMemberToProject() {
       newMember.joined_at = ''
       isDetailModalOpen.value = false
     },
+    onError: (errors) => {
+      toast.error(
+        errors?.employee_profile_id ||
+        errors?.role_name ||
+        errors?.project ||
+        errors?.member ||
+        'Khong the them nhan su vao du an.'
+      )
+    },
+  })
+}
+
+function addRoleToProject() {
+  if (!selectedProject.value) return
+
+  const roleName = (newRole.name || '').trim()
+  if (!roleName) {
+    toast.error('Vui long nhap ten vai tro.')
+    return
+  }
+
+  router.post(route('projects.roles.store', selectedProject.value.id), {
+    name: roleName,
+  }, {
+    preserveState: false,
+    preserveScroll: true,
+    onSuccess: () => {
+      toast.success('Da them vai tro du an.')
+      newRole.name = ''
+      isDetailModalOpen.value = false
+    },
+    onError: (errors) => {
+      toast.error(
+        errors?.name ||
+        errors?.role ||
+        errors?.project ||
+        'Khong the them vai tro du an.'
+      )
+    },
+  })
+}
+
+function removeRoleFromProject(role) {
+  if (!selectedProject.value) return
+  if (!role?.id) return
+  if (!window.confirm(`Ban co chac muon xoa vai tro "${role.name}"?`)) return
+
+  router.delete(route('projects.roles.destroy', [selectedProject.value.id, role.id]), {
+    preserveScroll: true,
+    onSuccess: () => {
+      toast.success('Da xoa vai tro du an.')
+      isDetailModalOpen.value = false
+    },
     onError: () => {
-      toast.error('Khong the them nhan su vao du an.')
+      toast.error('Khong the xoa vai tro du an.')
+    },
+  })
+}
+
+function resetImplementationForm() {
+  editingImplementationId.value = null
+  implementationForm.content = ''
+  implementationForm.assigned_to = ''
+  implementationForm.execution_date = ''
+  implementationForm.duration_days = 1
+  implementationForm.detail_status = implementationStatusOptions.value?.[0]?.value || 'planned'
+  implementationForm.progress_percent = 0
+}
+
+function editImplementationDetail(detail) {
+  editingImplementationId.value = detail.id
+  implementationForm.content = detail.content || ''
+  implementationForm.assigned_to = detail.assigned_to ? String(detail.assigned_to) : ''
+  implementationForm.execution_date = detail.execution_date || ''
+  implementationForm.duration_days = detail.duration_days || 1
+  implementationForm.detail_status = detail.detail_status || (implementationStatusOptions.value?.[0]?.value || 'planned')
+  implementationForm.progress_percent = detail.progress_percent ?? 0
+}
+
+function saveImplementationDetail() {
+  if (!selectedProject.value) return
+  if (!implementationForm.content.trim()) {
+    toast.error('Vui long nhap noi dung cong viec.')
+    return
+  }
+  if (!implementationForm.execution_date) {
+    toast.error('Vui long chon ngay thuc hien.')
+    return
+  }
+  if (!implementationForm.duration_days || Number(implementationForm.duration_days) < 1) {
+    toast.error('So ngay thuc hien phai lon hon 0.')
+    return
+  }
+
+  const payload = {
+    content: implementationForm.content.trim(),
+    assigned_to: implementationForm.assigned_to || null,
+    execution_date: implementationForm.execution_date,
+    duration_days: Number(implementationForm.duration_days),
+    detail_status: implementationForm.detail_status,
+    progress_percent: Number(implementationForm.progress_percent || 0),
+  }
+
+  const onSuccess = () => {
+    toast.success(editingImplementationId.value ? 'Da cap nhat dau viec.' : 'Da them dau viec.')
+    resetImplementationForm()
+    isDetailModalOpen.value = false
+  }
+
+  const onError = (errors) => {
+    toast.error(
+      errors?.content ||
+      errors?.assigned_to ||
+      errors?.execution_date ||
+      errors?.duration_days ||
+      errors?.detail ||
+      errors?.project ||
+      'Khong the luu dau viec.'
+    )
+  }
+
+  if (editingImplementationId.value) {
+    router.put(
+      route('projects.implementation-details.update', [selectedProject.value.id, editingImplementationId.value]),
+      payload,
+      { preserveState: false, preserveScroll: true, onSuccess, onError }
+    )
+    return
+  }
+
+  router.post(
+    route('projects.implementation-details.store', selectedProject.value.id),
+    payload,
+    { preserveState: false, preserveScroll: true, onSuccess, onError }
+  )
+}
+
+function updateImplementationStatus(detail) {
+  if (!selectedProject.value) return
+  const draft = implementationDrafts.value[detail.id] || {}
+  router.put(route('projects.implementation-details.status', [selectedProject.value.id, detail.id]), {
+    detail_status: draft.detail_status || detail.detail_status,
+    progress_percent: Number(draft.progress_percent ?? detail.progress_percent ?? 0),
+  }, {
+    preserveState: false,
+    preserveScroll: true,
+    onSuccess: () => {
+      toast.success('Da cap nhat trang thai dau viec.')
+      isDetailModalOpen.value = false
+    },
+    onError: (errors) => {
+      toast.error(errors?.detail || errors?.detail_status || errors?.progress_percent || 'Khong the cap nhat trang thai dau viec.')
+    },
+  })
+}
+
+function toggleImplementationLock(detail) {
+  if (!selectedProject.value) return
+  router.put(route('projects.implementation-details.toggle-lock', [selectedProject.value.id, detail.id]), {}, {
+    preserveState: false,
+    preserveScroll: true,
+    onSuccess: () => {
+      toast.success(detail.is_locked ? 'Da mo khoa dau viec.' : 'Da khoa dau viec.')
+      isDetailModalOpen.value = false
+    },
+    onError: (errors) => {
+      toast.error(errors?.detail || errors?.project || 'Khong the thay doi khoa dau viec.')
+    },
+  })
+}
+
+function removeImplementationDetail(detail) {
+  if (!selectedProject.value) return
+  if (!window.confirm('Ban co chac muon xoa dau viec nay?')) return
+
+  router.delete(route('projects.implementation-details.destroy', [selectedProject.value.id, detail.id]), {
+    preserveState: false,
+    preserveScroll: true,
+    onSuccess: () => {
+      toast.success('Da xoa dau viec.')
+      isDetailModalOpen.value = false
+    },
+    onError: (errors) => {
+      toast.error(errors?.detail || errors?.project || 'Khong the xoa dau viec.')
     },
   })
 }

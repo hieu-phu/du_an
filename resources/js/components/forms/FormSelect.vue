@@ -86,8 +86,8 @@
         </p>
 
         <!-- Error message -->
-        <p v-if="error" class="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center">
-            {{ error[0] }}
+        <p v-if="errorMessage" class="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center">
+            {{ errorMessage }}
         </p>
     </div>
 </template>
@@ -141,7 +141,7 @@ const props = defineProps({
         default: true
     },
     error: {
-        type: String,
+        type: [String, Array],
         default: ''
     },
     helperText: {
@@ -299,6 +299,11 @@ const emit = defineEmits([
     'deselect',
     'clear'
 ])
+
+const errorMessage = computed(() => {
+    if (Array.isArray(props.error)) return props.error[0] || ''
+    return props.error || ''
+})
 
 // State cho server pagination
 const serverOptions = ref([])

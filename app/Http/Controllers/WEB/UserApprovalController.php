@@ -16,12 +16,13 @@ class UserApprovalController extends Controller
 
     public function index(Request $request)
     {
-        $filters = $request->only(['status', 'per_page']);
+        $filters = $request->only(['status', 'request_type', 'per_page']);
         $perPage = $request->integer('per_page', 15);
 
         return Inertia::render('User/Approvals', [
-            'approvalRequests' => $this->userApprovalService->getCreateUserRequests($filters, $perPage),
+            'approvalRequests' => $this->userApprovalService->getApprovalRequests($filters, $perPage),
             'filters' => $filters,
+            'stats' => $this->userApprovalService->getApprovalStats(),
         ]);
     }
 
@@ -34,10 +35,10 @@ class UserApprovalController extends Controller
         try {
             $this->userApprovalService->approve($approvalRequest, $validated['review_note'] ?? null);
 
-            return redirect()->back()->with('success', 'Đã duyệt và tạo tài khoản thành công.');
+            return redirect()->back()->with('success', 'Da duyet yeu cau thanh cong.');
         } catch (\Exception $e) {
             return back()->withErrors([
-                'error' => 'Không thể duyệt yêu cầu: ' . $e->getMessage(),
+                'error' => 'Khong the duyet yeu cau: ' . $e->getMessage(),
             ]);
         }
     }
@@ -51,10 +52,10 @@ class UserApprovalController extends Controller
         try {
             $this->userApprovalService->reject($approvalRequest, $validated['review_note'] ?? null);
 
-            return redirect()->back()->with('success', 'Đã từ chối yêu cầu tạo tài khoản.');
+            return redirect()->back()->with('success', 'Da tu choi yeu cau.');
         } catch (\Exception $e) {
             return back()->withErrors([
-                'error' => 'Không thể từ chối yêu cầu: ' . $e->getMessage(),
+                'error' => 'Khong the tu choi yeu cau: ' . $e->getMessage(),
             ]);
         }
     }

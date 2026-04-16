@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Repositories\PositionRepository;
+use App\Support\PositionRoleResolver;
 
 class PositionService extends BaseService
 {
@@ -17,41 +18,44 @@ class PositionService extends BaseService
 
     public function store(array $data)
     {
+        $data = PositionRoleResolver::normalizePositionPayload($data);
         $position = $this->positionRepository->create($data);
+        $position->syncCapabilityCodes($data['capabilities'] ?? []);
 
-        $this->logActivity('create', "Đã tạo chức vụ mới: {$position->name}", $position->id);
+        $this->logActivity('create', "Da tao chuc vu moi: {$position->name}", $position->id);
 
         return $position;
     }
 
     public function update($id, array $data)
     {
-        $position = $this->positionRepository->find($id);
+        $data = PositionRoleResolver::normalizePositionPayload($data);
+        $position = $this->positionRepository->getByIdOrFail((int) $id);
         $oldName = $position->name;
-        $oldCaps = $position->capabilities ?? [];
+        $oldCaps = $position->resolvedCapabilities();
         $newCaps = $data['capabilities'] ?? [];
 
         $result = $this->positionRepository->update($id, $data);
         $position->refresh();
+        $position->syncCapabilityCodes($newCaps);
 
         $changes = [];
 
         if ($oldName !== $position->name) {
-            $changes[] = "Đổi tên từ '{$oldName}' sang '{$position->name}'";
+            $changes[] = "Doi ten tu '{$oldName}' sang '{$position->name}'";
         }
 
-        // So sánh quyền hạn
         $added = array_diff($newCaps ?? [], $oldCaps ?? []);
         $removed = array_diff($oldCaps ?? [], $newCaps ?? []);
 
         if (!empty($added)) {
-            $changes[] = "Cấp thêm quyền: " . implode(', ', $added);
+            $changes[] = 'Cap them quyen: ' . implode(', ', $added);
         }
         if (!empty($removed)) {
-            $changes[] = "Thu hồi quyền: " . implode(', ', $removed);
+            $changes[] = 'Thu hoi quyen: ' . implode(', ', $removed);
         }
 
-        $description = "Cập nhật chức vụ '{$position->name}'" . (!empty($changes) ? ": " . implode('; ', $changes) : "");
+        $description = "Cap nhat chuc vu '{$position->name}'" . (!empty($changes) ? ': ' . implode('; ', $changes) : '');
 
         $this->logActivity('update', $description, $id);
 
@@ -60,25 +64,25 @@ class PositionService extends BaseService
 
     public function toggleStatus($id)
     {
-        $position = $this->positionRepository->find($id);
+        $position = $this->positionRepository->getByIdOrFail((int) $id);
         $newStatus = !$position->is_active;
 
         $result = $this->positionRepository->update($id, ['is_active' => $newStatus]);
-        $statusText = $newStatus ? 'kích hoạt' : 'tạm khóa';
+        $statusText = $newStatus ? 'kich hoat' : 'tam khoa';
 
-        $this->logActivity('toggle_status', "Đã {$statusText} chức vụ: {$position->name}", $id);
+        $this->logActivity('toggle_status', "Da {$statusText} chuc vu: {$position->name}", $id);
 
         return $result;
     }
 
     public function delete($id)
     {
-        $position = $this->positionRepository->find($id);
+        $position = $this->positionRepository->getByIdOrFail((int) $id);
         $name = $position->name;
 
         $result = $this->positionRepository->delete($id);
 
-        $this->logActivity('delete', "Đã xóa chức vụ: {$name}", $id);
+        $this->logActivity('delete', "Da xoa chuc vu: {$name}", $id);
 
         return $result;
     }
@@ -88,3 +92,4 @@ class PositionService extends BaseService
         $this->audit('positions', $action, $description, 'positions', $id);
     }
 }
+
