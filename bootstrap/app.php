@@ -23,10 +23,6 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Middleware alias
         $middleware->alias([
-            'role'               => \Spatie\Permission\Middleware\RoleMiddleware::class,
-            'permission'         => \Spatie\Permission\Middleware\PermissionMiddleware::class,
-            'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
-            'access'             => \App\Http\Middleware\EnsureRoleAccess::class,
             'position.capability' => \App\Http\Middleware\EnsurePositionCapability::class,
             'activity.log'       => \App\Http\Middleware\LogUserActivity::class,
         ]);

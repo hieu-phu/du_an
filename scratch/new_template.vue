@@ -1,380 +1,3 @@
-﻿<script setup>
-import { computed, reactive, ref, watch } from 'vue'
-import { Head, router, useForm, usePage } from '@inertiajs/vue3'
-import { toast } from 'vue3-toastify'
-import AdminLayout from '@/Layouts/AdminLayout.vue'
-import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
-import Modal from '@/components/ui/Modal.vue'
-const props = defineProps({
-    positions: { type: Array, default: () => [] },
-    filters: { type: Object, default: () => ({}) },
-    capabilityOptions: { type: Array, default: () => [] },
-    authorityLevels: { type: Array, default: () => [] },
-    authorityLevelCatalog: { type: Array, default: () => [] },
-})
-const page = usePage()
-const positionCapabilities = computed(() => page.props.auth?.position_capabilities || {})
-const canManageAuthorityLevels = computed(() => positionCapabilities.value.manage_positions === true)
-const filters = reactive({
-    search: props.filters?.search ?? '',
-    status: props.filters?.status ?? '',
-})
-const applyFilter = () => {
-    router.get(
-        route('positions.index'),
-        {
-            search: filters.search || undefined,
-            status: filters.status || undefined,
-        },
-        { preserveState: true, preserveScroll: true, replace: true }
-    )
-}
-const resetFilter = () => {
-    filters.search = ''
-    filters.status = ''
-    applyFilter()
-}
-const authorityOptions = computed(() => {
-    if (Array.isArray(props.authorityLevels) && props.authorityLevels.length > 0) {
-        return props.authorityLevels.map((item) => ({
-            value: Number(item.value),
-            label: String(item.label || `Mức ${item.value}`),
-        }))
-    }
-
-    return [
-        { value: 1, label: 'Mức 1 - Nhân viên' },
-        { value: 2, label: 'Mức 2 - Tổ phó / Senior' },
-        { value: 3, label: 'Mức 3 - Trưởng nhóm' },
-        { value: 4, label: 'Mức 4 - Trưởng phòng' },
-        { value: 5, label: 'Mức 5 - Giám đốc / Quản lý cao' },
-    ]
-})
-const authorityLabelMap = computed(() =>
-    Object.fromEntries(authorityOptions.value.map((o) => [o.value, o.label]))
-)
-const capabilityGroups = computed(() => {
-    const baseGroups = (page.props.auth?.capability_definitions || []).map((group) => ({
-        ...group,
-        items: [...(group.items || [])],
-    }))
-
-    const existingKeys = new Set(
-        baseGroups.flatMap((group) => (group.items || []).map((item) => item.key))
-    )
-
-    const extras = (props.capabilityOptions || []).filter((item) => !existingKeys.has(item.key))
-    if (!extras.length) {
-        return baseGroups
-    }
-
-    const moduleLabel = (module) => {
-        const normalized = String(module || 'custom').replace(/_/g, ' ')
-        return normalized.charAt(0).toUpperCase() + normalized.slice(1)
-    }
-
-    const grouped = new Map()
-    for (const item of extras) {
-        const groupName = `Mở rộng: ${moduleLabel(item.module)}`
-        if (!grouped.has(groupName)) {
-            grouped.set(groupName, [])
-        }
-        grouped.get(groupName).push({
-            key: item.key,
-            label: item.label || item.key,
-            desc: item.desc || 'Quyền tùy chỉnh do Admin thêm.',
-        })
-    }
-
-    for (const [groupName, items] of grouped.entries()) {
-        baseGroups.push({
-            group: groupName,
-            icon: '🧩',
-            items,
-        })
-    }
-
-    return baseGroups
-})
-const allCapabilities = computed(() =>
-    capabilityGroups.value.flatMap((g) => g.items)
-)
-const capabilityLabelMap = computed(() =>
-    Object.fromEntries(allCapabilities.value.map((c) => [c.key, c.label]))
-)
-const capabilityMinAuthority = {
-    manage_positions: 5,
-    view_activity_logs: 5,
-    sign_documents: 5,
-    manage_employees: 4,
-    manage_salary: 4,
-    view_salary: 4,
-    manage_departments: 4,
-    transfer_employee: 4,
-    approve_attendance: 4,
-    approve_leave: 4,
-    approve_requests: 4,
-}
-const impliedCapabilities = {
-    manage_salary: ['view_salary'],
-    export_attendance: ['view_all_attendance'],
-    manage_project_roles: ['manage_project_members', 'manage_projects'],
-    export_reports: ['view_reports'],
-}
-const isFormModalOpen = ref(false)
-const isDetailModalOpen = ref(false)
-const isAuthorityLevelModalOpen = ref(false)
-const isEditing = ref(false)
-const selectedPosition = ref(null)
-const editingId = ref(null)
-const activeTab = ref('info')
-const form = useForm({
-    name: '',
-    description: '',
-    authority_level: '',
-    capabilities: [],
-    is_active: true,
-})
-const capabilityCreateForm = useForm({
-    name: '',
-    module: 'custom',
-    description: '',
-})
-const authorityLevelForm = useForm({
-    rank: '',
-    name: '',
-    is_active: true,
-})
-const showCapabilityCreator = ref(false)
-const emptyMessage = computed(() =>
-    filters.search || filters.status
-        ? 'Không tìm thấy chức vụ phù hợp.'
-        : 'Chưa có dữ liệu chức vụ.'
-)
-const capabilityRequiredAuthority = (key) => Number(capabilityMinAuthority[key] || 1)
-const hasCapability = (capabilities, key) =>
-    Array.isArray(capabilities) && capabilities.includes(key)
-const ensureAuthorityForCapability = (key) => {
-    const required = capabilityRequiredAuthority(key)
-    const current = Number(form.authority_level || 0)
-    if (current < required) {
-        form.authority_level = required
-    }
-}
-const addCapability = (key) => {
-    if (!form.capabilities.includes(key)) {
-        form.capabilities.push(key)
-    }
-}
-const applyImpliedCapabilities = () => {
-    let changed = false
-    do {
-        changed = false
-        for (const key of [...form.capabilities]) {
-            for (const impliedKey of impliedCapabilities[key] || []) {
-                ensureAuthorityForCapability(impliedKey)
-                if (!form.capabilities.includes(impliedKey)) {
-                    form.capabilities.push(impliedKey)
-                    changed = true
-                }
-            }
-        }
-    } while (changed)
-}
-const removeCapabilitiesAboveAuthority = (authorityLevel) => {
-    const level = Number(authorityLevel || 0)
-    const before = form.capabilities.length
-    form.capabilities = form.capabilities.filter((key) => capabilityRequiredAuthority(key) <= level)
-    const removed = before - form.capabilities.length
-    if (removed > 0) {
-        toast.info(`Đã bỏ ${removed} quyền không phù hợp với mức quyền hạn.`)
-    }
-}
-const toggleCapability = (key) => {
-    const idx = form.capabilities.indexOf(key)
-    if (idx === -1) {
-        ensureAuthorityForCapability(key)
-        addCapability(key)
-        applyImpliedCapabilities()
-    } else {
-        form.capabilities.splice(idx, 1)
-    }
-}
-const selectAllInGroup = (group) => {
-    group.items.forEach(({ key }) => {
-        ensureAuthorityForCapability(key)
-        addCapability(key)
-    })
-    applyImpliedCapabilities()
-}
-const clearAllInGroup = (group) => {
-    group.items.forEach(({ key }) => {
-        const idx = form.capabilities.indexOf(key)
-        if (idx !== -1) form.capabilities.splice(idx, 1)
-    })
-}
-const isGroupFullySelected = (group) =>
-    group.items.every(({ key }) => form.capabilities.includes(key))
-const openCreateModal = () => {
-    isEditing.value = false
-    editingId.value = null
-    activeTab.value = 'info'
-    form.reset()
-    form.clearErrors()
-    form.is_active = true
-    form.authority_level = ''
-    form.capabilities = []
-    showCapabilityCreator.value = false
-    capabilityCreateForm.reset()
-    capabilityCreateForm.clearErrors()
-    capabilityCreateForm.module = 'custom'
-    isFormModalOpen.value = true
-}
-const openEditModal = (position) => {
-    isEditing.value = true
-    editingId.value = position.id
-    activeTab.value = 'info'
-    form.clearErrors()
-    form.name = position.name ?? ''
-    form.description = position.description ?? ''
-    form.authority_level = position.authority_level ?? ''
-    form.capabilities = Array.isArray(position.capabilities) ? [...position.capabilities] : []
-    form.is_active = !!position.is_active
-    applyImpliedCapabilities()
-    showCapabilityCreator.value = false
-    capabilityCreateForm.reset()
-    capabilityCreateForm.clearErrors()
-    capabilityCreateForm.module = 'custom'
-    isFormModalOpen.value = true
-}
-const openDetailModal = (position) => {
-    selectedPosition.value = position
-    isDetailModalOpen.value = true
-}
-const closeFormModal = () => {
-    isFormModalOpen.value = false
-    form.clearErrors()
-    capabilityCreateForm.clearErrors()
-    showCapabilityCreator.value = false
-}
-const submit = () => {
-    applyImpliedCapabilities()
-    const payload = {
-        ...form.data(),
-        authority_level: form.authority_level === '' ? null : Number(form.authority_level),
-    }
-    const options = {
-        preserveScroll: true,
-        onSuccess: () => {
-            isFormModalOpen.value = false
-            form.reset()
-            toast.success(isEditing.value ? 'Đã cập nhật chức vụ.' : 'Đã tạo chức vụ mới.')
-        },
-        onError: (errors) => {
-            if (errors.name || errors.authority_level || errors.description) {
-                activeTab.value = 'info'
-            }
-            if (errors.capabilities || Object.keys(errors).some((key) => key.startsWith('capabilities.'))) {
-                activeTab.value = 'capabilities'
-            }
-            toast.error('Vui lòng sửa các trường đang báo lỗi trong form.')
-        },
-    }
-    if (isEditing.value) {
-        return form.transform(() => payload).put(route('positions.update', editingId.value), options)
-    }
-    return form.transform(() => payload).post(route('positions.store'), options)
-}
-const submitNewCapability = () => {
-    capabilityCreateForm.post(route('positions.capabilities.store'), {
-        preserveScroll: true,
-        onSuccess: () => {
-            toast.success('Đã thêm quyền mới.')
-            capabilityCreateForm.reset()
-            capabilityCreateForm.module = 'custom'
-            showCapabilityCreator.value = false
-        },
-        onError: () => {
-            toast.error('Không thể thêm quyền. Vui lòng kiểm tra lại.')
-        },
-    })
-}
-const openAuthorityLevelModal = () => {
-    authorityLevelForm.reset()
-    authorityLevelForm.clearErrors()
-    authorityLevelForm.is_active = true
-    isAuthorityLevelModalOpen.value = true
-}
-const closeAuthorityLevelModal = () => {
-    isAuthorityLevelModalOpen.value = false
-    authorityLevelForm.clearErrors()
-}
-const submitAuthorityLevel = () => {
-    const payload = {
-        rank: authorityLevelForm.rank === '' ? null : Number(authorityLevelForm.rank),
-        name: authorityLevelForm.name,
-        is_active: !!authorityLevelForm.is_active,
-    }
-
-    authorityLevelForm.transform(() => payload).post(route('positions.authority-levels.store'), {
-        preserveScroll: true,
-        onSuccess: () => {
-            toast.success('Đã thêm mức quyền hạn.')
-            authorityLevelForm.reset()
-            authorityLevelForm.is_active = true
-        },
-        onError: () => {
-            toast.error('Không thể thêm mức quyền hạn.')
-        },
-    })
-}
-const toggleAuthorityLevel = (level) => {
-    const nextAction = level.is_active ? 'khóa' : 'mở'
-    if (!window.confirm(`Bạn có chắc muốn ${nextAction} mức "${level.name}"?`)) return
-    router.put(route('positions.authority-levels.toggle', level.id), {}, {
-        preserveScroll: true,
-        onSuccess: () => toast.success(`Đã ${nextAction} mức quyền hạn.`),
-        onError: () => toast.error(`Không thể ${nextAction} mức quyền hạn.`),
-    })
-}
-watch(() => form.authority_level, (nextLevel, prevLevel) => {
-    const next = Number(nextLevel || 0)
-    const prev = Number(prevLevel || 0)
-    if (next <= 0) {
-        return
-    }
-    if (prev > 0 && next < prev) {
-        removeCapabilitiesAboveAuthority(next)
-    }
-})
-watch(() => form.capabilities, () => {
-    applyImpliedCapabilities()
-}, { deep: true })
-const toggleStatus = (position) => {
-    const nextAction = position.is_active ? 'khóa' : 'mở lại'
-    if (!window.confirm(`Bạn có chắc muốn ${nextAction} chức vụ "${position.name}"?`)) return
-    router.put(route('positions.toggle', position.id), {}, {
-        preserveScroll: true,
-        onSuccess: () => toast.success(`Đã ${nextAction} chức vụ.`),
-        onError: () => toast.error(`Không thể ${nextAction} chức vụ.`),
-    })
-}
-const confirmDelete = (position) => {
-    if (position.employee_profiles_count > 0) {
-        window.alert(`Chức vụ "${position.name}" đang có ${position.employee_profiles_count} nhân viên. Không thể xóa.`)
-        return
-    }
-    if (!window.confirm(`Bạn có chắc muốn xóa chức vụ "${position.name}"?`)) return
-    router.delete(route('positions.destroy', position.id), {
-        preserveScroll: true,
-        onSuccess: () => toast.success('Đã xóa chức vụ.'),
-        onError: () => toast.error('Không thể xóa chức vụ.'),
-    })
-}
-const canEditPosition = (position) => position?.can_edit !== false
-const canTogglePosition = (position) => position?.can_toggle !== false
-</script>
-
 <template>
     <Head title="Quản lý Chức vụ" />
 
@@ -428,7 +51,7 @@ const canTogglePosition = (position) => position?.can_toggle !== false
                             Tìm Kiếm
                         </button>
                         <button
-                            v-if="canManageAuthorityLevels"
+                            v-if="isAdmin"
                             type="button"
                             class="rounded-xl border border-indigo-200 bg-indigo-50 px-5 py-2.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100"
                             @click="openAuthorityLevelModal"
@@ -446,7 +69,6 @@ const canTogglePosition = (position) => position?.can_toggle !== false
                     </div>
                 </div>
             </div>
-
             <!-- DATA MATRIX -->
             <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div class="overflow-x-auto">
@@ -527,9 +149,9 @@ const canTogglePosition = (position) => position?.can_toggle !== false
                                             :class="position.is_active ? 'text-amber-600 hover:bg-amber-50 hover:text-amber-800' : 'text-emerald-600 hover:bg-emerald-50 hover:text-emerald-800'"
                                             @click="toggleStatus(position)"
                                         >{{ position.is_active ? 'Khóa' : 'Mở' }}</button>
-                                        <span v-if="canManageAuthorityLevels && position.employee_profiles_count === 0" class="text-slate-200">|</span>
+                                        <span v-if="isAdmin && position.employee_profiles_count === 0" class="text-slate-200">|</span>
                                         <button
-                                            v-if="canManageAuthorityLevels && position.employee_profiles_count === 0"
+                                            v-if="isAdmin && position.employee_profiles_count === 0"
                                             type="button"
                                             class="rounded-lg px-2.5 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50 hover:text-red-800"
                                             @click="confirmDelete(position)"
@@ -614,7 +236,7 @@ const canTogglePosition = (position) => position?.can_toggle !== false
                                     </select>
                                     <div v-if="form.errors.authority_level" class="mt-1.5 text-xs text-rose-600">{{ form.errors.authority_level }}</div>
                                     <div class="mt-2 text-xs text-slate-500">
-                                        Hệ thống kiểm soát theo rank và capability đã chọn.
+                                        Vai trò hệ thống tự động: <span class="font-semibold text-indigo-600">{{ finalMinimumRoleLabel }}</span>
                                     </div>
                                 </div>
 
@@ -644,7 +266,7 @@ const canTogglePosition = (position) => position?.can_toggle !== false
                         <!-- Tab: Capabilities -->
                         <div v-show="activeTab === 'capabilities'" class="space-y-6">
                             
-                            <div v-if="canManageAuthorityLevels" class="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+                            <div v-if="isAdmin" class="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
                                 <div class="flex items-center justify-between">
                                     <div class="text-sm font-semibold text-indigo-800">Quản lý định nghĩa quyền tùy chỉnh</div>
                                     <button
@@ -783,10 +405,10 @@ const canTogglePosition = (position) => position?.can_toggle !== false
                 <div class="p-6 bg-slate-50/50 space-y-6">
                     <form class="rounded-xl border border-indigo-100 bg-white p-5 shadow-sm" @submit.prevent="submitAuthorityLevel">
                         <div class="mb-4 text-sm font-semibold text-indigo-800">Thêm Cấp Bậc Mới</div>
-                            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                <div>
-                                    <label class="mb-1.5 block text-xs font-semibold text-slate-600">Thứ bậc (Rank)</label>
-                                    <input
+                        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div>
+                                <label class="mb-1.5 block text-xs font-semibold text-slate-600">Thứ bậc (Rank)</label>
+                                <input
                                     v-model="authorityLevelForm.rank"
                                     type="number"
                                     min="1"
@@ -795,16 +417,16 @@ const canTogglePosition = (position) => position?.can_toggle !== false
                                 />
                                 <div v-if="authorityLevelForm.errors.rank" class="mt-1 text-xs text-rose-600">{{ authorityLevelForm.errors.rank }}</div>
                             </div>
-                                <div>
-                                    <label class="mb-1.5 block text-xs font-semibold text-slate-600">Tên Định Danh</label>
-                                    <input
-                                        v-model="authorityLevelForm.name"
+                            <div>
+                                <label class="mb-1.5 block text-xs font-semibold text-slate-600">Tên Định Danh</label>
+                                <input
+                                    v-model="authorityLevelForm.name"
                                     type="text"
                                     class="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-900 outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                                     placeholder="Ex: Mức 6 - Phó tổng"
                                 />
                                 <div v-if="authorityLevelForm.errors.name" class="mt-1 text-xs text-rose-600">{{ authorityLevelForm.errors.name }}</div>
-                                </div>
+                            </div>
                         </div>
                         <div class="mt-5 flex items-center justify-between">
                             <label class="inline-flex items-center gap-2 cursor-pointer">

@@ -14,8 +14,7 @@ const props = defineProps({
 
 const page = usePage()
 const permissions = computed(() => page.props.auth?.permissions || {})
-const roles = computed(() => page.props.auth?.user?.roles || [])
-const isAdmin = computed(() => roles.value.includes('admin'))
+const canApproveRequests = computed(() => page.props.auth?.position_capabilities?.approve_requests === true)
 
 const filters = reactive({
     search: props.filters?.search ?? '',
@@ -43,7 +42,7 @@ const managerOptions = computed(() => props.users.map((user) => ({
 const pageTitle = 'Danh sách phòng ban'
 
 const submitLabel = computed(() => {
-    if (isAdmin.value) {
+    if (canApproveRequests.value) {
         return isEditing.value ? 'Cập nhật phòng ban' : 'Thêm phòng ban'
     }
 
@@ -56,7 +55,7 @@ const emptyMessage = computed(() => filters.search || filters.status
 
 const statusText = (isActive) => isActive ? 'Đang hoạt động' : 'Tạm khóa'
 
-const requestTypeText = computed(() => isAdmin.value
+const requestTypeText = computed(() => canApproveRequests.value
     ? null
     : 'Các thao tác thêm, sửa, khóa hoặc mở phòng ban của HR sẽ được gửi Admin duyệt trước khi áp dụng.')
 
@@ -120,13 +119,13 @@ const submitOptions = () => ({
     onSuccess: () => {
         isFormModalOpen.value = false
         form.reset()
-        toast.success(isAdmin.value
+        toast.success(canApproveRequests.value
             ? (isEditing.value ? 'Đã cập nhật phòng ban.' : 'Đã tạo phòng ban mới.')
             : (isEditing.value ? 'Đã gửi yêu cầu cập nhật phòng ban.' : 'Đã gửi yêu cầu tạo phòng ban.')
         )
     },
     onError: () => {
-        toast.error(isAdmin.value
+        toast.error(canApproveRequests.value
             ? 'Không thể lưu phòng ban.'
             : 'Không thể gửi yêu cầu phòng ban.'
         )
@@ -144,13 +143,13 @@ const toggleStatus = (department) => {
     router.put(route('departments.toggle', department.id), {}, {
         preserveScroll: true,
         onSuccess: () => {
-            toast.success(isAdmin.value
+            toast.success(canApproveRequests.value
                 ? `Đã ${nextAction} phòng ban.`
                 : `Đã gửi yêu cầu ${nextAction} phòng ban.`
             )
         },
         onError: () => {
-            toast.error(isAdmin.value
+            toast.error(canApproveRequests.value
                 ? `Không thể ${nextAction} phòng ban.`
                 : `Không thể gửi yêu cầu ${nextAction} phòng ban.`
             )
@@ -226,7 +225,7 @@ const toggleStatus = (department) => {
                         class="rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
                         @click="openCreateModal"
                     >
-                        {{ isAdmin ? 'Thêm phòng ban' : 'Gửi duyệt phòng ban' }}
+                        {{ canApproveRequests ? 'Thêm phòng ban' : 'Gửi duyệt phòng ban' }}
                     </button>
                 </div>
             </div>
@@ -289,7 +288,7 @@ const toggleStatus = (department) => {
                                         class="rounded-lg border border-blue-200 px-3 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-50"
                                         @click="openEditModal(department)"
                                     >
-                                        {{ isAdmin ? 'Sửa' : 'Gửi sửa' }}
+                                        {{ canApproveRequests ? 'Sửa' : 'Gửi sửa' }}
                                     </button>
                                     <button
                                         v-if="permissions['departments.manage']"
@@ -298,7 +297,7 @@ const toggleStatus = (department) => {
                                         :class="department.is_active ? 'bg-amber-500 hover:bg-amber-600' : 'bg-emerald-600 hover:bg-emerald-700'"
                                         @click="toggleStatus(department)"
                                     >
-                                        {{ department.is_active ? (isAdmin ? 'Khóa' : 'Gửi khóa') : (isAdmin ? 'Mở' : 'Gửi mở') }}
+                                        {{ department.is_active ? (canApproveRequests ? 'Khóa' : 'Gửi khóa') : (canApproveRequests ? 'Mở' : 'Gửi mở') }}
                                     </button>
                                 </div>
                             </td>
@@ -414,3 +413,4 @@ const toggleStatus = (department) => {
         </Modal>
     </AdminLayout>
 </template>
+

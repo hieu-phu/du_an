@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\ApprovalRequest;
 use App\Models\Department;
+use App\Models\User;
+use App\Support\AccessMatrix;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -141,6 +143,7 @@ class DepartmentApprovalService extends BaseService
             'pending' => (clone $baseQuery)->where('status', 'pending')->count(),
             'approved' => (clone $baseQuery)->where('status', 'approved')->count(),
             'rejected' => (clone $baseQuery)->where('status', 'rejected')->count(),
+            'cancelled' => (clone $baseQuery)->where('status', 'cancelled')->count(),
         ];
     }
 
@@ -179,6 +182,30 @@ class DepartmentApprovalService extends BaseService
             ]);
 
             $this->notifyRequesterDecision($approvalRequest, false, $reviewNote);
+        });
+    }
+
+    public function cancel(ApprovalRequest $approvalRequest, User $actor, ?string $note = null): void
+    {
+        $this->handleTransaction(function () use ($approvalRequest, $actor, $note) {
+            if ($approvalRequest->status !== 'pending') {
+                throw ValidationException::withMessages([
+                    'approval' => 'Chi duoc huy yeu cau dang cho duyet.',
+                ]);
+            }
+
+            if ((int) $approvalRequest->requested_by !== (int) $actor->id && !AccessMatrix::canApproveRequests($actor)) {
+                throw ValidationException::withMessages([
+                    'approval' => 'Ban khong duoc phep huy yeu cau nay.',
+                ]);
+            }
+
+            $approvalRequest->update([
+                'status' => 'cancelled',
+                'reviewed_by' => $actor->id,
+                'reviewed_at' => now(),
+                'review_note' => $note ?: 'Requester cancelled department approval request',
+            ]);
         });
     }
 

@@ -6,11 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\AuthorityLevel;
 use App\Models\Position;
 use App\Models\PositionCapability as PositionCapabilityModel;
+use App\Models\User;
 use App\Services\PositionService;
 use App\Support\PositionCapability;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
@@ -26,6 +28,19 @@ class PositionController extends Controller
             search: $request->input('search'),
             status: $request->input('status'),
         );
+        $actor = $request->user();
+        $actorLevel = $actor ? $this->resolveActorAuthorityLevel($actor) : 0;
+        $actorPositionId = (int) ($actor?->employeeProfile?->position_id ?? 0);
+
+        $positions = $positions->map(function (Position $position) use ($actorLevel, $actorPositionId) {
+            $canManage = ((int) ($position->authority_level ?? 0) <= $actorLevel)
+                && ((int) $position->id !== $actorPositionId);
+
+            $position->setAttribute('can_edit', $canManage);
+            $position->setAttribute('can_toggle', $canManage);
+
+            return $position;
+        });
 
         return Inertia::render('Positions/Index', [
             'positions' => $positions,
@@ -56,6 +71,23 @@ class PositionController extends Controller
             'authority_level.integer' => 'Mức quyền hạn phải là số nguyên.',
             'authority_level.in' => 'Mức quyền hạn không hợp lệ.',
         ]);
+        $actorLevel = $this->resolveActorAuthorityLevel($request->user());
+        if ((int) ($validated['authority_level'] ?? 0) >= $actorLevel) {
+            throw ValidationException::withMessages([
+                'authority_level' => 'Bạn chỉ được tạo chức vụ có mức quyền hạn thấp hơn cấp bậc hiện tại của bạn.',
+            ]);
+        }
+
+        // TẮT kiểm tra quyền gán tạm thời để có thể thiết lập phân quyền ban đầu
+        // $capabilities = $validated['capabilities'] ?? [];
+        // $actor = $request->user();
+        // foreach ($capabilities as $cap) {
+        //     if (!$actor->hasPositionCapability($cap)) {
+        //         throw ValidationException::withMessages([
+        //             'capabilities' => "Bạn không có quyền: {$cap} nên không thể gán quyền này.",
+        //         ]);
+        //     }
+        // }
 
         $this->positionService->store($validated);
 
@@ -64,6 +96,9 @@ class PositionController extends Controller
 
     public function update(Request $request, int $id)
     {
+        $position = Position::query()->findOrFail($id);
+        $this->assertManageablePosition($request->user(), $position);
+
         $allowedCapabilities = $this->allowedCapabilityKeys();
         $allowedAuthorityLevels = $this->allowedAuthorityLevelValues();
 
@@ -83,21 +118,43 @@ class PositionController extends Controller
             'authority_level.in' => 'Mức quyền hạn không hợp lệ.',
         ]);
 
+        $actorLevel = $this->resolveActorAuthorityLevel($request->user());
+        if ((int) ($validated['authority_level'] ?? 0) >= $actorLevel) {
+            throw ValidationException::withMessages([
+                'authority_level' => 'Bạn chỉ được cập nhật chức vụ với mức quyền hạn thấp hơn cấp bậc hiện tại của bạn.',
+            ]);
+        }
+
+        // TẮT kiểm tra quyền gán tạm thời để có thể thiết lập phân quyền ban đầu
+        // $capabilities = $validated['capabilities'] ?? [];
+        // $actor = $request->user();
+        // foreach ($capabilities as $cap) {
+        //     if (!$actor->hasPositionCapability($cap)) {
+        //         throw ValidationException::withMessages([
+        //             'capabilities' => "Bạn không có quyền: {$cap} nên không thể gán quyền này.",
+        //         ]);
+        //     }
+        // }
+
         $this->positionService->update($id, $validated);
 
         return redirect()->back()->with('success', 'Chức vụ đã được cập nhật thành công.');
     }
 
-    public function toggleStatus(int $id)
+    public function toggleStatus(Request $request, int $id)
     {
+        $position = Position::query()->findOrFail($id);
+        $this->assertManageablePosition($request->user(), $position);
+
         $this->positionService->toggleStatus($id);
 
         return redirect()->back()->with('success', 'Đã cập nhật trạng thái chức vụ.');
     }
 
-    public function destroy(int $id)
+    public function destroy(Request $request, int $id)
     {
         $position = Position::withCount('employeeProfiles')->findOrFail($id);
+        $this->assertManageablePosition($request->user(), $position);
 
         if ($position->employee_profiles_count > 0) {
             return redirect()->back()->withErrors([
@@ -155,6 +212,10 @@ class PositionController extends Controller
 
     public function storeAuthorityLevel(Request $request)
     {
+        if ($this->resolveActorAuthorityLevel($request->user()) < 10) {
+            return back()->withErrors(['error' => 'Chỉ tài khoản (mức 10) mới được phép quản lý danh mục mức quyền hạn.']);
+        }
+
         if (!Schema::hasTable('authority_levels')) {
             return back()->withErrors(['error' => 'Bang muc quyen han chua san sang. Vui long chay migrate.']);
         }
@@ -169,8 +230,10 @@ class PositionController extends Controller
             'name.required' => 'Vui long nhap ten muc quyen han.',
         ]);
 
+        $rank = (int) $validated['rank'];
+
         AuthorityLevel::query()->create([
-            'rank' => (int) $validated['rank'],
+            'rank' => $rank,
             'name' => (string) $validated['name'],
             'is_active' => (bool) ($validated['is_active'] ?? true),
         ]);
@@ -180,6 +243,10 @@ class PositionController extends Controller
 
     public function toggleAuthorityLevel(AuthorityLevel $authorityLevel)
     {
+        if ($this->resolveActorAuthorityLevel(request()->user()) < 10) {
+            return back()->withErrors(['error' => 'Chỉ tài khoản (mức 10) mới được phép quản lý danh mục mức quyền hạn.']);
+        }
+
         $next = !$authorityLevel->is_active;
 
         if (!$next) {
@@ -263,6 +330,11 @@ class PositionController extends Controller
             ['value' => 3, 'label' => 'Mức 3 - Trưởng nhóm'],
             ['value' => 4, 'label' => 'Mức 4 - Trưởng phòng'],
             ['value' => 5, 'label' => 'Mức 5 - Giám đốc / Quản lý cao'],
+            ['value' => 6, 'label' => 'Mức 6 - Giám đốc khối / VP'],
+            ['value' => 7, 'label' => 'Mức 7 - Phó tổng giám đốc'],
+            ['value' => 8, 'label' => 'Mức 8 - Tổng giám đốc'],
+            ['value' => 9, 'label' => 'Mức 9 - Hội đồng quản trị'],
+            ['value' => 10, 'label' => 'Mức 10 - Quản trị hệ thống (System Admin)'],
         ];
     }
 
@@ -276,7 +348,7 @@ class PositionController extends Controller
             ->values()
             ->all();
 
-        return empty($values) ? [1, 2, 3, 4, 5] : $values;
+        return empty($values) ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] : $values;
     }
 
     private function authorityLevelCatalog(): array
@@ -296,5 +368,61 @@ class PositionController extends Controller
         }
 
         return [];
+    }
+
+    private function assertManageablePosition(?User $actor, Position $position): void
+    {
+        if (!$actor) {
+            abort(403);
+        }
+
+        $actor->loadMissing('employeeProfile.position');
+        $actorPositionId = (int) ($actor->employeeProfile?->position_id ?? 0);
+
+        if ($actorPositionId > 0 && $actorPositionId === (int) $position->id) {
+            throw ValidationException::withMessages([
+                'position' => 'Ban khong duoc sua chuc vu cua chinh minh.',
+            ]);
+        }
+
+        $actorLevel = $this->resolveActorAuthorityLevel($actor);
+        $targetLevel = (int) ($position->authority_level ?? 0);
+
+        if ($targetLevel > $actorLevel) {
+            throw ValidationException::withMessages([
+                'position' => 'Ban khong duoc sua chuc vu co muc quyen han cao hon minh.',
+            ]);
+        }
+    }
+
+    private function resolveActorAuthorityLevel(User $actor): int
+    {
+        $actor->loadMissing('employeeProfile.position');
+        $positionLevel = (int) ($actor->employeeProfile?->position?->authority_level ?? 0);
+
+        if ($positionLevel > 0) {
+            return $positionLevel;
+        }
+
+        if ($actor->hasPositionCapability(PositionCapability::MANAGE_POSITIONS)) {
+            return $this->resolveMaxAuthorityLevel();
+        }
+
+        return 1;
+    }
+
+    private function resolveMaxAuthorityLevel(): int
+    {
+        if (Schema::hasTable('authority_levels')) {
+            $max = (int) (AuthorityLevel::query()
+                ->where('is_active', true)
+                ->max('rank') ?? 0);
+
+            if ($max > 0) {
+                return $max;
+            }
+        }
+
+        return 10;
     }
 }

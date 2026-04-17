@@ -14,7 +14,6 @@ return new class extends Migration
             $table->id(); // Khoa chinh cap tham quyen.
             $table->unsignedSmallInteger('rank')->unique(); // Thu tu cap bac (1 thap -> cao dan).
             $table->string('name', 120); // Ten cap bac de hien thi UI.
-            $table->string('minimum_role', 20)->default('employee'); // Role toi thieu duoc phep su dung cap nay.
             $table->boolean('is_active')->default(true); // Danh dau cap bac con su dung.
             $table->timestamps(); // created_at, updated_at.
 
@@ -23,11 +22,16 @@ return new class extends Migration
 
         // Seed bo cap bac mac dinh cho he thong.
         DB::table('authority_levels')->insert([
-            ['rank' => 1, 'name' => 'Muc 1 - Nhan vien', 'minimum_role' => 'employee', 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
-            ['rank' => 2, 'name' => 'Muc 2 - To pho / Senior', 'minimum_role' => 'employee', 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
-            ['rank' => 3, 'name' => 'Muc 3 - Truong nhom', 'minimum_role' => 'employee', 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
-            ['rank' => 4, 'name' => 'Muc 4 - Truong phong', 'minimum_role' => 'hr', 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
-            ['rank' => 5, 'name' => 'Muc 5 - Giam doc / Quan ly cao', 'minimum_role' => 'admin', 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
+            ['rank' => 1, 'name' => 'Muc 1 - Nhan vien', 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
+            ['rank' => 2, 'name' => 'Muc 2 - To pho / Senior', 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
+            ['rank' => 3, 'name' => 'Muc 3 - Truong nhom', 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
+            ['rank' => 4, 'name' => 'Muc 4 - Truong phong', 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
+            ['rank' => 5, 'name' => 'Muc 5 - Giam doc / Quan ly cao', 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
+            ['rank' => 6, 'name' => 'Muc 6 - Giam doc khoi / VP', 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
+            ['rank' => 7, 'name' => 'Muc 7 - Pho tong giam doc', 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
+            ['rank' => 8, 'name' => 'Muc 8 - Tong giam doc', 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
+            ['rank' => 9, 'name' => 'Muc 9 - Hoi dong quan tri', 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
+            ['rank' => 10, 'name' => 'Muc 10 - Quan tri he thong / Admin', 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
         ]);
     }
 

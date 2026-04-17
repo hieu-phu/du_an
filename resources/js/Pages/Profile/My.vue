@@ -103,11 +103,11 @@ watch(isEditProfileOpen, (isOpen) => {
 })
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
-const roleLabel = computed(() => ({
-  admin: 'Quản trị viên',
-  hr: 'Quản lý nhân sự',
-  employee: 'Nhân viên',
-}[props.profile.role] || '-'))
+const positionLabel = computed(() => {
+  if (props.profile.position) return props.profile.position
+  if (Number(props.profile.authority_level || 0) > 0) return `Rank ${props.profile.authority_level}`
+  return '-'
+})
 
 const employmentStatusLabel = computed(() => ({
   active: 'Đang làm việc',
@@ -249,7 +249,7 @@ const triggerAvatarUpload = () => {
             </div>
             <div class="mt-4 flex flex-wrap justify-center gap-2">
               <span class="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-                {{ roleLabel }}
+                {{ positionLabel }}
               </span>
               <span :class="statusBadgeClass(profile.status)" class="inline-flex rounded-full px-3 py-1 text-xs font-semibold">
                 {{ statusLabel(profile.status) }}
@@ -573,3 +573,4 @@ const triggerAvatarUpload = () => {
   }
 }
 </style>
+

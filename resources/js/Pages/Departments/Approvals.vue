@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import { router } from '@inertiajs/vue3'
+import { router, usePage } from '@inertiajs/vue3'
 import { toast } from 'vue3-toastify'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
@@ -14,17 +14,21 @@ const props = defineProps({
 })
 
 const selectedRequest = ref(null)
+const page = usePage()
+const currentUserId = page.props.auth?.user?.id
 
 const statusLabel = (status) => ({
     pending: 'Cho duyet',
     approved: 'Da duyet',
     rejected: 'Tu choi',
+    cancelled: 'Da huy',
 }[status] || '-')
 
 const statusClass = (status) => ({
     pending: 'bg-amber-100 text-amber-800',
     approved: 'bg-emerald-100 text-emerald-800',
     rejected: 'bg-rose-100 text-rose-800',
+    cancelled: 'bg-gray-100 text-gray-700',
 }[status] || 'bg-gray-100 text-gray-700')
 
 const requestTypeLabel = (type) => ({
@@ -75,6 +79,17 @@ const reject = (item) => {
         preserveScroll: true,
         onSuccess: () => toast.success('Da tu choi yeu cau phong ban.'),
         onError: () => toast.error('Khong the tu choi yeu cau phong ban.'),
+    })
+}
+
+const cancel = (item) => {
+    const reviewNote = window.prompt('Ghi chu huy yeu cau (tuy chon):', '')
+    if (reviewNote === null) return
+
+    router.post(route('web.department-approvals.cancel', item.id), { review_note: reviewNote }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success('Da huy yeu cau phong ban.'),
+        onError: () => toast.error('Khong the huy yeu cau phong ban.'),
     })
 }
 </script>
@@ -204,6 +219,14 @@ const reject = (item) => {
                                         @click="reject(item)"
                                     >
                                         Tu choi
+                                    </button>
+                                    <button
+                                        v-if="item.status === 'pending' && item.requested_by?.id === currentUserId"
+                                        type="button"
+                                        class="rounded-lg bg-gray-700 px-3 py-2 text-sm font-medium text-white"
+                                        @click="cancel(item)"
+                                    >
+                                        Huy
                                     </button>
                                 </div>
                             </td>

@@ -10,6 +10,7 @@ use App\Models\ApprovalRequest;
 use App\Models\SalaryHistory;
 use App\Models\User;
 use App\Models\Ward;
+use App\Support\AccessMatrix;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -168,6 +169,7 @@ class UserApprovalService extends BaseService
             'pending' => (clone $baseQuery)->where('status', 'pending')->count(),
             'approved' => (clone $baseQuery)->where('status', 'approved')->count(),
             'rejected' => (clone $baseQuery)->where('status', 'rejected')->count(),
+            'cancelled' => (clone $baseQuery)->where('status', 'cancelled')->count(),
         ];
     }
 
@@ -295,6 +297,30 @@ class UserApprovalService extends BaseService
         });
     }
 
+    public function cancel(ApprovalRequest $approvalRequest, User $actor, ?string $note = null): void
+    {
+        $this->handleTransaction(function () use ($approvalRequest, $actor, $note) {
+            if ($approvalRequest->status !== 'pending') {
+                throw ValidationException::withMessages([
+                    'approval' => 'Chi duoc huy yeu cau dang cho duyet.',
+                ]);
+            }
+
+            if ((int) $approvalRequest->requested_by !== (int) $actor->id && !AccessMatrix::canApproveRequests($actor)) {
+                throw ValidationException::withMessages([
+                    'approval' => 'Ban khong duoc phep huy yeu cau nay.',
+                ]);
+            }
+
+            $approvalRequest->update([
+                'status' => 'cancelled',
+                'reviewed_by' => $actor->id,
+                'reviewed_at' => now(),
+                'review_note' => $note ?: 'Requester cancelled approval request',
+            ]);
+        });
+    }
+
     private function decodePayload(ApprovalRequest $approvalRequest): array
     {
         $payload = [];
@@ -323,13 +349,6 @@ class UserApprovalService extends BaseService
 
     private function formatPayloadForList(array $payload): array
     {
-        $payload['role_label'] = match ($payload['role_name'] ?? null) {
-            'admin' => 'Admin',
-            'hr' => 'HR',
-            'employee' => 'Nhan vien',
-            default => '-',
-        };
-
         $payload['department_name'] = !empty($payload['department_id'])
             ? Department::query()->whereKey($payload['department_id'])->value('name')
             : null;

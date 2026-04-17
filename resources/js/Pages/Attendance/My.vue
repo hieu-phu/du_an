@@ -150,8 +150,8 @@
           {{ formatMinutes(item.overtime_minutes) }}
         </template>
         <template #cell-attendance_status="{ item }">
-          <span :class="statusClass(item.attendance_status, item.day_status)" class="rounded-full px-3 py-1 text-xs font-semibold">
-            {{ formatAttendanceStatus(item.attendance_status, item.day_status) }}
+          <span :class="statusClass(item.attendance_status, item.day_status, item.work_unit)" class="rounded-full px-3 py-1 text-xs font-semibold">
+            {{ formatAttendanceStatus(item.attendance_status, item.day_status, item.work_unit) }}
           </span>
         </template>
         <template #cell-day_status="{ item }">
@@ -254,7 +254,7 @@ const requestColumns = [
 ]
 
 const summaryCards = computed(() => [
-  { label: 'Tổng ngày công', value: props.summary.total_records ?? 0 },
+  { label: 'Tổng ngày công', value: formatWorkUnits(props.summary.total_work_units ?? 0) },
   { label: 'Đã duyệt', value: props.summary.confirmed_records ?? 0 },
   { label: 'Chờ duyệt', value: props.summary.pending_records ?? 0 },
   { label: 'Tổng giờ làm', value: formatMinutes(props.summary.total_worked_minutes ?? 0) },
@@ -312,9 +312,28 @@ function formatMinutes(value) {
   return `${hours} giờ ${remainMinutes} phút`
 }
 
-function formatAttendanceStatus(value, dayStatus = null) {
+function formatWorkUnits(value) {
+  const units = Number(value) || 0
+  return Number.isInteger(units) ? `${units}` : units.toFixed(1)
+}
+
+function formatAttendanceStatus(value, dayStatus = null, workUnit = null) {
+  const resolvedUnit = Number(workUnit)
+
+  if (resolvedUnit === 1) {
+    return 'Đủ công'
+  }
+
+  if (resolvedUnit === 0.5) {
+    return 'Nửa công'
+  }
+
+  if (!Number.isNaN(resolvedUnit) && resolvedUnit === 0) {
+    return 'Không công'
+  }
+
   if (dayStatus === 'early_leave' || dayStatus === 'missing_check_in' || dayStatus === 'missing_check_out') {
-    return 'Không đủ công'
+    return 'Không công'
   }
 
   const labels = {
@@ -349,7 +368,21 @@ function formatApprovalStatus(value) {
   return labels[value] || '-'
 }
 
-function statusClass(value, dayStatus = null) {
+function statusClass(value, dayStatus = null, workUnit = null) {
+  const resolvedUnit = Number(workUnit)
+
+  if (resolvedUnit === 1) {
+    return 'bg-emerald-50 text-emerald-700'
+  }
+
+  if (resolvedUnit === 0.5) {
+    return 'bg-blue-50 text-blue-700'
+  }
+
+  if (!Number.isNaN(resolvedUnit) && resolvedUnit === 0) {
+    return 'bg-orange-50 text-orange-700'
+  }
+
   if (dayStatus === 'early_leave' || dayStatus === 'missing_check_in' || dayStatus === 'missing_check_out') {
     return 'bg-orange-50 text-orange-700'
   }

@@ -11,6 +11,7 @@ use App\Models\ProjectMember;
 use App\Models\ProjectProgressHistory;
 use App\Models\ProjectRole;
 use App\Support\AccessMatrix;
+use App\Support\PositionCapability;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -384,7 +385,7 @@ class ProjectController extends Controller
             ]);
         }
 
-        $isAdmin = $this->isAdmin($request->user());
+        $canEditImplementationSchedule = $this->canEditImplementationSchedule($request->user());
 
         $validated = $request->validate([
             'content' => ['required', 'string', 'max:2000'],
@@ -395,12 +396,12 @@ class ProjectController extends Controller
             'progress_percent' => ['required', 'integer', 'min:0', 'max:100'],
         ]);
 
-        if (!$isAdmin && (
+        if (!$canEditImplementationSchedule && (
             (string) $validated['execution_date'] !== $implementationDetail->execution_date?->toDateString()
             || (int) $validated['duration_days'] !== (int) $implementationDetail->duration_days
         )) {
             return redirect()->back()->withErrors([
-                'detail' => 'Chi admin moi duoc thay doi thoi gian thuc hien.',
+                'detail' => 'Chi nguoi co quyen dieu chinh lich trien khai moi duoc thay doi thoi gian thuc hien.',
             ]);
         }
 
@@ -685,7 +686,7 @@ class ProjectController extends Controller
             'can_manage_members' => $canManageMembers,
             'can_manage_project_roles' => $canManageProjectRoles,
             'can_manage_implementation_details' => $canManageImplementationDetails,
-            'can_edit_implementation_schedule' => $this->isAdmin($pageUser),
+            'can_edit_implementation_schedule' => $this->canEditImplementationSchedule($pageUser),
             'implementation_status_options' => collect(self::DETAIL_STATUSES)
                 ->map(fn (string $status) => ['value' => $status, 'label' => $this->implementationStatusLabel($status)])
                 ->values(),
@@ -1154,11 +1155,11 @@ class ProjectController extends Controller
             return false;
         }
 
-        if ($user->hasPositionCapability('view_all_projects')) {
+        if ($user->hasPositionCapability(PositionCapability::VIEW_ALL_PROJECTS)) {
             return true;
         }
 
-        return $this->canManageProjects($user);
+        return false;
     }
 
     private function canManageProjects($user): bool
@@ -1167,24 +1168,16 @@ class ProjectController extends Controller
             return false;
         }
 
-        if ($user->hasPositionCapability('manage_projects')) {
-            return true;
-        }
-
-        return (bool) ($user->employeeProfile?->is_department_head ?? false);
+        return $user->hasPositionCapability(PositionCapability::MANAGE_PROJECTS);
     }
 
     private function canManageProjectMembers($user): bool
     {
-        if ($this->canManageProjects($user)) {
-            return true;
-        }
-
         if (!$user) {
             return false;
         }
 
-        return $user->hasPositionCapability('manage_project_members');
+        return $user->hasPositionCapability(PositionCapability::MANAGE_PROJECT_MEMBERS);
     }
 
     private function canManageProjectRoles($user): bool
@@ -1193,7 +1186,7 @@ class ProjectController extends Controller
             return false;
         }
 
-        return $user->hasPositionCapability('manage_project_roles');
+        return $user->hasPositionCapability(PositionCapability::MANAGE_PROJECT_ROLES);
     }
 
     private function canManageImplementationDetails($user): bool
@@ -1211,13 +1204,18 @@ class ProjectController extends Controller
             return true;
         }
 
-        return $user->hasActiveProjectMembership();
+        return $user->hasPositionCapability(PositionCapability::VIEW_OWN_PROJECTS)
+            && $user->hasActiveProjectMembership();
     }
 
     private function canUpdateImplementationStatus($user, ProjectImplementationDetail $detail): bool
     {
         if ($this->canManageImplementationDetails($user)) {
             return true;
+        }
+
+        if (!$user?->hasPositionCapability(PositionCapability::UPDATE_PROJECT_TASK_STATUS)) {
+            return false;
         }
 
         $profileId = $user?->employeeProfile?->id;
@@ -1228,8 +1226,8 @@ class ProjectController extends Controller
         return (int) $detail->assigned_to === (int) $profileId;
     }
 
-    private function isAdmin($user): bool
+    private function canEditImplementationSchedule($user): bool
     {
-        return (bool) $user?->hasPositionCapability('manage_projects');
+        return (bool) $user?->hasPositionCapability(PositionCapability::MANAGE_PROJECTS);
     }
 }

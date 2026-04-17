@@ -54,7 +54,7 @@
           {{ month_lock?.is_locked ? 'Bảng công đang khóa' : 'Bảng công đang mở' }}
         </span>
         <button
-          v-if="isAdmin && !month_lock?.is_locked"
+          v-if="canManageMonthLock && !month_lock?.is_locked"
           type="button"
           class="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700"
           @click="toggleMonthLock('lock')"
@@ -62,7 +62,7 @@
           Khóa tháng
         </button>
         <button
-          v-if="isAdmin && month_lock?.is_locked"
+          v-if="canManageMonthLock && month_lock?.is_locked"
           type="button"
           class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700"
           @click="toggleMonthLock('unlock')"
@@ -156,8 +156,7 @@ const props = defineProps({
 })
 
 const page = usePage()
-const primaryRole = computed(() => page.props.auth?.user?.primary_role || 'employee')
-const isAdmin = computed(() => primaryRole.value === 'admin')
+const canManageMonthLock = computed(() => page.props.auth?.position_capabilities?.approve_attendance === true)
 const monthLockForm = useForm({ month: props.filters.month, year: props.filters.year, note: '' })
 const filterForm = reactive({
   month: props.filters.month,
@@ -320,6 +319,7 @@ function approvalStatusClass(value) {
   return classes[value] || 'bg-slate-50 text-slate-700'
 }
 </script>
+
 
 
 

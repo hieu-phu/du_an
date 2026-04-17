@@ -15,6 +15,7 @@ class FeedbackMessage extends Model
     protected $fillable = [
         'sender_id',
         'receiver_id',
+        'receiver_position_id',
         'receiver_group',
         'subject',
         'message',
@@ -40,6 +41,11 @@ class FeedbackMessage extends Model
     public function receiver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'receiver_id');
+    }
+
+    public function receiverPosition(): BelongsTo
+    {
+        return $this->belongsTo(Position::class, 'receiver_position_id');
     }
 
     public function replier(): BelongsTo

@@ -6,38 +6,44 @@ use App\Models\User;
 
 class AccessMatrix
 {
-    public const ROLE_ADMIN = 'admin';
-    public const ROLE_HR = 'hr';
-    public const ROLE_EMPLOYEE = 'employee';
-
     private const ABILITIES = [
-        'dashboard.view' => [self::ROLE_ADMIN, self::ROLE_HR, self::ROLE_EMPLOYEE],
-        'profile.view' => [self::ROLE_ADMIN, self::ROLE_HR, self::ROLE_EMPLOYEE],
-        'attendance.mine.view' => [self::ROLE_ADMIN, self::ROLE_HR, self::ROLE_EMPLOYEE],
-        'attendance.mine.action' => [self::ROLE_ADMIN, self::ROLE_HR, self::ROLE_EMPLOYEE],
-        'attendance.manage.view' => [self::ROLE_ADMIN, self::ROLE_HR],
-        'users.view' => [self::ROLE_ADMIN, self::ROLE_HR],
-        'users.create' => [self::ROLE_ADMIN, self::ROLE_HR],
-        'users.edit' => [self::ROLE_ADMIN, self::ROLE_HR],
-        'users.manage_status' => [self::ROLE_ADMIN, self::ROLE_HR],
-        'users.approvals.view' => [self::ROLE_ADMIN],
-        'users.approvals.review' => [self::ROLE_ADMIN],
-        'users.assign_admin' => [self::ROLE_ADMIN],
-        'departments.view' => [self::ROLE_ADMIN, self::ROLE_HR],
-        'departments.manage' => [self::ROLE_ADMIN, self::ROLE_HR],
-        'departments.approvals.view' => [self::ROLE_ADMIN],
-        'departments.approvals.review' => [self::ROLE_ADMIN],
-        'positions.view' => [self::ROLE_ADMIN],
-        'positions.manage' => [self::ROLE_ADMIN],
-        'projects.all.view' => [self::ROLE_ADMIN, self::ROLE_HR],
-        'projects.mine.view' => [],
-        'settings.view' => [self::ROLE_ADMIN],
+        'dashboard.view' => true,
+        'profile.view' => true,
+        'attendance.mine.view' => true,
+        'attendance.mine.action' => true,
+        'attendance.manage.view' => true,
+        'users.view' => true,
+        'users.create' => true,
+        'users.edit' => true,
+        'users.manage_status' => true,
+        'users.approvals.view' => true,
+        'users.approvals.review' => true,
+        'users.assign_admin' => true,
+        'departments.view' => true,
+        'departments.manage' => true,
+        'departments.approvals.view' => true,
+        'departments.approvals.review' => true,
+        'positions.view' => true,
+        'positions.manage' => true,
+        'projects.all.view' => true,
+        'projects.mine.view' => true,
+        'settings.view' => true,
     ];
 
-    /**
-     * Capability map để bật permission UI theo chức vụ.
-     */
     private const ABILITY_CAPABILITIES = [
+        'dashboard.view' => [
+            PositionCapability::VIEW_DASHBOARD,
+        ],
+        'profile.view' => [
+            PositionCapability::VIEW_OWN_PROFILE,
+        ],
+        'attendance.mine.view' => [
+            PositionCapability::VIEW_OWN_ATTENDANCE,
+        ],
+        'attendance.mine.action' => [
+            PositionCapability::CHECK_IN,
+            PositionCapability::CHECK_OUT,
+        ],
         'attendance.manage.view' => [
             PositionCapability::APPROVE_ATTENDANCE,
             PositionCapability::VIEW_ALL_ATTENDANCE,
@@ -81,33 +87,18 @@ class AccessMatrix
         ],
         'projects.all.view' => [
             PositionCapability::VIEW_ALL_PROJECTS,
-            PositionCapability::MANAGE_PROJECTS,
-            PositionCapability::MANAGE_PROJECT_MEMBERS,
-            PositionCapability::MANAGE_PROJECT_ROLES,
         ],
         'projects.mine.view' => [
-            PositionCapability::VIEW_ALL_PROJECTS,
-            PositionCapability::MANAGE_PROJECTS,
-            PositionCapability::MANAGE_PROJECT_MEMBERS,
-            PositionCapability::MANAGE_PROJECT_ROLES,
+            PositionCapability::VIEW_OWN_PROJECTS,
         ],
         'settings.view' => [
             PositionCapability::VIEW_ACTIVITY_LOGS,
         ],
     ];
 
-    public static function roleLabels(): array
-    {
-        return [
-            self::ROLE_ADMIN => 'Admin',
-            self::ROLE_HR => 'HR',
-            self::ROLE_EMPLOYEE => 'Nhân viên',
-        ];
-    }
-
     public static function allowedRoles(string $ability): array
     {
-        return self::ABILITIES[$ability] ?? [];
+        return [];
     }
 
     public static function allows(?User $user, string $ability): bool
@@ -118,18 +109,10 @@ class AccessMatrix
 
         $allowedCapabilities = self::ABILITY_CAPABILITIES[$ability] ?? [];
 
-        if (in_array($ability, ['dashboard.view', 'profile.view', 'attendance.mine.view', 'attendance.mine.action'], true)) {
-            return true;
-        }
-
         foreach ($allowedCapabilities as $capability) {
             if ($user->hasPositionCapability($capability)) {
                 return true;
             }
-        }
-
-        if ($ability === 'projects.mine.view') {
-            return $user->hasActiveProjectMembership();
         }
 
         return false;
@@ -146,18 +129,53 @@ class AccessMatrix
         return $permissions;
     }
 
-    public static function primaryRole(?User $user): ?string
+    public static function canManageAllAttendance(?User $user): bool
     {
         if (!$user) {
-            return null;
+            return false;
         }
 
-        foreach ([self::ROLE_ADMIN, self::ROLE_HR, self::ROLE_EMPLOYEE] as $role) {
-            if ($user->hasRole($role)) {
-                return $role;
-            }
+        return $user->hasAnyPositionCapability([
+            PositionCapability::APPROVE_ATTENDANCE,
+            PositionCapability::VIEW_ALL_ATTENDANCE,
+            PositionCapability::EXPORT_ATTENDANCE,
+        ]);
+    }
+
+    public static function canApproveRequests(?User $user): bool
+    {
+        return (bool) ($user?->hasPositionCapability(PositionCapability::APPROVE_REQUESTS));
+    }
+
+    public static function canViewAllProjects(?User $user): bool
+    {
+        if (!$user) {
+            return false;
         }
 
-        return $user->getRoleNames()->first();
+        return $user->hasAnyPositionCapability([
+            PositionCapability::VIEW_ALL_PROJECTS,
+            PositionCapability::MANAGE_PROJECTS,
+            PositionCapability::MANAGE_PROJECT_MEMBERS,
+            PositionCapability::MANAGE_PROJECT_ROLES,
+        ]);
+    }
+
+    public static function canReceiveFeedbackGroup(?User $user, string $group): bool
+    {
+        if (!$user || !$user->hasPositionCapability(PositionCapability::VIEW_FEEDBACKS)) {
+            return false;
+        }
+
+        if ($group === 'admin') {
+            return $user->hasPositionCapability(PositionCapability::MANAGE_FEEDBACKS);
+        }
+
+        if ($group === 'hr') {
+            return $user->hasPositionCapability(PositionCapability::REPLY_FEEDBACK)
+                || $user->hasPositionCapability(PositionCapability::MANAGE_FEEDBACKS);
+        }
+
+        return false;
     }
 }

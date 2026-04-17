@@ -469,3 +469,54 @@ Xây dựng hệ thống HRM trên nền tảng web để quản lý toàn diệ
 
 ## 6. Kết luận
 Dự án HRM này cần được triển khai theo hướng quản lý tổng thể nhân sự, dự án và chấm công trong doanh nghiệp. Hệ thống không chỉ dừng ở các chức năng CRUD cơ bản mà còn cần có các chức năng quản lý nâng cao như duyệt thay đổi, lịch sử thao tác, báo cáo, thông báo và cấu hình hệ thống. Đây là các chức năng cần thiết để hệ thống có thể vận hành thực tế trong môi trường doanh nghiệp.
+
+
+///
+Bạn đang có nền tảng tốt, nhưng đối chiếu DB với code hiện tại thì còn thiếu/đang dang dở các phần sau:
+
+Thiếu chức năng rõ ràng (DB có, luồng nghiệp vụ chưa có)
+
+Cấu hình website chưa có CRUD thật
+Route chỉ render trang tĩnh: web.php (line 220)
+UI chỉ là placeholder: Settings/Index.vue (line 7)
+Bảng đã có: create_hrm_management_tables.php:242 (line 242)
+Model SiteSetting chưa có logic: SiteSetting.php (line 8)
+Lịch sử biến động nhân sự chưa dùng
+Có model/bảng nhưng chưa thấy ghi nhận trong flow update:
+EmployeeDepartmentHistory.php (line 8)
+EmployeePositionHistory.php (line 8)
+EmployeeStatusLog.php (line 8)
+Trong luồng cập nhật user chỉ update trực tiếp profile: UserService.php (line 103)
+Attendance adjustments chưa có luồng sử dụng
+Có bảng/model/relationship nhưng chưa thấy nghiệp vụ tạo/sửa adjustment:
+AttendanceAdjustment.php (line 9)
+AttendanceRecord.php (line 86)
+Quản trị ca làm việc/ngày lễ chưa có màn hình quản lý
+AttendanceService có dùng WorkShift, Holiday, EmployeeWorkShiftAssignment, nhưng chưa có controller/page CRUD quản trị các danh mục này.
+Lệch thiết kế / kỹ thuật cần củng cố
+
+Setting model trỏ bảng settings nhưng không có migration tạo bảng này
+Setting.php (line 11)
+Hiện có site_settings -> đang bị trùng khái niệm settings vs site_settings.
+authority_levels.minimum_role da duoc xoa khoi schema runtime
+He thong hien tai phan quyen theo authority level va capability.
+RoleController đang “mồ côi”
+Có controller: RoleController.php
+Không có route web tương ứng để dùng.
+Thiếu test coverage theo module
+
+Hiện test tập trung chủ yếu vào Auth, Attendance, Authorization, Profile.
+Chưa có bộ test chuyên sâu cho:
+Projects (CRUD + member/role/detail workflows),
+Positions full flows,
+Departments approvals,
+Feedback + email log,
+Settings.
+Ưu tiên nên làm tiếp (đề xuất)
+
+Hoàn thiện module Settings (đọc/ghi site_settings + upload logo/favicon).
+Bổ sung log lịch sử nhân sự (department/position/status) trong UserService.
+Tạo module quản lý WorkShift, Holiday, phân ca.
+Thêm luồng AttendanceAdjustment (HR/Admin chỉnh công có audit).
+Viet test Feature cho Projects va Positions theo rule authority level + capability.
+Nếu bạn muốn, mình có thể đi từng phần theo đúng cách bạn đang làm: mình làm phần 1 (Settings CRUD) trước, xong gửi bạn checklist test ngay.

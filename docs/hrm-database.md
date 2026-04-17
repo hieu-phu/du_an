@@ -7,13 +7,13 @@ Schema nay duoc thiet ke theo tai lieu "MO TA CHUC NANG APP WEBSITE HRM", bao go
 - Quan ly nhan su, phong ban, chuc vu
 - Cham cong va xac nhan ngay cong
 - Quan ly du an va chi tiet trien khai
-- Phan quyen Admin, HR, Nhan vien
+- Phan quyen theo cap bac va capability
 - Phe duyet thay doi luong/phong ban
 - Cau hinh header, footer, logo, favicon
 
 ## Bang chinh
 
-- `users`: tai khoan dang nhap, email, avatar, session, role/permission
+- `users`: tai khoan dang nhap, email, avatar, session, thong tin truy cap
 - `employee_profiles`: ho so nhan su, phong ban, chuc vu, dia chi, ngay sinh, ngay vao lam, luong co ban
 - `departments`: phong ban
 - `positions`: chuc vu

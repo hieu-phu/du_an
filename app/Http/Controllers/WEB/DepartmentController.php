@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\DepartmentApprovalService;
 use App\Services\DepartmentService;
 use App\Services\NotificationService;
+use App\Support\AccessMatrix;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -43,7 +44,7 @@ class DepartmentController extends Controller
     {
         $validated = $this->validateDepartment($request);
 
-        if ($request->user()?->hasRole('admin')) {
+        if (AccessMatrix::canApproveRequests($request->user())) {
             $this->departmentService->store($validated);
 
             return redirect()->back()->with('success', 'Phòng ban đã được tạo thành công.');
@@ -67,7 +68,7 @@ class DepartmentController extends Controller
         $department = Department::query()->findOrFail($id);
         $validated = $this->validateDepartment($request, $department->id);
 
-        if ($request->user()?->hasRole('admin')) {
+        if (AccessMatrix::canApproveRequests($request->user())) {
             $this->departmentService->update($department->id, $validated);
 
             return redirect()->back()->with('success', 'Phòng ban đã được cập nhật thành công.');
@@ -100,7 +101,7 @@ class DepartmentController extends Controller
     {
         $wasActive = (bool) $department->is_active;
 
-        if (request()->user()?->hasRole('admin')) {
+        if (AccessMatrix::canApproveRequests(request()->user())) {
             $this->departmentService->toggleStatus($department->id);
 
             return redirect()->back()->with(
@@ -148,7 +149,14 @@ class DepartmentController extends Controller
 
     private function notifyAdmins(string $title, string $message, int $approvalRequestId): void
     {
-        $adminIds = User::role('admin')->pluck('id')->all();
+        $adminIds = User::query()
+            ->where('status', 'active')
+            ->with('employeeProfile.position')
+            ->get(['id'])
+            ->filter(fn (User $user) => AccessMatrix::canApproveRequests($user))
+            ->pluck('id')
+            ->values()
+            ->all();
 
         if (empty($adminIds)) {
             return;

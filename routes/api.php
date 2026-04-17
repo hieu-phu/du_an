@@ -9,6 +9,7 @@ Route::get('/user', function (Request $request) {
 Route::middleware(['auth:sanctum', 'activity.log'])->group(function () {
     Route::prefix('locations')->group(function () {
         Route::get('/provinces', [\App\Http\Controllers\API\LocationController::class, 'provinces']);
+        Route::get('/districts/{provinceId}', [\App\Http\Controllers\API\LocationController::class, 'districts']);
         Route::get('/wards/{provinceId}', [\App\Http\Controllers\API\LocationController::class, 'wards']);
     });
 });

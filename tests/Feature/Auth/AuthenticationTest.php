@@ -57,7 +57,7 @@ class AuthenticationTest extends TestCase
         ]);
 
         $this->assertAuthenticatedAs($user);
-        $response->assertRedirect('/dashboard');
+        $response->assertRedirect('/document');
         $this->assertNotNull($user->fresh()->last_login_at);
     }
 
@@ -73,7 +73,7 @@ class AuthenticationTest extends TestCase
         ]);
 
         $this->assertAuthenticatedAs($user);
-        $response->assertRedirect(route('dashboard', absolute: false));
+        $response->assertRedirect('/document');
     }
 
     public function test_users_can_not_authenticate_with_invalid_password(): void

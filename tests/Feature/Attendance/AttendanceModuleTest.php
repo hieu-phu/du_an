@@ -9,12 +9,13 @@ use App\Models\AttendanceRequest;
 use App\Models\AttendanceMonthLock;
 use App\Models\ApprovalRequest;
 use App\Models\EmployeeProfile;
+use App\Models\Position;
 use Carbon\Carbon;
 use App\Models\Notification;
 use App\Models\OvertimeRequest;
 use App\Models\User;
+use App\Support\PositionCapability as Capability;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class AttendanceModuleTest extends TestCase
@@ -24,21 +25,22 @@ class AttendanceModuleTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        Carbon::setTestNow(Carbon::create(2026, 4, 14, 9, 0, 0, 'Asia/Ho_Chi_Minh'));
 
-        foreach (['admin', 'hr', 'employee'] as $role) {
-            Role::firstOrCreate(
-                ['name' => $role, 'guard_name' => 'web'],
-                ['description' => strtoupper($role) . ' role']
-            );
-        }
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
     }
 
     public function test_employee_can_check_in_and_check_out_and_hr_receives_notifications(): void
     {
         Carbon::setTestNow(Carbon::create(2026, 4, 15, 7, 55, 0, 'Asia/Ho_Chi_Minh'));
 
-        $employee = $this->makeUserWithRole('employee', 'Employee One');
-        $hr = $this->makeUserWithRole('hr', 'HR One');
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee One');
+        $hr = $this->makeUserWithAuthorityProfile('hr', 'HR One');
 
         $this->actingAs($employee)
             ->post(route('attendance.check-in'))
@@ -74,9 +76,9 @@ class AttendanceModuleTest extends TestCase
 
     public function test_check_in_after_8am_is_marked_late(): void
     {
-        Carbon::setTestNow(Carbon::create(2026, 4, 15, 8, 5, 0, 'Asia/Ho_Chi_Minh'));
+        Carbon::setTestNow(Carbon::create(2026, 4, 15, 8, 20, 0, 'Asia/Ho_Chi_Minh'));
 
-        $employee = $this->makeUserWithRole('employee', 'Employee Late');
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Late');
 
         $this->actingAs($employee)
             ->post(route('attendance.check-in'))
@@ -92,14 +94,14 @@ class AttendanceModuleTest extends TestCase
 
     public function test_hr_can_confirm_attendance_record(): void
     {
-        $employee = $this->makeUserWithRole('employee', 'Employee Two');
-        $hr = $this->makeUserWithRole('hr', 'HR Two');
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Two');
+        $hr = $this->makeUserWithAuthorityProfile('hr', 'HR Two');
 
         $record = AttendanceRecord::query()->create([
             'employee_profile_id' => $employee->employeeProfile->id,
             'work_date' => now()->toDateString(),
             'check_in_at' => now()->startOfDay()->setHour(8),
-            'check_out_at' => now()->startOfDay()->setHour(17),
+            'check_out_at' => now()->startOfDay()->setHour(18),
             'worked_minutes' => 540,
             'attendance_status' => 'on_time',
             'is_confirmed' => false,
@@ -124,15 +126,15 @@ class AttendanceModuleTest extends TestCase
 
     public function test_only_admin_can_confirm_hr_attendance_record(): void
     {
-        $hrTarget = $this->makeUserWithRole('hr', 'HR Target');
-        $hrApprover = $this->makeUserWithRole('hr', 'HR Approver');
-        $admin = $this->makeUserWithRole('admin', 'Admin One');
+        $hrTarget = $this->makeUserWithAuthorityProfile('hr', 'HR Target');
+        $hrApprover = $this->makeUserWithAuthorityProfile('hr', 'HR Approver');
+        $admin = $this->makeUserWithAuthorityProfile('admin', 'Admin One');
 
         $record = AttendanceRecord::query()->create([
             'employee_profile_id' => $hrTarget->employeeProfile->id,
             'work_date' => now()->toDateString(),
             'check_in_at' => now()->startOfDay()->setHour(8),
-            'check_out_at' => now()->startOfDay()->setHour(17),
+            'check_out_at' => now()->startOfDay()->setHour(18),
             'worked_minutes' => 540,
             'attendance_status' => 'on_time',
             'is_confirmed' => false,
@@ -157,8 +159,8 @@ class AttendanceModuleTest extends TestCase
 
     public function test_hr_can_reject_attendance_record(): void
     {
-        $employee = $this->makeUserWithRole('employee', 'Employee Reject');
-        $hr = $this->makeUserWithRole('hr', 'HR Reject');
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Reject');
+        $hr = $this->makeUserWithAuthorityProfile('hr', 'HR Reject');
 
         $record = AttendanceRecord::query()->create([
             'employee_profile_id' => $employee->employeeProfile->id,
@@ -188,8 +190,8 @@ class AttendanceModuleTest extends TestCase
 
     public function test_employee_only_sees_own_attendance_page_data(): void
     {
-        $employee = $this->makeUserWithRole('employee', 'Employee Three');
-        $otherEmployee = $this->makeUserWithRole('employee', 'Employee Four');
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Three');
+        $otherEmployee = $this->makeUserWithAuthorityProfile('employee', 'Employee Four');
 
         AttendanceRecord::query()->create([
             'employee_profile_id' => $employee->employeeProfile->id,
@@ -216,10 +218,65 @@ class AttendanceModuleTest extends TestCase
         $response->assertDontSee($otherEmployee->employeeProfile->employee_code);
     }
 
+    public function test_my_attendance_summary_uses_work_unit_rules(): void
+    {
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Work Unit');
+
+        AttendanceRecord::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-10',
+            'check_in_at' => Carbon::create(2026, 4, 10, 8, 0, 0, 'Asia/Ho_Chi_Minh'),
+            'check_out_at' => Carbon::create(2026, 4, 10, 16, 0, 0, 'Asia/Ho_Chi_Minh'),
+            'worked_minutes' => 480,
+            'attendance_status' => 'on_time',
+            'day_status' => 'present',
+            'approval_status' => 'approved',
+            'missing_check_in' => false,
+            'missing_check_out' => false,
+        ]);
+
+        AttendanceRecord::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-11',
+            'check_in_at' => Carbon::create(2026, 4, 11, 8, 0, 0, 'Asia/Ho_Chi_Minh'),
+            'check_out_at' => Carbon::create(2026, 4, 11, 12, 0, 0, 'Asia/Ho_Chi_Minh'),
+            'worked_minutes' => 240,
+            'attendance_status' => 'late',
+            'day_status' => 'late',
+            'approval_status' => 'pending',
+            'missing_check_in' => false,
+            'missing_check_out' => false,
+        ]);
+
+        AttendanceRecord::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-12',
+            'check_in_at' => Carbon::create(2026, 4, 12, 8, 0, 0, 'Asia/Ho_Chi_Minh'),
+            'check_out_at' => Carbon::create(2026, 4, 12, 11, 59, 0, 'Asia/Ho_Chi_Minh'),
+            'worked_minutes' => 239,
+            'attendance_status' => 'late',
+            'day_status' => 'early_leave',
+            'approval_status' => 'pending',
+            'missing_check_in' => false,
+            'missing_check_out' => false,
+        ]);
+
+        $response = $this->actingAs($employee)->get(route('attendance.mine', [
+            'month' => 4,
+            'year' => 2026,
+        ]));
+
+        $response->assertOk();
+        $response->assertViewHas('page');
+
+        $page = $response->viewData('page');
+        $this->assertSame(1.5, (float) data_get($page, 'props.summary.total_work_units'));
+    }
+
     public function test_hr_can_export_reports_but_employee_cannot(): void
     {
-        $employee = $this->makeUserWithRole('employee', 'Employee Five');
-        $hr = $this->makeUserWithRole('hr', 'HR Three');
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Five');
+        $hr = $this->makeUserWithAuthorityProfile('hr', 'HR Three');
 
         AttendanceRecord::query()->create([
             'employee_profile_id' => $employee->employeeProfile->id,
@@ -243,12 +300,12 @@ class AttendanceModuleTest extends TestCase
 
         $this->actingAs($employee)
             ->get(route('attendance.reports.export.excel'))
-            ->assertForbidden();
+            ->assertRedirect();
     }
 
     public function test_mark_absent_command_creates_absent_records_for_missing_attendance(): void
     {
-        $employee = $this->makeUserWithRole('employee', 'Employee Absent');
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Absent');
 
         $this->artisan('attendance:mark-absent', ['date' => '2026-04-15'])
             ->expectsOutput('Marked 1 attendance record(s) as absent.')
@@ -263,7 +320,7 @@ class AttendanceModuleTest extends TestCase
 
     public function test_employee_can_submit_attendance_request_and_overtime_request(): void
     {
-        $employee = $this->makeUserWithRole('employee', 'Employee Request');
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Request');
 
         $this->actingAs($employee)
             ->post(route('attendance.requests.store'), [
@@ -297,8 +354,8 @@ class AttendanceModuleTest extends TestCase
 
     public function test_hr_can_approve_attendance_request(): void
     {
-        $employee = $this->makeUserWithRole('employee', 'Employee Approval Request');
-        $hr = $this->makeUserWithRole('hr', 'HR Approval Request');
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Approval Request');
+        $hr = $this->makeUserWithAuthorityProfile('hr', 'HR Approval Request');
 
         $this->actingAs($employee)
             ->post(route('attendance.requests.store'), [
@@ -333,8 +390,8 @@ class AttendanceModuleTest extends TestCase
 
     public function test_hr_can_approve_overtime_request_and_overtime_minutes_are_applied_to_attendance_record(): void
     {
-        $employee = $this->makeUserWithRole('employee', 'Employee Overtime Approval');
-        $hr = $this->makeUserWithRole('hr', 'HR Overtime Approval');
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Overtime Approval');
+        $hr = $this->makeUserWithAuthorityProfile('hr', 'HR Overtime Approval');
 
         $this->actingAs($employee)
             ->post(route('attendance.requests.store'), [
@@ -363,9 +420,9 @@ class AttendanceModuleTest extends TestCase
 
     public function test_approved_make_up_request_is_preserved_in_report_reconciliation(): void
     {
-        $employee = $this->makeUserWithRole('employee', 'Employee Make Up');
-        $hr = $this->makeUserWithRole('hr', 'HR Make Up');
-        $admin = $this->makeUserWithRole('admin', 'Admin Report');
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Make Up');
+        $hr = $this->makeUserWithAuthorityProfile('hr', 'HR Make Up');
+        $admin = $this->makeUserWithAuthorityProfile('admin', 'Admin Report');
 
         AttendanceRecord::query()->create([
             'employee_profile_id' => $employee->employeeProfile->id,
@@ -384,6 +441,8 @@ class AttendanceModuleTest extends TestCase
             ->post(route('attendance.requests.store'), [
                 'request_type' => 'make_up',
                 'request_date' => '2026-04-15',
+                'from_time' => '18:00',
+                'to_time' => '20:00',
                 'reason' => 'Lam bu da duoc phe duyet',
             ])
             ->assertRedirect();
@@ -405,21 +464,21 @@ class AttendanceModuleTest extends TestCase
             ->whereDate('work_date', '2026-04-15')
             ->firstOrFail();
 
-        $this->assertSame('late', $record->attendance_status);
-        $this->assertSame('late', $record->day_status);
-        $this->assertGreaterThan(0, (int) $record->late_minutes);
+        $this->assertSame('on_time', $record->attendance_status);
+        $this->assertSame('present', $record->day_status);
+        $this->assertSame(0, (int) $record->late_minutes);
     }
 
     public function test_approved_overtime_counts_only_minutes_outside_work_shift(): void
     {
-        $employee = $this->makeUserWithRole('employee', 'Employee OT Outside Shift');
-        $hr = $this->makeUserWithRole('hr', 'HR OT Outside Shift');
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee OT Outside Shift');
+        $hr = $this->makeUserWithAuthorityProfile('hr', 'HR OT Outside Shift');
 
         $this->actingAs($employee)
             ->post(route('attendance.requests.store'), [
                 'request_type' => 'overtime',
-                'start_at' => '2026-04-15 13:37:00',
-                'end_at' => '2026-04-15 18:00:00',
+                'start_at' => '2026-04-15 19:00:00',
+                'end_at' => '2026-04-15 20:00:00',
                 'reason' => 'Lam them buoi chieu',
             ])
             ->assertRedirect();
@@ -443,8 +502,8 @@ class AttendanceModuleTest extends TestCase
     {
         Carbon::setTestNow(Carbon::create(2026, 4, 15, 7, 50, 0, 'Asia/Ho_Chi_Minh'));
 
-        $admin = $this->makeUserWithRole('admin', 'Admin Lock');
-        $employee = $this->makeUserWithRole('employee', 'Employee Lock');
+        $admin = $this->makeUserWithAuthorityProfile('admin', 'Admin Lock');
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Lock');
 
         $this->actingAs($admin)
             ->post(route('attendance.month-locks.lock'), [
@@ -473,7 +532,7 @@ class AttendanceModuleTest extends TestCase
         Carbon::setTestNow();
     }
 
-    private function makeUserWithRole(string $role, string $name): User
+    private function makeUserWithAuthorityProfile(string $profile, string $name): User
     {
         $user = User::factory()->create([
             'name' => $name,
@@ -482,11 +541,19 @@ class AttendanceModuleTest extends TestCase
             'status' => 'active',
         ]);
 
-        $user->assignRole($role);
+        $position = Position::query()->create([
+            'name' => 'Position ' . $name,
+            'description' => 'Generated for test',
+            'is_active' => true,
+            'authority_level' => $profile === 'admin' ? 5 : ($profile === 'hr' ? 4 : 1),
+            'capabilities' => $this->capabilitiesForAuthorityProfile($profile),
+        ]);
+        $position->syncCapabilityCodes($this->capabilitiesForAuthorityProfile($profile));
 
         EmployeeProfile::query()->create([
             'user_id' => $user->id,
             'employee_code' => 'EMP-' . str_pad((string) $user->id, 3, '0', STR_PAD_LEFT),
+            'position_id' => $position->id,
             'hire_date' => now()->toDateString(),
             'employment_status' => 'active',
             'employment_type' => 'official',
@@ -494,5 +561,34 @@ class AttendanceModuleTest extends TestCase
         ]);
 
         return $user->fresh('employeeProfile');
+    }
+
+    private function capabilitiesForAuthorityProfile(string $profile): array
+    {
+        if ($profile === 'admin') {
+            return Capability::all();
+        }
+
+        if ($profile === 'hr') {
+            return [
+                Capability::VIEW_DASHBOARD,
+                Capability::MANAGE_EMPLOYEES,
+                Capability::APPROVE_ATTENDANCE,
+                Capability::VIEW_ALL_ATTENDANCE,
+                Capability::EXPORT_ATTENDANCE,
+                Capability::APPROVE_REQUESTS,
+                Capability::VIEW_ALL_PROJECTS,
+            ];
+        }
+
+        return [
+            Capability::VIEW_DASHBOARD,
+            Capability::VIEW_OWN_PROFILE,
+            Capability::UPDATE_OWN_PROFILE,
+            Capability::VIEW_OWN_ATTENDANCE,
+            Capability::CHECK_IN,
+            Capability::CHECK_OUT,
+            Capability::REQUEST_ATTENDANCE_ADJUSTMENT,
+        ];
     }
 }

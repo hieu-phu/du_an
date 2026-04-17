@@ -8,7 +8,7 @@
       <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 class="text-xl font-semibold text-gray-900">Tong quan he thong</h2>
-          <p class="mt-1 text-sm text-gray-500">Vai tro hien tai: {{ roleLabel }}</p>
+          <p class="mt-1 text-sm text-gray-500">Chuc vu hien tai: {{ positionLabel }}</p>
         </div>
 
         <div v-if="permissions['attendance.mine.action']" class="flex flex-wrap gap-3">
@@ -231,13 +231,7 @@ const attendanceForm = useForm({})
 const permissions = computed(() => page.props.auth?.permissions || {})
 const positionCapabilities = computed(() => page.props.auth?.position_capabilities || {})
 const isDepartmentHead = computed(() => !!page.props.auth?.user?.is_department_head)
-const primaryRole = computed(() => page.props.auth?.user?.primary_role || 'employee')
-
-const roleLabel = computed(() => ({
-  admin: 'Admin',
-  hr: 'HR',
-  employee: 'Nhan vien',
-}[primaryRole.value] || primaryRole.value))
+const positionLabel = computed(() => page.props.auth?.user?.position_name || (page.props.auth?.user?.authority_level ? `Rank ${page.props.auth.user.authority_level}` : 'Chua thiet lap'))
 
 const canCheckIn = computed(() => !props.todayAttendance?.check_in_at)
 const canCheckOut = computed(() => !!props.todayAttendance?.check_in_at && !props.todayAttendance?.check_out_at)

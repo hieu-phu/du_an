@@ -62,9 +62,11 @@
       <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
         <div>
           <label class="mb-1 block text-sm font-medium text-gray-700">Gui toi</label>
-          <select v-model="form.receiver_group" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-            <option value="hr">HR</option>
-            <option value="admin">Admin</option>
+          <select v-model="form.receiver_position_id" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+            <option v-if="!receiverOptions.length" value="">Chua co chuc vu nhan phan hoi</option>
+            <option v-for="option in receiverOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
           </select>
         </div>
         <div class="md:col-span-3">
@@ -77,7 +79,7 @@
         </div>
       </div>
       <div class="mt-3">
-        <button :disabled="form.processing" @click="submitFeedback" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
+        <button :disabled="form.processing || !receiverOptions.length" @click="submitFeedback" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
           {{ form.processing ? 'Dang gui...' : 'Gui phan hoi' }}
         </button>
       </div>
@@ -128,7 +130,7 @@
 
             <div class="mt-3 flex flex-wrap gap-2">
               <button @click="markRead(item)" class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700">Danh dau da doc</button>
-              <button @click="openReply(item)" class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white">Tra loi</button>
+              <button v-if="canSubmitReply" @click="openReply(item)" class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white">Tra loi</button>
               <span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700">Xu ly: {{ item.processing_state_label }}</span>
             </div>
 
@@ -220,14 +222,16 @@ const props = defineProps({
   inbox: { type: Array, default: () => [] },
   mailLogs: { type: Array, default: () => [] },
   canReply: { type: Boolean, default: false },
+  canSubmitReply: { type: Boolean, default: false },
   filters: { type: Object, default: () => ({}) },
   statusOptions: { type: Array, default: () => [] },
   processingOptions: { type: Array, default: () => [] },
+  receiverOptions: { type: Array, default: () => [] },
   summary: { type: Object, default: () => ({}) },
 })
 
 const form = useForm({
-  receiver_group: 'hr',
+  receiver_position_id: props.receiverOptions?.[0]?.value || '',
   subject: '',
   message: '',
 })

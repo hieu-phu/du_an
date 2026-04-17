@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\WEB\ActivityLogController;
 use App\Http\Controllers\WEB\AttendanceController;
+use App\Http\Controllers\WEB\AttendanceAdjustmentController;
+use App\Http\Controllers\WEB\AttendanceCatalogController;
 use App\Http\Controllers\WEB\DepartmentApprovalController;
 use App\Http\Controllers\WEB\DepartmentController;
 use App\Http\Controllers\WEB\FeedbackController;
@@ -9,12 +11,12 @@ use App\Http\Controllers\WEB\PortalController;
 use App\Http\Controllers\WEB\PositionController;
 use App\Http\Controllers\WEB\ProjectController;
 use App\Http\Controllers\WEB\ReportController;
+use App\Http\Controllers\WEB\SettingsController;
 use App\Http\Controllers\WEB\UserApprovalController;
 use App\Http\Controllers\WEB\UserController;
 use App\Support\PositionCapability;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 if (app()->isLocal() || app()->environment('staging')) {
     Route::get('/setup', function () {
@@ -38,43 +40,65 @@ if (app()->isLocal() || app()->environment('staging')) {
 }
 
 Route::middleware(['auth', 'activity.log'])->group(function () {
-    Route::get('/', [PortalController::class, 'dashboard']);
-    Route::get('/dashboard', [PortalController::class, 'dashboard'])->name('dashboard');
+    Route::get('/', [PortalController::class, 'dashboard'])
+        ->middleware('position.capability:' . PositionCapability::VIEW_DASHBOARD);
+    Route::get('/dashboard', [PortalController::class, 'dashboard'])
+        ->middleware('position.capability:' . PositionCapability::VIEW_DASHBOARD)
+        ->name('dashboard');
 
     Route::get('/my-profile', [PortalController::class, 'myProfile'])
+        ->middleware('position.capability:' . PositionCapability::VIEW_OWN_PROFILE)
         ->name('my-profile');
 
     Route::put('/my-profile', [PortalController::class, 'updateProfile'])
+        ->middleware('position.capability:' . PositionCapability::UPDATE_OWN_PROFILE)
         ->name('my-profile.update');
     Route::post('/my-profile/avatar', [PortalController::class, 'updateAvatar'])
+        ->middleware('position.capability:' . PositionCapability::UPDATE_OWN_PROFILE)
         ->name('my-profile.avatar');
 
     Route::post('/attendance/check-in', [AttendanceController::class, 'checkIn'])
+        ->middleware('position.capability:' . PositionCapability::CHECK_IN)
         ->name('attendance.check-in');
 
     Route::post('/attendance/check-out', [AttendanceController::class, 'checkOut'])
+        ->middleware('position.capability:' . PositionCapability::CHECK_OUT)
         ->name('attendance.check-out');
 
     Route::post('/attendance/requests', [AttendanceController::class, 'submitRequest'])
+        ->middleware('position.capability:' . PositionCapability::REQUEST_ATTENDANCE_ADJUSTMENT)
         ->name('attendance.requests.store');
 
+    Route::get('/attendance/adjustments', [AttendanceAdjustmentController::class, 'index'])
+        ->middleware('position.capability:' . PositionCapability::REQUEST_ATTENDANCE_ADJUSTMENT)
+        ->name('attendance.adjustments.index');
+
+    Route::post('/attendance/adjustments', [AttendanceAdjustmentController::class, 'store'])
+        ->middleware('position.capability:' . PositionCapability::REQUEST_ATTENDANCE_ADJUSTMENT)
+        ->name('attendance.adjustments.store');
+
     Route::get('/feedbacks', [FeedbackController::class, 'index'])
+        ->middleware('position.capability:' . PositionCapability::VIEW_FEEDBACKS)
         ->name('feedbacks.index');
 
     Route::post('/feedbacks', [FeedbackController::class, 'store'])
+        ->middleware('position.capability:' . PositionCapability::CREATE_FEEDBACK)
         ->name('feedbacks.store');
 
     Route::post('/feedbacks/{feedbackMessage}/read', [FeedbackController::class, 'markRead'])
+        ->middleware('position.capability:' . PositionCapability::VIEW_FEEDBACKS)
         ->name('feedbacks.read');
 
     Route::post('/feedbacks/{feedbackMessage}/reply', [FeedbackController::class, 'reply'])
-        ->middleware('position.capability:' . PositionCapability::APPROVE_REQUESTS)
+        ->middleware('position.capability:' . PositionCapability::REPLY_FEEDBACK)
         ->name('feedbacks.reply');
 
     Route::get('/my-attendance', [AttendanceController::class, 'myAttendance'])
+        ->middleware('position.capability:' . PositionCapability::VIEW_OWN_ATTENDANCE)
         ->name('attendance.mine');
 
     Route::get('/my-projects', [ProjectController::class, 'myProjects'])
+        ->middleware('position.capability:' . PositionCapability::VIEW_OWN_PROJECTS)
         ->name('projects.mine');
 
     Route::group([], function () {
@@ -111,6 +135,7 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
             ->middleware('position.capability:' . PositionCapability::MANAGE_PROJECT_MEMBERS)
             ->name('projects.implementation-details.update');
         Route::put('/projects/{project}/implementation-details/{implementationDetail}/status', [ProjectController::class, 'updateImplementationDetailStatus'])
+            ->middleware('position.capability:' . PositionCapability::UPDATE_PROJECT_TASK_STATUS)
             ->name('projects.implementation-details.status');
         Route::put('/projects/{project}/implementation-details/{implementationDetail}/toggle-lock', [ProjectController::class, 'toggleImplementationDetailLock'])
             ->middleware('position.capability:' . PositionCapability::MANAGE_PROJECT_MEMBERS)
@@ -135,6 +160,13 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
 
         Route::post('/attendance/request-approvals/{approvalRequest}/reject', [AttendanceController::class, 'rejectRequest'])
             ->name('attendance.request-approvals.reject');
+
+        Route::get('/attendance/adjustments/approvals', [AttendanceAdjustmentController::class, 'approvals'])
+            ->name('attendance.adjustments.approvals');
+        Route::post('/attendance/adjustments/{adjustment}/approve', [AttendanceAdjustmentController::class, 'approve'])
+            ->name('attendance.adjustments.approve');
+        Route::post('/attendance/adjustments/{adjustment}/reject', [AttendanceAdjustmentController::class, 'reject'])
+            ->name('attendance.adjustments.reject');
     });
 
     Route::middleware(['position.capability:' . PositionCapability::VIEW_ALL_ATTENDANCE])->group(function () {
@@ -191,6 +223,29 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
 
         Route::post('/attendance/month-locks/unlock', [AttendanceController::class, 'unlockMonth'])
             ->name('attendance.month-locks.unlock');
+
+        Route::get('/attendance/catalogs', [AttendanceCatalogController::class, 'index'])
+            ->name('attendance.catalogs.index');
+        Route::post('/attendance/catalogs/work-shifts', [AttendanceCatalogController::class, 'storeWorkShift'])
+            ->name('attendance.catalogs.work-shifts.store');
+        Route::put('/attendance/catalogs/work-shifts/{workShift}', [AttendanceCatalogController::class, 'updateWorkShift'])
+            ->name('attendance.catalogs.work-shifts.update');
+        Route::put('/attendance/catalogs/work-shifts/{workShift}/toggle', [AttendanceCatalogController::class, 'toggleWorkShift'])
+            ->name('attendance.catalogs.work-shifts.toggle');
+
+        Route::post('/attendance/catalogs/holidays', [AttendanceCatalogController::class, 'storeHoliday'])
+            ->name('attendance.catalogs.holidays.store');
+        Route::put('/attendance/catalogs/holidays/{holiday}', [AttendanceCatalogController::class, 'updateHoliday'])
+            ->name('attendance.catalogs.holidays.update');
+        Route::delete('/attendance/catalogs/holidays/{holiday}', [AttendanceCatalogController::class, 'destroyHoliday'])
+            ->name('attendance.catalogs.holidays.destroy');
+
+        Route::post('/attendance/catalogs/assignments', [AttendanceCatalogController::class, 'storeAssignment'])
+            ->name('attendance.catalogs.assignments.store');
+        Route::put('/attendance/catalogs/assignments/{assignment}', [AttendanceCatalogController::class, 'updateAssignment'])
+            ->name('attendance.catalogs.assignments.update');
+        Route::put('/attendance/catalogs/assignments/{assignment}/toggle', [AttendanceCatalogController::class, 'toggleAssignment'])
+            ->name('attendance.catalogs.assignments.toggle');
     });
 
     Route::middleware(['position.capability:' . PositionCapability::APPROVE_REQUESTS])->group(function () {
@@ -198,12 +253,14 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
             Route::get('/', [UserApprovalController::class, 'index'])->name('index');
             Route::post('/{approvalRequest}/approve', [UserApprovalController::class, 'approve'])->name('approve');
             Route::post('/{approvalRequest}/reject', [UserApprovalController::class, 'reject'])->name('reject');
+            Route::post('/{approvalRequest}/cancel', [UserApprovalController::class, 'cancel'])->name('cancel');
         });
 
         Route::prefix('departments/approvals')->name('web.department-approvals.')->group(function () {
             Route::get('/', [DepartmentApprovalController::class, 'index'])->name('index');
             Route::post('/{approvalRequest}/approve', [DepartmentApprovalController::class, 'approve'])->name('approve');
             Route::post('/{approvalRequest}/reject', [DepartmentApprovalController::class, 'reject'])->name('reject');
+            Route::post('/{approvalRequest}/cancel', [DepartmentApprovalController::class, 'cancel'])->name('cancel');
         });
     });
 
@@ -219,9 +276,12 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
         ->middleware('position.capability:' . PositionCapability::VIEW_ACTIVITY_LOGS)
         ->name('activity-logs.index');
 
-    Route::get('/settings', fn () => Inertia::render('Settings/Index'))
+    Route::get('/settings', [SettingsController::class, 'index'])
         ->middleware('position.capability:' . PositionCapability::VIEW_ACTIVITY_LOGS)
         ->name('settings.index');
+    Route::put('/settings', [SettingsController::class, 'update'])
+        ->middleware('position.capability:' . PositionCapability::VIEW_ACTIVITY_LOGS)
+        ->name('settings.update');
 });
 
 require __DIR__ . '/auth.php';

@@ -2,7 +2,6 @@
 
 namespace App\Repositories;
 
-use App\Support\PositionRoleResolver;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -46,11 +45,6 @@ class UserRepository extends BaseRepository
         if (!empty($filters['hire_date'])) {
             $hireDate = $filters['hire_date'];
             $query->whereHas('employeeProfile', fn ($q) => $q->whereDate('hire_date', $hireDate));
-        }
-
-        if (!empty($filters['role'])) {
-            $role = $filters['role'];
-            $query->role($role);
         }
 
         return $query->latest()->paginate($perPage)->through(fn (User $user) => $this->transformUser($user));
@@ -98,7 +92,6 @@ class UserRepository extends BaseRepository
     private function detailRelations(): array
     {
         $relations = [
-            'roles:id,name',
             'creator:id,name',
             'employeeProfile.department:id,name',
             'employeeProfile.position:id,name,authority_level,capabilities',
@@ -123,13 +116,6 @@ class UserRepository extends BaseRepository
     {
         $profile = $user->employeeProfile;
         $position = $profile?->position;
-        $roleName = $user->roles->first()?->name ?? PositionRoleResolver::ROLE_EMPLOYEE;
-        $minimumRole = PositionRoleResolver::resolveMinimumRole($position);
-        $roleMismatch = !PositionRoleResolver::allowsRoleForPosition($roleName, $position);
-        $effectiveRole = PositionRoleResolver::roleRank($roleName) >= PositionRoleResolver::roleRank($minimumRole)
-            ? $roleName
-            : $minimumRole;
-
         return [
             'id' => $user->id,
             'name' => $user->name,
@@ -143,10 +129,6 @@ class UserRepository extends BaseRepository
             'last_login_at' => $user->last_login_at,
             'is_employee' => (bool) $user->is_employee,
             'has_employee_profile' => (bool) $profile,
-            'role_name' => $roleName,
-            'minimum_role_name' => $minimumRole,
-            'effective_role_name' => $effectiveRole,
-            'is_role_mismatch' => $roleMismatch,
             'creator_name' => $user->creator?->name,
             'employee_code' => $profile?->employee_code,
             'date_of_birth' => $profile?->date_of_birth?->format('Y-m-d'),

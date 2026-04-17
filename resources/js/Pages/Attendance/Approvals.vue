@@ -160,7 +160,7 @@ const props = defineProps({
 })
 
 const page = usePage()
-const currentRole = computed(() => page.props.auth?.user?.primary_role || 'employee')
+const currentAuthorityLevel = computed(() => Number(page.props.auth?.user?.authority_level || 0))
 const selectedRequest = ref(null)
 const decisionForm = useForm({ note: '' })
 const requestDecisionForm = useForm({ note: '' })
@@ -207,13 +207,13 @@ const actions = [
   {
     label: 'Duyệt',
     buttonProps: { title: 'Duyệt ngày công' },
-    hidden: (item) => item.approval_status !== 'pending' || (item.employee_role === 'hr' && currentRole.value !== 'admin'),
+    hidden: (item) => item.approval_status !== 'pending' || (Number(item.employee_authority_level || 0) >= currentAuthorityLevel.value),
     onClick: (item) => decide(item, 'approve'),
   },
   {
     label: 'Từ chối',
     buttonProps: { title: 'Từ chối ngày công' },
-    hidden: (item) => item.approval_status !== 'pending' || (item.employee_role === 'hr' && currentRole.value !== 'admin'),
+    hidden: (item) => item.approval_status !== 'pending' || (Number(item.employee_authority_level || 0) >= currentAuthorityLevel.value),
     onClick: (item) => decide(item, 'reject'),
   },
 ]
@@ -359,4 +359,5 @@ function requestPresenceClass(value) {
   return classes[value] || 'bg-slate-50 text-slate-700'
 }
 </script>
+
 

@@ -63,7 +63,7 @@ class PortalController extends Controller
             ],
         ];
 
-        if ($user && $user->hasRole(AccessMatrix::ROLE_EMPLOYEE) && $profileId) {
+        if ($user && !$this->hasGlobalProjectAccess($user) && $profileId) {
             $stats = [
                 [
                     'title' => 'Du an cua toi',
@@ -131,7 +131,7 @@ class PortalController extends Controller
         }
 
         // Dành cho Quản lý / Admin
-        if ($user->hasRole([AccessMatrix::ROLE_ADMIN, AccessMatrix::ROLE_HR])) {
+        if (AccessMatrix::canManageAllAttendance($user)) {
             $pendingApprovals = $this->attendanceRepository->getPendingApprovalsCount();
             if ($pendingApprovals > 0) {
                 $warnings[] = [
@@ -187,7 +187,7 @@ class PortalController extends Controller
     {
         $query = Project::query();
 
-        if ($user->hasRole(AccessMatrix::ROLE_EMPLOYEE) && $profileId) {
+        if (!$this->hasGlobalProjectAccess($user) && $profileId) {
             $query->whereHas('members', function (Builder $builder) use ($profileId) {
                 $builder
                     ->where('employee_profile_id', $profileId)
@@ -280,7 +280,7 @@ class PortalController extends Controller
             ->whereYear('work_date', $year);
 
         $scope = 'company';
-        if ($user->hasRole(AccessMatrix::ROLE_EMPLOYEE) && $profileId) {
+        if (!AccessMatrix::canManageAllAttendance($user) && $profileId) {
             $query->where('employee_profile_id', $profileId);
             $scope = 'personal';
         }
@@ -320,12 +320,16 @@ class PortalController extends Controller
         };
     }
 
+    private function hasGlobalProjectAccess(User $user): bool
+    {
+        return AccessMatrix::canViewAllProjects($user);
+    }
+
     public function myProfile(Request $request): Response
     {
         $user = $request->user()->load([
-            'roles:id,name',
             'employeeProfile.department:id,name',
-            'employeeProfile.position:id,name',
+            'employeeProfile.position',
             'employeeProfile.province:id,name',
             'employeeProfile.ward:id,name',
         ]);
@@ -338,7 +342,6 @@ class PortalController extends Controller
                 'address' => $user->address,
                 'avatar' => $user->avatar,
                 'status' => $user->status,
-                'role' => $user->roles->first()?->name,
                 'last_login_at' => optional($user->last_login_at)?->format('Y-m-d H:i:s'),
                 'employee_code' => $user->employeeProfile?->employee_code,
                 'hire_date' => optional($user->employeeProfile?->hire_date)?->format('Y-m-d'),
@@ -347,6 +350,7 @@ class PortalController extends Controller
                 'employment_type' => $user->employeeProfile?->employment_type,
                 'department' => $user->employeeProfile?->department?->name,
                 'position' => $user->employeeProfile?->position?->name,
+                'authority_level' => (int) ($user->employeeProfile?->position?->authority_level ?? 0),
                 'base_salary' => $user->employeeProfile?->base_salary,
                 'province_id' => $user->employeeProfile?->province_id,
                 'ward_id' => $user->employeeProfile?->ward_id,

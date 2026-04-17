@@ -14,19 +14,21 @@ class MenuBuilder
 
         $can = static fn (string $capability): bool => $user->hasPositionCapability($capability);
 
-        $canViewAllProjects = $can(PositionCapability::VIEW_ALL_PROJECTS)
-            || $can(PositionCapability::MANAGE_PROJECTS)
-            || $can(PositionCapability::MANAGE_PROJECT_MEMBERS)
-            || $can(PositionCapability::MANAGE_PROJECT_ROLES)
-            || (bool) ($user->employeeProfile?->is_department_head ?? false);
+        $canViewAllProjects = $can(PositionCapability::VIEW_ALL_PROJECTS);
 
         $groups = [
             [
                 'title' => 'Dashboard',
                 'items' => array_values(array_filter([
-                    self::item('Dashboard', '/dashboard', 'GridIcon', true),
-                    self::item('Ho so ca nhan', '/my-profile', 'UserCircleIcon'),
-                    self::item('Phan hoi noi bo', '/feedbacks', 'Message2Line'),
+                    $can(PositionCapability::VIEW_DASHBOARD)
+                        ? self::item('Dashboard', '/dashboard', 'GridIcon', true)
+                        : null,
+                    $can(PositionCapability::VIEW_OWN_PROFILE)
+                        ? self::item('Ho so ca nhan', '/my-profile', 'UserCircleIcon')
+                        : null,
+                    $can(PositionCapability::VIEW_FEEDBACKS)
+                        ? self::item('Phan hoi noi bo', '/feedbacks', 'Message2Line')
+                        : null,
                 ])),
             ],
             [
@@ -46,9 +48,20 @@ class MenuBuilder
             [
                 'title' => 'Cham cong',
                 'items' => array_values(array_filter([
-                    self::item('Cong cua toi', '/my-attendance', 'ClockIcon'),
+                    $can(PositionCapability::VIEW_OWN_ATTENDANCE)
+                        ? self::item('Cong cua toi', '/my-attendance', 'ClockIcon')
+                        : null,
+                    $can(PositionCapability::REQUEST_ATTENDANCE_ADJUSTMENT)
+                        ? self::item('Dieu chinh cong', '/attendance/adjustments', 'EditIcon')
+                        : null,
                     $can(PositionCapability::APPROVE_ATTENDANCE)
                         ? self::item('Duyet cong', '/attendance/approvals', 'CheckCircleIcon')
+                        : null,
+                    $can(PositionCapability::APPROVE_ATTENDANCE)
+                        ? self::item('Duyet dieu chinh cong', '/attendance/adjustments/approvals', 'ListCheckIcon')
+                        : null,
+                    $can(PositionCapability::APPROVE_ATTENDANCE)
+                        ? self::item('Danh muc cham cong', '/attendance/catalogs', 'Calendar2Line')
                         : null,
                 ])),
             ],
@@ -58,7 +71,7 @@ class MenuBuilder
                     $canViewAllProjects
                         ? self::item('Danh sach du an', '/projects', 'BoxIcon')
                         : null,
-                    !$canViewAllProjects && $user->hasActiveProjectMembership()
+                    !$canViewAllProjects && $can(PositionCapability::VIEW_OWN_PROJECTS)
                         ? self::item('Du an cua toi', '/my-projects', 'BoxIcon')
                         : null,
                 ])),
@@ -74,14 +87,6 @@ class MenuBuilder
                         : null,
                     $can(PositionCapability::VIEW_ACTIVITY_LOGS)
                         ? self::item('Truy vet hoat dong', '/activity-logs', 'ListCheckIcon')
-                        : null,
-                ])),
-            ],
-            [
-                'title' => 'Cau hinh',
-                'items' => array_values(array_filter([
-                    $can(PositionCapability::VIEW_ACTIVITY_LOGS)
-                        ? self::item('Cau hinh website', '/settings', 'SettingsIcon')
                         : null,
                 ])),
             ],

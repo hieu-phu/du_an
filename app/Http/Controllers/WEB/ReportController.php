@@ -86,13 +86,12 @@ class ReportController extends Controller
         $projectStatus = !empty($input['project_status']) ? (string) $input['project_status'] : null;
 
         $profileId = $user->employeeProfile?->id;
-        $isEmployee = $user->hasRole(AccessMatrix::ROLE_EMPLOYEE);
-        $isAdmin = $user->hasRole(AccessMatrix::ROLE_ADMIN);
-        $isHr = $user->hasRole(AccessMatrix::ROLE_HR) && !$isAdmin;
+        $isEmployee = !AccessMatrix::canManageAllAttendance($user);
+        $canViewProjectReports = AccessMatrix::canViewAllProjects($user);
 
         $employeeByDepartment = $this->buildEmployeeByDepartment($user, $departmentId);
-        $projectByStatus = $isHr ? [] : $this->buildProjectByStatus($user, $profileId, $projectStatus);
-        $projectProgress = $isHr ? [] : $this->buildProjectProgress($user, $profileId, $projectStatus);
+        $projectByStatus = $canViewProjectReports ? $this->buildProjectByStatus($user, $profileId, $projectStatus) : [];
+        $projectProgress = $canViewProjectReports ? $this->buildProjectProgress($user, $profileId, $projectStatus) : [];
         $attendanceMonthly = $this->buildAttendanceMonthly($user, $profileId, $month, $year, $departmentId);
 
         return [
@@ -115,13 +114,13 @@ class ReportController extends Controller
             'attendanceMonthly' => $attendanceMonthly,
             'scopeLabel' => $isEmployee ? 'Du lieu ca nhan' : 'Du lieu toan bo',
             'canViewAll' => !$isEmployee,
-            'canViewProjectReports' => !$isHr,
+            'canViewProjectReports' => $canViewProjectReports,
         ];
     }
 
     private function buildEmployeeByDepartment(User $user, ?int $departmentId): array
     {
-        if ($user->hasRole(AccessMatrix::ROLE_EMPLOYEE)) {
+        if (!AccessMatrix::canManageAllAttendance($user)) {
             $profile = $user->employeeProfile;
             if (!$profile) {
                 return [];
@@ -227,7 +226,7 @@ class ReportController extends Controller
             ->whereMonth('work_date', $month)
             ->whereYear('work_date', $year);
 
-        if ($user->hasRole(AccessMatrix::ROLE_EMPLOYEE) && $profileId) {
+        if (!AccessMatrix::canManageAllAttendance($user) && $profileId) {
             $query->where('employee_profile_id', $profileId);
         } elseif ($departmentId) {
             $query->whereHas('employeeProfile', fn (Builder $q) => $q->where('department_id', $departmentId));
@@ -249,7 +248,7 @@ class ReportController extends Controller
     {
         $query = Project::query();
 
-        if ($user->hasRole(AccessMatrix::ROLE_EMPLOYEE) && $profileId) {
+        if (!AccessMatrix::canViewAllProjects($user) && $profileId) {
             $query->whereHas('members', function (Builder $builder) use ($profileId) {
                 $builder->where('employee_profile_id', $profileId)->where('is_active', true);
             });

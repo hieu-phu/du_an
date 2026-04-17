@@ -1,4 +1,4 @@
-<template>
+﻿<template>
     <CustomModal
         v-if="modelValue"
         :title="isEditMode ? 'Chỉnh sửa nhân sự' : 'Thêm nhân sự mới'"
@@ -56,10 +56,10 @@
                             placeholder="Chọn chức vụ"
                             :error="form.errors.position_id"
                         />
-                        <div v-if="minimumRoleHint" class="md:col-span-2 -mt-2">
+                        <div v-if="minimumAuthorityHint" class="md:col-span-2 -mt-2">
                             <p class="text-xs text-gray-500">
-                                Quyền tài khoản sẽ tự động gán theo chức vụ:
-                                <span class="font-semibold text-gray-700">{{ minimumRoleHint }}</span>
+                                Quyền tài khoản sẽ tự động gắn theo chức vụ:
+                                <span class="font-semibold text-gray-700">{{ minimumAuthorityHint }}</span>
                             </p>
                         </div>
                         <div>
@@ -116,13 +116,23 @@
                             @update:modelValue="handleProvinceChange"
                         />
                         <FormSelect
+                            id="district_id"
+                            v-model="form.district_id"
+                            :options="districtOptions"
+                            label="Quận / Huyện"
+                            placeholder="Chọn quận/huyện"
+                            :error="form.errors.district_id"
+                            :disabled="!form.province_id"
+                            @update:modelValue="handleDistrictChange"
+                        />
+                        <FormSelect
                             id="ward_id"
                             v-model="form.ward_id"
                             :options="wardOptions"
                             label="Phường / Xã"
                             placeholder="Chọn phường/xã"
                             :error="form.errors.ward_id"
-                            :disabled="!form.province_id"
+                            :disabled="!form.province_id || !form.district_id"
                         />
                         <div class="md:col-span-2">
                             <FormInput
@@ -172,7 +182,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'success'])
 const page = usePage()
-const isAdmin = computed(() => (page.props.auth?.user?.roles || []).includes('admin'))
+const canApproveRequests = computed(() => page.props.auth?.position_capabilities?.approve_requests === true)
 
 const modalClasses = [
     'relative', 'w-full', 'max-w-[900px]',
@@ -198,39 +208,15 @@ const provinceOptions = computed(() => props.provinces.map((item) => ({
 })))
 
 const wardOptions = ref([])
+const districtOptions = ref([])
 
 const getSelectedPosition = () => props.positions.find((item) => Number(item.id) === Number(form.position_id))
 
-const resolveMinimumRoleByPosition = (position) => {
-    if (!position) return 'employee'
-
-    const caps = Array.isArray(position.capabilities) ? position.capabilities : []
-    const adminOnlyCaps = ['manage_positions', 'view_activity_logs', 'sign_documents']
-    const hrCaps = [
-        'manage_employees',
-        'manage_salary',
-        'view_salary',
-        'manage_departments',
-        'transfer_employee',
-        'approve_attendance',
-        'approve_leave',
-        'approve_requests',
-    ]
-
-    if (caps.some((cap) => adminOnlyCaps.includes(cap))) return 'admin'
-    if (caps.some((cap) => hrCaps.includes(cap))) return 'hr'
-
-    const authorityLevel = Number(position.authority_level || 0)
-    if (authorityLevel >= 5) return 'admin'
-    if (authorityLevel >= 4) return 'hr'
-    return 'employee'
-}
-
-const minimumRoleHint = computed(() => {
+const minimumAuthorityHint = computed(() => {
     const selectedPosition = getSelectedPosition()
     if (!selectedPosition) return null
-    const minRole = resolveMinimumRoleByPosition(selectedPosition)
-    return getRoleLabel(minRole)
+    const authorityLevel = Number(selectedPosition.authority_level || 0)
+    return authorityLevel > 0 ? `Rank ${authorityLevel}` : null
 })
 
 const form = useForm({
@@ -240,6 +226,7 @@ const form = useForm({
     password: '',
     password_confirmation: '',
     province_id: '',
+    district_id: '',
     ward_id: '',
     address_line: '',
     status: 'active',
@@ -257,26 +244,44 @@ const form = useForm({
 const salaryDisplay = ref('')
 const lastManualStatus = ref('active')
 
-const getRoleLabel = (roleName) => ({
-    admin: 'Quản trị viên',
-    hr: 'Nhân sự',
-    employee: 'Nhân viên',
-}[roleName] || roleName)
-
 const fetchWards = async (provinceId) => {
     if (!provinceId) return
     try {
-        const response = await axios.get(`/api/locations/wards/${provinceId}`)
+        const params = {}
+        if (form.district_id) {
+            params.district_id = form.district_id
+        }
+        const response = await axios.get(`/api/locations/wards/${provinceId}`, { params })
         wardOptions.value = response.data.map(w => ({ value: w.id, label: w.name }))
     } catch (error) {
         console.error('Error fetching wards:', error)
     }
 }
 
+const fetchDistricts = async (provinceId) => {
+    if (!provinceId) return
+    try {
+        const response = await axios.get(`/api/locations/districts/${provinceId}`)
+        districtOptions.value = response.data.map(d => ({ value: d.id, label: d.name }))
+    } catch (error) {
+        console.error('Error fetching districts:', error)
+    }
+}
+
 const handleProvinceChange = (val) => {
+    form.district_id = ''
+    form.ward_id = ''
+    districtOptions.value = []
+    wardOptions.value = []
+    if (val) fetchDistricts(val)
+}
+
+const handleDistrictChange = () => {
     form.ward_id = ''
     wardOptions.value = []
-    if (val) fetchWards(val)
+    if (form.province_id && form.district_id) {
+        fetchWards(form.province_id)
+    }
 }
 
 const formatNumber = (value) => new Intl.NumberFormat('vi-VN').format(Number(value))
@@ -295,6 +300,11 @@ const resetForm = () => {
     form.employment_type = 'official'
     form.department_id = ''
     form.position_id = ''
+    form.province_id = ''
+    form.district_id = ''
+    form.ward_id = ''
+    districtOptions.value = []
+    wardOptions.value = []
     salaryDisplay.value = ''
     lastManualStatus.value = 'active'
 }
@@ -304,10 +314,17 @@ const populateForm = (user) => {
     form.email = user.email || ''
     form.phone = user.phone || ''
     form.province_id = user.province_id || ''
+    form.district_id = user.district_id || ''
     form.ward_id = user.ward_id || ''
     form.address_line = user.address_line || ''
 
-    if (form.province_id) fetchWards(form.province_id)
+    if (form.province_id) {
+        fetchDistricts(form.province_id).then(() => {
+            if (form.district_id) {
+                fetchWards(form.province_id)
+            }
+        })
+    }
 
     form.status = user.status || 'active'
     form.date_of_birth = user.date_of_birth || ''
@@ -403,7 +420,7 @@ const submitForm = () => {
     form.transform(() => payload).post(props.storeRoute, {
         preserveScroll: true,
         onSuccess: () => {
-            toast.success(isAdmin.value ? 'Thêm mới thành công!' : 'Đã gửi yêu cầu cho Admin duyệt!')
+            toast.success(canApproveRequests.value ? 'Thêm mới thành công!' : 'Đã gửi yêu cầu cho cấp có thẩm quyền duyệt!')
             close()
             emit('success')
         },
@@ -411,3 +428,6 @@ const submitForm = () => {
     })
 }
 </script>
+
+
+

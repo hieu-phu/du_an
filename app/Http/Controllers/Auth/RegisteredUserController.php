@@ -52,7 +52,6 @@ class RegisteredUserController extends Controller
                 'phone' => $request->phone,
                 'password' => Hash::make($request->password),
             ]);
-            // // $user->assignRole('CompanyManager');
             // $user->save();
             event(new Registered($user));
 

@@ -59,4 +59,21 @@ class DepartmentApprovalController extends Controller
             ]);
         }
     }
+
+    public function cancel(Request $request, ApprovalRequest $approvalRequest)
+    {
+        $validated = $request->validate([
+            'review_note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $this->departmentApprovalService->cancel($approvalRequest, $request->user(), $validated['review_note'] ?? null);
+
+            return redirect()->back()->with('success', 'Da huy yeu cau phong ban.');
+        } catch (\Exception $e) {
+            return back()->withErrors([
+                'error' => 'Khong the huy yeu cau phong ban: ' . $e->getMessage(),
+            ]);
+        }
+    }
 }

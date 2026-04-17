@@ -6,8 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\EmailLog;
 use App\Models\FeedbackMessage;
 use App\Models\FeedbackReply;
+use App\Models\Position;
 use App\Models\User;
 use App\Services\NotificationService;
+use App\Support\AccessMatrix;
+use App\Support\PositionCapability;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -27,7 +30,7 @@ class FeedbackController extends Controller
         $processingState = $request->input('processing_state');
 
         $sentQuery = FeedbackMessage::query()
-            ->with(['receiver:id,name,email', 'replier:id,name,email'])
+            ->with(['receiver:id,name,email', 'receiverPosition:id,name', 'replier:id,name,email'])
             ->where('sender_id', $user->id)
             ->with(['replies.replier:id,name,email'])
             ->when($status, fn (Builder $q) => $q->where('status', $status));
@@ -39,13 +42,22 @@ class FeedbackController extends Controller
 
         $inbox = [];
         $inboxQuery = null;
-        if ($user->hasAnyRole(['admin', 'hr'])) {
+        if ($this->canViewFeedbackInbox($user)) {
             $inboxQuery = FeedbackMessage::query()
-                ->with(['sender:id,name,email', 'replier:id,name,email'])
+                ->with(['sender:id,name,email', 'receiverPosition:id,name', 'replier:id,name,email'])
                 ->with(['replies.replier:id,name,email'])
                 ->where(function (Builder $q) use ($user) {
-                    $q->where('receiver_id', $user->id)
-                        ->orWhere('receiver_group', $user->hasRole('admin') ? 'admin' : 'hr');
+                    $groups = $this->receiverGroupsForUser($user);
+                    $q->where('receiver_id', $user->id);
+
+                    $positionId = $user->employeeProfile?->position_id;
+                    if ($positionId) {
+                        $q->orWhere('receiver_position_id', $positionId);
+                    }
+
+                    if (!empty($groups)) {
+                        $q->orWhereIn('receiver_group', $groups);
+                    }
                 })
                 ->when($status, fn (Builder $q) => $q->where('status', $status));
 
@@ -67,7 +79,7 @@ class FeedbackController extends Controller
             ->all();
 
         $mailLogs = [];
-        if ($user->hasAnyRole(['admin', 'hr'])) {
+        if ($user->hasPositionCapability(PositionCapability::MANAGE_FEEDBACKS)) {
             $mailLogs = EmailLog::query()
                 ->with('sender:id,name,email')
                 ->where('subject', 'like', '[Feedback]%')
@@ -99,7 +111,12 @@ class FeedbackController extends Controller
                 'status' => $status,
                 'processing_state' => $processingState,
             ],
-            'canReply' => $user->hasAnyRole(['admin', 'hr']),
+            'canReply' => $this->canViewFeedbackInbox($user),
+            'canSubmitReply' => $user->hasAnyPositionCapability([
+                PositionCapability::REPLY_FEEDBACK,
+                PositionCapability::MANAGE_FEEDBACKS,
+            ]),
+            'receiverOptions' => $this->receiverPositionOptions($user),
             'statusOptions' => [
                 ['value' => 'sent', 'label' => 'Da gui'],
                 ['value' => 'read', 'label' => 'Da doc'],
@@ -125,25 +142,33 @@ class FeedbackController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
-            'receiver_group' => ['required', 'in:hr,admin'],
+            'receiver_position_id' => ['required', 'integer', 'exists:positions,id'],
             'subject' => ['required', 'string', 'max:255'],
             'message' => ['required', 'string', 'max:5000'],
         ]);
 
+        $receiverPosition = Position::query()
+            ->whereKey((int) $validated['receiver_position_id'])
+            ->where('is_active', true)
+            ->firstOrFail();
+
         $feedback = FeedbackMessage::query()->create([
             'sender_id' => $user->id,
-            'receiver_group' => $validated['receiver_group'],
+            'receiver_group' => 'specific_user',
+            'receiver_position_id' => $receiverPosition->id,
             'receiver_id' => null,
             'subject' => $validated['subject'],
             'message' => $validated['message'],
             'status' => 'sent',
         ]);
 
-        $receiverRole = $validated['receiver_group'];
         $recipients = User::query()
-            ->role($receiverRole)
+            ->where('status', 'active')
             ->where('id', '<>', $user->id)
-            ->get(['id', 'name', 'email']);
+            ->with('employeeProfile.position')
+            ->get(['id', 'name', 'email'])
+            ->filter(fn (User $candidate) => $this->canReceiveFeedbackForPosition($candidate, $receiverPosition->id))
+            ->values();
 
         $recipientIds = $recipients->pluck('id')->all();
 
@@ -170,7 +195,7 @@ class FeedbackController extends Controller
                 actorId: $user->id,
                 toEmail: (string) $recipient->email,
                 subject: "[Feedback] Phan hoi moi: {$feedback->subject}",
-                bodySummary: "feedback_message_id={$feedback->id}; from={$user->email}; to_group={$feedback->receiver_group}; type=new_feedback",
+                bodySummary: "feedback_message_id={$feedback->id}; from={$user->email}; to_position={$receiverPosition->name}; type=new_feedback",
                 body: "Ban co phan hoi moi tu {$user->name} ({$user->email}).\nTieu de: {$feedback->subject}\nNoi dung: {$feedback->message}\nVui long vao he thong de xu ly."
             );
         }
@@ -181,7 +206,10 @@ class FeedbackController extends Controller
     public function reply(Request $request, FeedbackMessage $feedbackMessage)
     {
         $user = $request->user();
-        abort_unless($user->hasAnyRole(['admin', 'hr']), 403);
+        abort_unless($user->hasAnyPositionCapability([
+            PositionCapability::REPLY_FEEDBACK,
+            PositionCapability::MANAGE_FEEDBACKS,
+        ]), 403);
         abort_unless($this->canReplyFeedback($user, $feedbackMessage), 403);
 
         $validated = $request->validate([
@@ -257,11 +285,14 @@ class FeedbackController extends Controller
             return true;
         }
 
-        if ($user->hasRole('admin') && $feedbackMessage->receiver_group === 'admin') {
+        if (
+            $feedbackMessage->receiver_position_id
+            && $this->canReceiveFeedbackForPosition($user, (int) $feedbackMessage->receiver_position_id)
+        ) {
             return true;
         }
 
-        if ($user->hasRole('hr') && $feedbackMessage->receiver_group === 'hr') {
+        if (AccessMatrix::canReceiveFeedbackGroup($user, (string) $feedbackMessage->receiver_group)) {
             return true;
         }
 
@@ -274,15 +305,77 @@ class FeedbackController extends Controller
             return $feedbackMessage->receiver_id === $user->id;
         }
 
-        if ($user->hasRole('admin') && $feedbackMessage->receiver_group === 'admin') {
-            return true;
+        if ($feedbackMessage->receiver_position_id) {
+            return $this->canReplyFeedbackForPosition($user, (int) $feedbackMessage->receiver_position_id);
         }
 
-        if ($user->hasRole('hr') && $feedbackMessage->receiver_group === 'hr') {
+        if (AccessMatrix::canReceiveFeedbackGroup($user, (string) $feedbackMessage->receiver_group)) {
             return true;
         }
 
         return false;
+    }
+
+    private function receiverGroupsForUser(User $user): array
+    {
+        $groups = [];
+
+        if (AccessMatrix::canReceiveFeedbackGroup($user, 'admin')) {
+            $groups[] = 'admin';
+        }
+
+        if (AccessMatrix::canReceiveFeedbackGroup($user, 'hr')) {
+            $groups[] = 'hr';
+        }
+
+        return $groups;
+    }
+
+    private function receiverPositionOptions(User $sender): array
+    {
+        return Position::query()
+            ->where('is_active', true)
+            ->orderBy('authority_level')
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (Position $position) => [
+                'value' => $position->id,
+                'label' => $position->name,
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function canReceiveFeedbackForPosition(User $user, int $positionId): bool
+    {
+        return (int) ($user->employeeProfile?->position_id ?? 0) === $positionId
+            && $this->canProcessFeedback($user);
+    }
+
+    private function canReplyFeedbackForPosition(User $user, int $positionId): bool
+    {
+        return $this->canReceiveFeedbackForPosition($user, $positionId)
+            && $user->hasAnyPositionCapability([
+                PositionCapability::REPLY_FEEDBACK,
+                PositionCapability::MANAGE_FEEDBACKS,
+            ]);
+    }
+
+    private function canViewFeedbackInbox(User $user): bool
+    {
+        return $user->hasAnyPositionCapability([
+            PositionCapability::VIEW_FEEDBACKS,
+            PositionCapability::REPLY_FEEDBACK,
+            PositionCapability::MANAGE_FEEDBACKS,
+        ]);
+    }
+
+    private function canProcessFeedback(User $user): bool
+    {
+        return $user->hasAnyPositionCapability([
+            PositionCapability::REPLY_FEEDBACK,
+            PositionCapability::MANAGE_FEEDBACKS,
+        ]);
     }
 
     private function applyProcessingStateFilter(Builder $query, ?string $processingState): void
@@ -341,7 +434,7 @@ class FeedbackController extends Controller
             'subject' => $item->subject,
             'message' => $item->message,
             'receiver_group' => $item->receiver_group,
-            'receiver_group_label' => match ($item->receiver_group) {
+            'receiver_group_label' => $item->receiverPosition?->name ?: match ($item->receiver_group) {
                 'admin' => 'Admin',
                 'hr' => 'HR',
                 'specific_user' => 'Nguoi cu the',

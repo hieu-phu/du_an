@@ -138,6 +138,14 @@
                                     >
                                         Tu choi
                                     </button>
+                                    <button
+                                        v-if="item.status === 'pending' && item.requested_by?.id === currentUserId"
+                                        type="button"
+                                        class="rounded-lg bg-gray-700 px-3 py-2 text-sm font-medium text-white"
+                                        @click="cancel(item)"
+                                    >
+                                        Huy
+                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -181,7 +189,6 @@
                                     <div><span class="font-medium text-gray-900">Ho ten:</span> {{ selectedRequest.payload.name || '-' }}</div>
                                     <div><span class="font-medium text-gray-900">Email:</span> {{ selectedRequest.payload.email || '-' }}</div>
                                     <div><span class="font-medium text-gray-900">Dien thoai:</span> {{ selectedRequest.payload.phone || '-' }}</div>
-                                    <div><span class="font-medium text-gray-900">Vai tro:</span> {{ selectedRequest.payload.role_label || '-' }}</div>
                                 </div>
                             </div>
                             <div class="rounded-xl border border-gray-200 p-4">
@@ -243,7 +250,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import { router } from '@inertiajs/vue3'
+import { router, usePage } from '@inertiajs/vue3'
 import { toast } from 'vue3-toastify'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
@@ -262,6 +269,8 @@ const breadcrumbItems = [
 ]
 
 const selectedRequest = ref(null)
+const page = usePage()
+const currentUserId = page.props.auth?.user?.id
 
 const requestTypeLabel = (type) => ({
     user_create: 'Tạo tài khoản',
@@ -342,6 +351,19 @@ const reject = (item) => {
         preserveScroll: true,
         onSuccess: () => toast.success('Da tu choi yeu cau.'),
         onError: () => toast.error('Khong the tu choi yeu cau.'),
+    })
+}
+
+const cancel = (item) => {
+    const reviewNote = window.prompt('Ghi chu huy yeu cau (tuy chon):', '')
+    if (reviewNote === null) {
+        return
+    }
+
+    router.post(route('web.user-approvals.cancel', item.id), { review_note: reviewNote }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success('Da huy yeu cau.'),
+        onError: () => toast.error('Khong the huy yeu cau.'),
     })
 }
 </script>

@@ -2,25 +2,6 @@
     <AdminLayout :title="title">
         <PageBreadcrumb :title="title" :items="breadcrumbItems" />
 
-        <!-- Tabs for role filtering -->
-        <div v-if="roleTabs.length > 1" class="mb-6 flex items-center gap-1 border-b border-gray-200 p-1 dark:border-gray-800">
-            <button
-                v-for="tab in roleTabs"
-                :key="tab.value"
-                @click="filterByRole(tab.value)"
-                class="relative flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200"
-                :class="activeRole === tab.value 
-                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 shadow-sm' 
-                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800/50'"
-            >
-                <span>{{ tab.label }}</span>
-                <span 
-                    v-if="activeRole === tab.value"
-                    class="absolute -bottom-[5px] left-0 h-0.5 w-full bg-blue-600 dark:bg-blue-400"
-                ></span>
-            </button>
-        </div>
-
         <div class="mb-6 rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
             <div class="flex flex-col gap-4 p-4">
                 <div class="mb-2 flex w-full flex-col items-stretch justify-end gap-3 sm:flex-row sm:items-center">
@@ -48,7 +29,7 @@
                     </Button>
 
                     <Button
-                        v-if="authRoles.includes('hr') && !isAdmin"
+                        v-if="!canApproveRequests"
                         @click="goToRequests"
                         size="md"
                         variant="outline"
@@ -92,7 +73,7 @@
                     <div>
                         <div class="font-medium text-gray-900 dark:text-white">{{ item.name }}</div>
                         <div class="text-xs text-gray-500 dark:text-gray-400">{{ item.employee_code || '-' }}</div>
-                        <div class="text-xs text-indigo-600 dark:text-indigo-400">{{ getRoleLabel(item.role_name) }}</div>
+                        <div class="text-xs text-indigo-600 dark:text-indigo-400">{{ getPositionSummary(item) }}</div>
                     </div>
                 </div>
             </template>
@@ -189,11 +170,7 @@
                                 <div><span class="font-medium text-gray-800">Họ tên:</span> {{ selectedUser.name }}</div>
                                 <div><span class="font-medium text-gray-800">Mã nhân viên:</span> {{ selectedUser.employee_code || '-' }}</div>
                                 <div><span class="font-medium text-gray-800">Người tạo:</span> <span class="text-blue-600 font-semibold">{{ selectedUser.creator_name || 'Hệ thống' }}</span></div>
-                                <div><span class="font-medium text-gray-800">Quyền tài khoản:</span> {{ getRoleLabel(selectedUser.role_name) }}</div>
-                                <div><span class="font-medium text-gray-800">Quyền tối thiểu theo chức vụ:</span> {{ getRoleLabel(selectedUser.minimum_role_name || 'employee') }}</div>
-                                <div v-if="selectedUser.is_role_mismatch" class="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-700">
-                                    Quyền tài khoản đang thấp hơn chức vụ. Hệ thống cần đồng bộ lại role.
-                                </div>
+                                <div><span class="font-medium text-gray-800">Cấp bậc:</span> {{ getPositionSummary(selectedUser) }}</div>
                                 <div><span class="font-medium text-gray-800">Email:</span> {{ selectedUser.email }}</div>
                                 <div><span class="font-medium text-gray-800">Số điện thoại:</span> {{ selectedUser.phone || '-' }}</div>
                                 <div><span class="font-medium text-gray-800">Trạng thái tài khoản:</span> {{ getStatusText(selectedUser.status) }}</div>
@@ -357,8 +334,8 @@ const props = defineProps({
 
 const page = usePage()
 const permissions = computed(() => page.props.auth?.permissions || {})
-const authRoles = computed(() => page.props.auth?.user?.roles || [])
-const isAdmin = computed(() => authRoles.value.includes('admin'))
+const currentAuthorityLevel = computed(() => Number(page.props.auth?.user?.authority_level || 0))
+const canApproveRequests = computed(() => page.props.auth?.position_capabilities?.approve_requests === true)
 
 const title = props.pageTitle
 const isUserModalOpen = ref(false)
@@ -366,7 +343,6 @@ const isUserEditMode = ref(false)
 const isDetailModalOpen = ref(false)
 const selectedUser = ref(null)
 const imageErrors = ref({})
-const activeRole = ref(props.filters?.role || '')
 const overrideForm = ref({
     capability_code: '',
     effect: 'allow',
@@ -374,35 +350,20 @@ const overrideForm = ref({
     expires_at: '',
 })
 
-const roleTabs = computed(() => {
-    if (!isAdmin.value && authRoles.value.includes('hr')) {
-        return [
-            { label: 'Nhân viên', value: 'employee' }
-        ]
-    }
-
-    return [
-        { label: 'Tất cả', value: '' },
-        { label: 'Admin', value: 'admin' },
-        { label: 'HR', value: 'hr' },
-        { label: 'Nhân viên', value: 'employee' }
-    ]
-})
-
 const createButtonText = computed(() => {
     if (props.pageKey === 'employees') {
-        return (isAdmin.value || authRoles.value.includes('hr')) ? 'Nhân sự' : 'Gửi duyệt nhân sự'
+        return canApproveRequests.value ? 'Nhân sự' : 'Tạo nhân sự'
     }
 
-    return (isAdmin.value || authRoles.value.includes('hr')) ? 'Tài khoản' : 'Gửi duyệt tài khoản'
+    return canApproveRequests.value ? 'Tài khoản' : 'Tạo tài khoản'
 })
 
 const createButtonTitle = computed(() => {
     if (props.pageKey === 'employees') {
-        return (isAdmin.value || authRoles.value.includes('hr')) ? 'Thêm nhân sự mới' : 'Gửi yêu cầu tạo nhân sự'
+        return canApproveRequests.value ? 'Thêm nhân sự mới' : 'Tạo nhân sự'
     }
 
-    return (isAdmin.value || authRoles.value.includes('hr')) ? 'Thêm tài khoản mới' : 'Gửi yêu cầu tạo tài khoản'
+    return canApproveRequests.value ? 'Thêm tài khoản mới' : 'Tạo tài khoản'
 })
 
 const detailModalClasses = [
@@ -496,11 +457,15 @@ const getEmploymentTypeText = (type) => ({
     collaborator: 'Cộng tác viên'
 }[type] || '-')
 
-const getRoleLabel = (roleName) => ({
-    admin: 'Quản trị viên',
-    hr: 'Nhân sự',
-    employee: 'Nhân viên',
-}[roleName] || '-')
+const getPositionSummary = (user) => {
+    if (user?.position?.name) {
+        const authority = Number(user?.position?.authority_level || 0)
+        return authority > 0 ? `${user.position.name} (Rank ${authority})` : user.position.name
+    }
+
+    const authority = Number(user?.position?.authority_level || user?.authority_level || 0)
+    return authority > 0 ? `Rank ${authority}` : '-'
+}
 
 const getCapabilityLabel = (capability) => ({
     manage_employees: 'Quản lý nhân sự',
@@ -551,7 +516,8 @@ const formatFullAddress = (user) => {
 
 const canManageUser = (user) => {
     if (!permissions.value['users.edit']) return false
-    if (user.role_name === 'admin' && !isAdmin.value) return false
+    const targetAuthorityLevel = Number(user?.position?.authority_level || 0)
+    if (currentAuthorityLevel.value > 0 && targetAuthorityLevel > 0 && targetAuthorityLevel >= currentAuthorityLevel.value) return false
     return true
 }
 
@@ -576,7 +542,6 @@ const effectOptionItems = [
 const refreshDetailUser = (userId) => {
     const query = {
         ...props.filters,
-        role: activeRole.value,
         detail_user: userId,
         page: props.users?.current_page ?? 1,
         per_page: props.users?.per_page ?? props.filters?.per_page ?? 15,
@@ -678,12 +643,7 @@ const handleImageError = (e) => {
 }
 
 const applyFilter = (filters) => {
-    router.get(currentRouteName.value, { ...filters, role: activeRole.value }, { preserveState: true, preserveScroll: true })
-}
-
-const filterByRole = (role) => {
-    activeRole.value = role
-    router.get(currentRouteName.value, { ...props.filters, role, page: 1 }, { preserveState: true, preserveScroll: true })
+    router.get(currentRouteName.value, { ...filters }, { preserveState: true, preserveScroll: true })
 }
 
 const handlePageChange = (pageNumber) => {
@@ -742,6 +702,7 @@ watch(() => props.detailUser, (detailUser) => {
     openDetailModal(detailUser)
 }, { immediate: true })
 </script>
+
 
 
 

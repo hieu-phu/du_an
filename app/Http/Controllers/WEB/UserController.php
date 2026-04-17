@@ -15,8 +15,8 @@ use App\Models\UserPositionCapabilityOverride;
 use App\Services\NotificationService;
 use App\Services\UserApprovalService;
 use App\Services\UserService;
+use App\Support\AccessMatrix;
 use App\Support\PositionCapability;
-use App\Support\PositionRoleResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
@@ -33,12 +33,8 @@ class UserController extends Controller
 
     public function index(Request $request)
     {
-        $filters = $request->only(['search', 'status', 'per_page', 'department_id', 'hire_date', 'role']);
+        $filters = $request->only(['search', 'status', 'per_page', 'department_id', 'hire_date']);
         
-        if ($request->user()?->hasRole('hr')) {
-            $filters['role'] = 'employee';
-        }
-
         $filters['scope'] = 'accounts';
         $perPage = $request->integer('per_page', 15);
 
@@ -59,12 +55,8 @@ class UserController extends Controller
 
     public function employees(Request $request)
     {
-        $filters = $request->only(['search', 'status', 'per_page', 'department_id', 'hire_date', 'role']);
+        $filters = $request->only(['search', 'status', 'per_page', 'department_id', 'hire_date']);
         
-        if ($request->user()?->hasRole('hr')) {
-            $filters['role'] = 'employee';
-        }
-
         $filters['scope'] = 'employees';
         $perPage = $request->integer('per_page', 15);
 
@@ -152,9 +144,8 @@ class UserController extends Controller
         try {
             $validated = $request->validated();
             $this->assertAssignablePosition($request->user(), (int) ($validated['position_id'] ?? 0));
-            $validated['role_name'] = $this->resolveRoleFromPosition((int) ($validated['position_id'] ?? 0));
 
-            if ($request->user()?->hasRole('admin')) {
+            if (AccessMatrix::canApproveRequests($request->user())) {
                 $this->userService->createUser(
                     $validated,
                     $request->file('avatar')
@@ -163,7 +154,7 @@ class UserController extends Controller
                 return redirect()->back()->with('success', 'Tạo nhân sự thành công!');
             }
 
-            if (in_array(($validated['role_name'] ?? PositionRoleResolver::ROLE_EMPLOYEE), [PositionRoleResolver::ROLE_HR, PositionRoleResolver::ROLE_ADMIN], true)) {
+            if ($this->positionRequiresApproval((int) ($validated['position_id'] ?? 0))) {
                 $this->userApprovalService->submitCreateRequest($validated);
 
                 return redirect()->back()->with('success', 'Đã gửi yêu cầu tạo tài khoản Nhân sự cho Admin duyệt.');
@@ -206,7 +197,7 @@ class UserController extends Controller
             $requestedSalary = (float) ($validated['base_salary'] ?? $currentSalary);
             $salaryChanged = $hasSalaryInPayload && round($requestedSalary, 2) !== round($currentSalary, 2);
 
-            if ($requester?->hasRole('hr') && !$requester?->hasRole('admin') && $salaryChanged) {
+            if ($requester && !AccessMatrix::canApproveRequests($requester) && $salaryChanged) {
                 if (!$requester->hasPositionCapability(\App\Support\PositionCapability::MANAGE_SALARY)) {
                     throw ValidationException::withMessages([
                         'base_salary' => 'Ban khong co quyen de xuat thay doi luong.',
@@ -298,18 +289,21 @@ class UserController extends Controller
 
     private function ensureManageableUser(User $actor, User $target): void
     {
-        if ($actor->hasRole('admin')) {
+        if ((int) $actor->id === (int) $target->id) {
             return;
         }
 
-        if ($actor->hasRole('hr') && $target->hasRole('admin')) {
-            abort(403, 'HR không được phép tác động tài khoản Admin.');
+        $actorLevel = $this->resolveActorAuthorityLevel($actor);
+        $targetLevel = $this->resolveActorAuthorityLevel($target);
+
+        if ($actorLevel <= $targetLevel) {
+            abort(403, 'Ban khong duoc phep tac dong tai khoan co muc quyen han bang hoac cao hon.');
         }
     }
 
     private function notifyAdminsAboutNewEmployeeAccount(User $actor, User $createdUser): void
     {
-        $adminIds = User::role('admin')->pluck('id')->all();
+        $adminIds = $this->resolveApproverIds((int) $actor->id);
 
         if (empty($adminIds)) {
             return;
@@ -322,7 +316,8 @@ class UserController extends Controller
             [
                 'user_id' => $createdUser->id,
                 'user_name' => $createdUser->name,
-                'role_name' => $createdUser->primaryRole(),
+                'position_name' => $createdUser->employeeProfile?->position?->name,
+                'authority_level' => (int) ($createdUser->employeeProfile?->position?->authority_level ?? 0),
                 'action_url' => "/users/employees?detail_user={$createdUser->id}",
             ],
             "/users/employees?detail_user={$createdUser->id}",
@@ -357,20 +352,6 @@ class UserController extends Controller
         }
 
         return $this->userService->getDetailedUser($detailUserId);
-    }
-
-    private function resolveRoleFromPosition(int $positionId): string
-    {
-        if ($positionId <= 0) {
-            return PositionRoleResolver::ROLE_EMPLOYEE;
-        }
-
-        $position = Position::query()->find($positionId);
-        if (!$position) {
-            return PositionRoleResolver::ROLE_EMPLOYEE;
-        }
-
-        return PositionRoleResolver::resolveMinimumRole($position);
     }
 
     private function resolveCapabilityOptions(): array
@@ -461,12 +442,8 @@ class UserController extends Controller
             return $positionLevel;
         }
 
-        if ($actor->hasRole('admin')) {
+        if (AccessMatrix::canApproveRequests($actor)) {
             return $this->resolveMaxAuthorityLevel();
-        }
-
-        if ($actor->hasRole('hr')) {
-            return 4;
         }
 
         return 1;
@@ -486,6 +463,46 @@ class UserController extends Controller
 
         return 5;
     }
-}
+    private function positionRequiresApproval(int $positionId): bool
+    {
+        if ($positionId <= 0) {
+            return false;
+        }
 
+        $position = Position::query()->find($positionId);
+        if (!$position) {
+            return false;
+        }
+
+        $sensitiveCapabilities = [
+            PositionCapability::APPROVE_REQUESTS,
+            PositionCapability::MANAGE_POSITIONS,
+            PositionCapability::MANAGE_DEPARTMENTS,
+            PositionCapability::MANAGE_SALARY,
+        ];
+
+        $resolved = $position->resolvedCapabilities();
+
+        foreach ($sensitiveCapabilities as $capability) {
+            if (in_array($capability, $resolved, true)) {
+                return true;
+            }
+        }
+
+        return (int) ($position->authority_level ?? 0) >= 4;
+    }
+
+    private function resolveApproverIds(?int $excludeUserId = null): array
+    {
+        return User::query()
+            ->where('status', 'active')
+            ->when($excludeUserId, fn ($query) => $query->whereKeyNot($excludeUserId))
+            ->with('employeeProfile.position')
+            ->get(['id'])
+            ->filter(fn (User $user) => AccessMatrix::canApproveRequests($user))
+            ->pluck('id')
+            ->values()
+            ->all();
+    }
+}
 

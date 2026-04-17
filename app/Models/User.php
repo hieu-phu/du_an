@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Support\AccessMatrix;
 use App\Models\ProjectMember;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -12,12 +11,11 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\HasApiTokens;
-use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, HasRoles, HasApiTokens;
+    use HasFactory, Notifiable, HasApiTokens;
 
     protected ?array $positionCapabilityDecisionCache = null;
     protected static ?bool $hasUserCapabilityOverridesTable = null;
@@ -181,11 +179,6 @@ class User extends Authenticatable
         return $this->status === 'blocked';
     }
 
-    public function primaryRole(): ?string
-    {
-        return AccessMatrix::primaryRole($this);
-    }
-
     /**
      * Kiểm tra xem user có quyền hạn nghiệp vụ này không,
      * dựa theo chức vụ của nhân viên đó.
@@ -202,6 +195,17 @@ class User extends Authenticatable
         }
 
         return (bool) ($this->positionCapabilityDecisionCache[$capability] ?? false);
+    }
+
+    public function hasAnyPositionCapability(array $capabilities): bool
+    {
+        foreach ($capabilities as $capability) {
+            if (is_string($capability) && $capability !== '' && $this->hasPositionCapability($capability)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function buildPositionCapabilityDecisionCache(): array
@@ -230,7 +234,9 @@ class User extends Authenticatable
                 if (!is_string($code) || $code === '') {
                     continue;
                 }
-                $decision[$code] = $override->effect === 'allow';
+                if ($override->effect === 'deny' && ($decision[$code] ?? false)) {
+                    $decision[$code] = false;
+                }
             }
         }
 

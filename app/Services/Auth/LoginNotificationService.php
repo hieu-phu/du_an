@@ -7,6 +7,7 @@ use App\Mail\SuccessfulLoginMail;
 use App\Models\LoginHistory;
 use App\Models\User;
 use App\Services\AuditTrailService;
+use App\Support\AccessMatrix;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 
@@ -79,14 +80,17 @@ class LoginNotificationService
         string $userAgent,
         string $loggedInAt
     ): void {
-        if ($user->hasRole('admin')) {
+        if (AccessMatrix::canApproveRequests($user)) {
             return;
         }
 
-        $admins = User::role('admin')
+        $admins = User::query()
             ->whereKeyNot($user->id)
+            ->where('status', 'active')
             ->whereNotNull('email')
-            ->get(['id', 'name', 'email']);
+            ->with('employeeProfile.position')
+            ->get(['id', 'name', 'email'])
+            ->filter(fn (User $admin) => AccessMatrix::canApproveRequests($admin));
 
         foreach ($admins as $admin) {
             Mail::to($admin->email)->queue(new AdminUserLoginAlertMail(

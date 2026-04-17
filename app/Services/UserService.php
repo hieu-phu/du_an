@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Models\EmployeeDepartmentHistory;
+use App\Models\EmployeePositionHistory;
+use App\Models\EmployeeStatusLog;
 use App\Models\Position;
 use App\Models\User;
 use App\Repositories\UserRepository;
-use App\Support\PositionRoleResolver;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Hash;
@@ -31,7 +33,6 @@ class UserService extends BaseService
     {
         return $this->handleTransaction(function () use ($validatedData, $avatarFile) {
             $validatedData = $this->normalizeEmploymentData($validatedData);
-            $validatedData = $this->normalizeRoleByPosition($validatedData);
             $avatarPath = $avatarFile ? $this->handleAvatarUpload($avatarFile) : null;
 
             $user = $this->userRepository->createUser([
@@ -65,7 +66,6 @@ class UserService extends BaseService
                 'employment_type' => $validatedData['employment_type'],
             ]);
 
-            $user->syncRoles([$validatedData['role_name'] ?? 'employee']);
             $this->audit('users', 'create', "Tao tai khoan {$user->email}", 'users', $user->id);
 
             return $user;
@@ -76,7 +76,7 @@ class UserService extends BaseService
     {
         return $this->handleTransaction(function () use ($user, $validatedData, $avatarFile) {
             $validatedData = $this->normalizeEmploymentData($validatedData);
-            $validatedData = $this->normalizeRoleByPosition($validatedData);
+            $existingProfile = $user->employeeProfile()->first();
             $avatarPath = $user->avatar;
 
             if ($avatarFile) {
@@ -119,7 +119,9 @@ class UserService extends BaseService
                 ]
             );
 
-            $user->syncRoles([$validatedData['role_name'] ?? 'employee']);
+            $updatedProfile = $user->employeeProfile()->first();
+            $this->recordEmploymentHistories($user, $existingProfile, $updatedProfile);
+
             $this->audit('users', 'update', "Cap nhat tai khoan {$user->email}", 'users', $user->id);
 
             return $result;
@@ -156,12 +158,23 @@ class UserService extends BaseService
                 return false;
             }
 
+            $oldStatus = (string) ($profile->employment_status ?? '');
             $profile->update([
                 'employment_status' => $employmentStatus,
                 'termination_date' => $employmentStatus === 'terminated'
                     ? now()->toDateString()
                     : null,
             ]);
+
+            if ($oldStatus !== $employmentStatus) {
+                EmployeeStatusLog::query()->create([
+                    'employee_profile_id' => $profile->id,
+                    'old_status' => $oldStatus ?: null,
+                    'new_status' => $employmentStatus,
+                    'reason' => 'Updated from user employment status action',
+                    'changed_by' => $this->user()?->id,
+                ]);
+            }
 
             $accountStatus = $employmentStatus === 'terminated'
                 ? 'blocked'
@@ -192,24 +205,6 @@ class UserService extends BaseService
         return $validatedData;
     }
 
-    private function normalizeRoleByPosition(array $validatedData): array
-    {
-        $positionId = $validatedData['position_id'] ?? null;
-        if (blank($positionId)) {
-            return $validatedData;
-        }
-
-        $position = Position::query()->find($positionId);
-        if (!$position) {
-            return $validatedData;
-        }
-
-        $minimumRole = PositionRoleResolver::resolveMinimumRole($position);
-        $validatedData['role_name'] = $minimumRole;
-
-        return $validatedData;
-    }
-
     private function generateEmployeeCode(): string
     {
         $maxNumber = \App\Models\EmployeeProfile::query()
@@ -223,5 +218,52 @@ class UserService extends BaseService
             }, 0);
 
         return 'EMP-' . str_pad((string) ($maxNumber + 1), 3, '0', STR_PAD_LEFT);
+    }
+
+    private function recordEmploymentHistories(User $user, $beforeProfile, $afterProfile): void
+    {
+        if (!$afterProfile) {
+            return;
+        }
+
+        $changedBy = $this->user()?->id;
+
+        $oldDepartmentId = (int) ($beforeProfile?->department_id ?? 0);
+        $newDepartmentId = (int) ($afterProfile->department_id ?? 0);
+        if ($oldDepartmentId !== $newDepartmentId && $newDepartmentId > 0) {
+            EmployeeDepartmentHistory::query()->create([
+                'employee_profile_id' => $afterProfile->id,
+                'old_department_id' => $oldDepartmentId > 0 ? $oldDepartmentId : null,
+                'new_department_id' => $newDepartmentId,
+                'changed_at' => now(),
+                'changed_by' => $changedBy,
+                'reason' => 'Department changed from user update',
+            ]);
+        }
+
+        $oldPositionId = (int) ($beforeProfile?->position_id ?? 0);
+        $newPositionId = (int) ($afterProfile->position_id ?? 0);
+        if ($oldPositionId !== $newPositionId && $newPositionId > 0) {
+            EmployeePositionHistory::query()->create([
+                'employee_profile_id' => $afterProfile->id,
+                'old_position_id' => $oldPositionId > 0 ? $oldPositionId : null,
+                'new_position_id' => $newPositionId,
+                'changed_at' => now(),
+                'changed_by' => $changedBy,
+                'reason' => 'Position changed from user update',
+            ]);
+        }
+
+        $oldStatus = (string) ($beforeProfile?->employment_status ?? '');
+        $newStatus = (string) ($afterProfile->employment_status ?? '');
+        if ($oldStatus !== $newStatus && $newStatus !== '') {
+            EmployeeStatusLog::query()->create([
+                'employee_profile_id' => $afterProfile->id,
+                'old_status' => $oldStatus ?: null,
+                'new_status' => $newStatus,
+                'reason' => 'Employment status changed from user update',
+                'changed_by' => $changedBy,
+            ]);
+        }
     }
 }

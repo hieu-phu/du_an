@@ -3,6 +3,7 @@
 namespace App\Repositories;
 
 use App\Models\AttendanceRecord;
+use Illuminate\Database\Eloquent\Builder;
 
 class AttendanceRepository extends BaseRepository
 {
@@ -58,8 +59,20 @@ class AttendanceRepository extends BaseRepository
      */
     public function getPendingApprovalsCount(): int
     {
+        $now = now('Asia/Ho_Chi_Minh');
+
         return $this->model->newQuery()
             ->where('approval_status', 'pending')
+            ->where('is_confirmed', false)
+            ->whereMonth('work_date', (int) $now->month)
+            ->whereYear('work_date', (int) $now->year)
+            ->where(function (Builder $query) {
+                $query
+                    ->where('late_minutes', '>', 0)
+                    ->orWhere('early_leave_minutes', '>', 0)
+                    ->orWhere('day_status', 'late')
+                    ->orWhere('day_status', 'early_leave');
+            })
             ->count();
     }
 }

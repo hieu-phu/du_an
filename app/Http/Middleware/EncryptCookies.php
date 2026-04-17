@@ -1,4 +1,3 @@
-
 <?php
 
 namespace App\Http\Middleware;
@@ -13,6 +12,6 @@ class EncryptCookies extends Middleware
      * @var array<int, string>
      */
     protected $except = [
-        'token', // Thêm dòng này để loại trừ cookie token khỏi mã hóa
+        'token',
     ];
 }

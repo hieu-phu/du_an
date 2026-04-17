@@ -15,7 +15,7 @@
           {{ user?.name || 'User' }}
         </div>
         <div class="truncate text-xs text-gray-500 dark:text-gray-400">
-          {{ roleLabel }}
+          {{ positionLabel }}
         </div>
       </div>
 
@@ -80,13 +80,10 @@ const initials = computed(() => {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
 })
 
-const roleLabel = computed(() => {
-  const role = user.value?.primary_role
-  return {
-    admin: 'Admin',
-    hr: 'HR',
-    employee: 'Nhân viên',
-  }[role] || 'Tài khoản'
+const positionLabel = computed(() => {
+  if (user.value?.position_name) return user.value.position_name
+  if (Number(user.value?.authority_level || 0) > 0) return `Rank ${user.value.authority_level}`
+  return 'Tài khoản'
 })
 
 const toggleDropdown = () => {
@@ -98,22 +95,20 @@ const closeDropdown = () => {
 }
 
 const handleLogout = () => {
-    closeDropdown()
-    router.post(route('logout'), {}, {
-        onSuccess: () => {
-            window.location.href = '/'
-        },
-        onError: () => {
-            // Nếu lỗi (có thể do hết hạn session/419), vẫn đẩy ra trang chủ
-            window.location.href = '/'
-        },
-        onFinish: () => {
-            // Đảm bảo thoát hoàn toàn
-            if (window.location.pathname !== '/') {
-                window.location.href = '/'
-            }
-        }
-    })
+  closeDropdown()
+  router.post(route('logout'), {}, {
+    onSuccess: () => {
+      window.location.href = '/'
+    },
+    onError: () => {
+      window.location.href = '/'
+    },
+    onFinish: () => {
+      if (window.location.pathname !== '/') {
+        window.location.href = '/'
+      }
+    },
+  })
 }
 
 const handleClickOutside = (event) => {
