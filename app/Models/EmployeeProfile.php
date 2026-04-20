@@ -19,7 +19,6 @@ class EmployeeProfile extends Model
         'position_id',
         'default_work_shift_id',
         'province_id',
-        'district_id',
         'ward_id',
         'address_line',
         'date_of_birth',
@@ -60,11 +59,6 @@ class EmployeeProfile extends Model
     public function province(): BelongsTo
     {
         return $this->belongsTo(Province::class);
-    }
-
-    public function district(): BelongsTo
-    {
-        return $this->belongsTo(District::class);
     }
 
     public function ward(): BelongsTo

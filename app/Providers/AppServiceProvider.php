@@ -42,12 +42,15 @@ class AppServiceProvider extends ServiceProvider
                     ] : null,
                     'permissions' => AccessMatrix::permissionsFor($user),
                     'position_capabilities' => $user
-                        ? array_fill_keys($availableCapabilities, false) + array_fill_keys(
-                            array_filter(
-                                $availableCapabilities,
-                                fn ($cap) => $user->hasPositionCapability($cap)
-                            ),
-                            true
+                        ? array_replace(
+                            array_fill_keys($availableCapabilities, false),
+                            array_fill_keys(
+                                array_filter(
+                                    $availableCapabilities,
+                                    fn ($cap) => $user->hasPositionCapability($cap)
+                                ),
+                                true
+                            )
                         )
                         : [],
                     'capability_definitions' => [

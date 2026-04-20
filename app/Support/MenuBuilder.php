@@ -29,6 +29,9 @@ class MenuBuilder
                     $can(PositionCapability::VIEW_FEEDBACKS)
                         ? self::item('Phan hoi noi bo', '/feedbacks', 'Message2Line')
                         : null,
+                    $can(PositionCapability::VIEW_OWN_SALARY)
+                        ? self::item('Bang luong ca nhan', '/my-salary', 'MoneyIcon')
+                        : null,
                 ])),
             ],
             [

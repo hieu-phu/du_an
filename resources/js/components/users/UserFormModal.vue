@@ -112,18 +112,9 @@
                             :options="provinceOptions"
                             label="Tỉnh / Thành phố"
                             placeholder="Chọn tỉnh/thành"
+                            :show-optional-label="false"
                             :error="form.errors.province_id"
                             @update:modelValue="handleProvinceChange"
-                        />
-                        <FormSelect
-                            id="district_id"
-                            v-model="form.district_id"
-                            :options="districtOptions"
-                            label="Quận / Huyện"
-                            placeholder="Chọn quận/huyện"
-                            :error="form.errors.district_id"
-                            :disabled="!form.province_id"
-                            @update:modelValue="handleDistrictChange"
                         />
                         <FormSelect
                             id="ward_id"
@@ -131,8 +122,9 @@
                             :options="wardOptions"
                             label="Phường / Xã"
                             placeholder="Chọn phường/xã"
+                            :show-optional-label="false"
                             :error="form.errors.ward_id"
-                            :disabled="!form.province_id || !form.district_id"
+                            :disabled="!form.province_id"
                         />
                         <div class="md:col-span-2">
                             <FormInput
@@ -202,13 +194,17 @@ const positionOptions = computed(() => props.positions.map((item) => ({
     label: item.name,
 })))
 
+const stripAdministrativePrefix = (name = '') => String(name || '')
+    .replace(/^(thành phố|thị trấn|thị xã|tỉnh|phường|xã|thanh pho|thi tran|thi xa|tinh|phuong|xa|tp\.?|tt\.?|p\.)\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
 const provinceOptions = computed(() => props.provinces.map((item) => ({
     value: item.id,
-    label: item.name,
+    label: stripAdministrativePrefix(item.name),
 })))
 
 const wardOptions = ref([])
-const districtOptions = ref([])
 
 const getSelectedPosition = () => props.positions.find((item) => Number(item.id) === Number(form.position_id))
 
@@ -226,7 +222,6 @@ const form = useForm({
     password: '',
     password_confirmation: '',
     province_id: '',
-    district_id: '',
     ward_id: '',
     address_line: '',
     status: 'active',
@@ -247,41 +242,17 @@ const lastManualStatus = ref('active')
 const fetchWards = async (provinceId) => {
     if (!provinceId) return
     try {
-        const params = {}
-        if (form.district_id) {
-            params.district_id = form.district_id
-        }
-        const response = await axios.get(`/api/locations/wards/${provinceId}`, { params })
-        wardOptions.value = response.data.map(w => ({ value: w.id, label: w.name }))
+        const response = await axios.get(`/api/locations/wards/${provinceId}`)
+        wardOptions.value = response.data.map(w => ({ value: w.id, label: stripAdministrativePrefix(w.name) }))
     } catch (error) {
         console.error('Error fetching wards:', error)
     }
 }
 
-const fetchDistricts = async (provinceId) => {
-    if (!provinceId) return
-    try {
-        const response = await axios.get(`/api/locations/districts/${provinceId}`)
-        districtOptions.value = response.data.map(d => ({ value: d.id, label: d.name }))
-    } catch (error) {
-        console.error('Error fetching districts:', error)
-    }
-}
-
 const handleProvinceChange = (val) => {
-    form.district_id = ''
-    form.ward_id = ''
-    districtOptions.value = []
-    wardOptions.value = []
-    if (val) fetchDistricts(val)
-}
-
-const handleDistrictChange = () => {
     form.ward_id = ''
     wardOptions.value = []
-    if (form.province_id && form.district_id) {
-        fetchWards(form.province_id)
-    }
+    if (val) fetchWards(val)
 }
 
 const formatNumber = (value) => new Intl.NumberFormat('vi-VN').format(Number(value))
@@ -301,9 +272,7 @@ const resetForm = () => {
     form.department_id = ''
     form.position_id = ''
     form.province_id = ''
-    form.district_id = ''
     form.ward_id = ''
-    districtOptions.value = []
     wardOptions.value = []
     salaryDisplay.value = ''
     lastManualStatus.value = 'active'
@@ -314,16 +283,11 @@ const populateForm = (user) => {
     form.email = user.email || ''
     form.phone = user.phone || ''
     form.province_id = user.province_id || ''
-    form.district_id = user.district_id || ''
     form.ward_id = user.ward_id || ''
     form.address_line = user.address_line || ''
 
     if (form.province_id) {
-        fetchDistricts(form.province_id).then(() => {
-            if (form.district_id) {
-                fetchWards(form.province_id)
-            }
-        })
+        fetchWards(form.province_id)
     }
 
     form.status = user.status || 'active'

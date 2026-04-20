@@ -11,6 +11,7 @@ use App\Http\Controllers\WEB\PortalController;
 use App\Http\Controllers\WEB\PositionController;
 use App\Http\Controllers\WEB\ProjectController;
 use App\Http\Controllers\WEB\ReportController;
+use App\Http\Controllers\WEB\SalaryController;
 use App\Http\Controllers\WEB\SettingsController;
 use App\Http\Controllers\WEB\UserApprovalController;
 use App\Http\Controllers\WEB\UserController;
@@ -90,12 +91,16 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
         ->name('feedbacks.read');
 
     Route::post('/feedbacks/{feedbackMessage}/reply', [FeedbackController::class, 'reply'])
-        ->middleware('position.capability:' . PositionCapability::REPLY_FEEDBACK)
+        ->middleware('position.capability:' . PositionCapability::VIEW_FEEDBACKS)
         ->name('feedbacks.reply');
 
     Route::get('/my-attendance', [AttendanceController::class, 'myAttendance'])
         ->middleware('position.capability:' . PositionCapability::VIEW_OWN_ATTENDANCE)
         ->name('attendance.mine');
+
+    Route::get('/my-salary', [SalaryController::class, 'mine'])
+        ->middleware('position.capability:' . PositionCapability::VIEW_OWN_SALARY)
+        ->name('salary.mine');
 
     Route::get('/my-projects', [ProjectController::class, 'myProjects'])
         ->middleware('position.capability:' . PositionCapability::VIEW_OWN_PROJECTS)

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AttendanceAdjustment;
 use App\Services\AttendanceService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -36,6 +37,8 @@ class AttendanceAdjustmentController extends Controller
 
         try {
             $this->attendanceService->submitAttendanceAdjustmentRequest($request->user(), $validated);
+        } catch (ValidationException $exception) {
+            throw $exception;
         } catch (\Throwable $exception) {
             return back()->withErrors(['error' => $exception->getMessage()]);
         }
@@ -83,4 +86,3 @@ class AttendanceAdjustmentController extends Controller
         return redirect()->back()->with('success', 'Da tu choi dieu chinh cong.');
     }
 }
-

@@ -23,7 +23,6 @@ class StoreUserRequest extends BaseRequest
             'password' => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()],
             'address' => ['nullable', 'string', 'max:500'],
             'province_id' => ['nullable', 'exists:provinces,id'],
-            'district_id' => ['nullable', 'exists:districts,id'],
             'ward_id' => ['nullable', 'exists:wards,id'],
             'address_line' => ['nullable', 'string', 'max:255'],
             'date_of_birth' => ['nullable', 'date', 'before:today', 'before:hire_date'],

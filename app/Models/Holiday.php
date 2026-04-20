@@ -13,11 +13,15 @@ class Holiday extends Model
     protected $fillable = [
         'holiday_date',
         'holiday_name',
+        'holiday_type',
         'is_paid_leave',
+        'is_recurring',
+        'note',
     ];
 
     protected $casts = [
         'holiday_date' => 'date',
         'is_paid_leave' => 'boolean',
+        'is_recurring' => 'boolean',
     ];
 }

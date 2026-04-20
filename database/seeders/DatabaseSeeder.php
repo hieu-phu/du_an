@@ -269,10 +269,8 @@ class DatabaseSeeder extends Seeder
     private function seedAddressedEmployeeProfile(User $employeeUser, int $workShiftId): void
     {
         $provinceId = DB::table('provinces')->orderBy('id')->value('id');
-        $districtId = DB::table('districts')->where('province_id', $provinceId)->orderBy('id')->value('id');
         $wardId = DB::table('wards')
             ->where('province_id', $provinceId)
-            ->when($districtId, fn ($query) => $query->where('district_id', $districtId))
             ->orderBy('id')
             ->value('id');
 
@@ -281,7 +279,6 @@ class DatabaseSeeder extends Seeder
             ->update([
                 'default_work_shift_id' => $workShiftId,
                 'province_id' => $provinceId,
-                'district_id' => $districtId,
                 'ward_id' => $wardId,
                 'address_line' => 'So 1, duong 2',
                 'date_of_birth' => '1995-05-10',

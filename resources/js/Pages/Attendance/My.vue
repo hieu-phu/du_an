@@ -1,8 +1,8 @@
 <template>
-  <Head title="Công của tôi" />
+  <Head title="Cong cua toi" />
 
   <AdminLayout>
-    <PageBreadcrumb title="Công của tôi" :items="[{ text: 'Chấm công', link: null }, { text: 'Công của tôi', link: null }]" />
+    <PageBreadcrumb title="Cong cua toi" :items="[{ text: 'Cham cong', link: null }, { text: 'Cong cua toi', link: null }]" />
 
     <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
       <div v-for="card in summaryCards" :key="card.label" class="rounded-xl border border-gray-200 bg-white p-5 shadow-theme-sm">
@@ -11,23 +11,35 @@
       </div>
     </div>
 
-    <div class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
-      <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+    <div class="mb-6 rounded-[24px] border border-gray-200 bg-white p-6 shadow-theme-sm">
+      <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700">Tháng</label>
-          <select v-model="filterForm.month" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-            <option v-for="month in filters.months" :key="month.value" :value="month.value">{{ month.label }}</option>
-          </select>
+          <div class="text-sm font-semibold text-gray-900">Bo loc ky cham cong</div>
+          <div class="mt-1 text-sm text-gray-500">Chuyen nhanh qua tung thang hoac chon thang, nam cu the de xem du lieu.</div>
         </div>
-        <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700">Năm</label>
-          <select v-model="filterForm.year" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-            <option v-for="year in filters.years" :key="year.value" :value="year.value">{{ year.label }}</option>
-          </select>
+        <div class="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+          Dang xem: {{ currentPeriodLabel }}
         </div>
-        <div class="flex items-end">
-          <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white" @click="applyFilters">
-            Xem dữ liệu
+      </div>
+
+      <div class="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_auto]">
+        <div class="max-w-xl">
+          <InputDate
+            v-model="filterForm.period"
+            label="Chon thang nam"
+            placeholder="Chon thang nam"
+            :clearable="false"
+            :config="periodPickerConfig"
+          />
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 xl:justify-end">
+          <button
+            type="button"
+            class="rounded-2xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+            @click="jumpToCurrentPeriod"
+          >
+            Thang nay
           </button>
         </div>
       </div>
@@ -35,78 +47,123 @@
 
     <div class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="mb-4">
-        <h3 class="text-lg font-semibold text-gray-900">Gửi đơn liên quan chấm công</h3>
-        <p class="mt-1 text-sm text-gray-500">Dùng cho nghỉ phép, quên chấm công, công tác, làm bù hoặc tăng ca.</p>
+        <h3 class="text-lg font-semibold text-gray-900">Gui don lien quan cham cong</h3>
       </div>
 
       <div v-if="formError" class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
         {{ formError }}
       </div>
+
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700">Loại đơn</label>
+          <label class="mb-2 block text-sm font-medium text-gray-700">Loai don</label>
           <select v-model="requestForm.request_type" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-            <option value="">Chọn loại đơn</option>
+            <option value="">Chon loai don</option>
             <option v-for="type in request_types" :key="type.value" :value="type.value">{{ requestTypeLabel(type.value) }}</option>
           </select>
           <p v-if="requestForm.errors.request_type" class="mt-1 text-sm text-red-500">{{ requestForm.errors.request_type }}</p>
         </div>
-        <div v-if="requestForm.request_type !== 'overtime'">
-          <label class="mb-2 block text-sm font-medium text-gray-700">Ngày áp dụng</label>
-          <input v-model="requestForm.request_date" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-          <p v-if="requestForm.errors.request_date" class="mt-1 text-sm text-red-500">{{ requestForm.errors.request_date }}</p>
-        </div>
+
+        <InputDate
+          v-if="showSingleDate"
+          v-model="requestForm.request_date"
+          :label="singleDateLabel"
+          placeholder="Chon ngay"
+          :error="requestForm.errors.request_date"
+          :config="datePickerConfig"
+        />
+
+        <InputDate
+          v-if="showDateRange"
+          v-model="requestForm.from_date"
+          label="Tu ngay"
+          placeholder="Chon tu ngay"
+          :error="requestForm.errors.from_date"
+          :config="datePickerConfig"
+        />
+
+        <InputDate
+          v-if="showDateRange"
+          v-model="requestForm.to_date"
+          label="Den ngay"
+          placeholder="Chon den ngay"
+          :error="requestForm.errors.to_date"
+          :config="datePickerConfig"
+        />
+
         <div v-if="requestForm.request_type === 'leave'">
-          <label class="mb-2 block text-sm font-medium text-gray-700">Loại nghỉ</label>
+          <label class="mb-2 block text-sm font-medium text-gray-700">Loai nghi</label>
           <select v-model="requestForm.leave_type" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-            <option value="paid">Nghỉ phép</option>
-            <option value="unpaid">Nghỉ không phép</option>
+            <option value="paid">Nghi phep</option>
+            <option value="unpaid">Nghi khong phep</option>
           </select>
           <p v-if="requestForm.errors.leave_type" class="mt-1 text-sm text-red-500">{{ requestForm.errors.leave_type }}</p>
         </div>
+
         <div v-if="requestForm.request_type === 'late_early'">
-          <label class="mb-2 block text-sm font-medium text-gray-700">Trạng thái đề nghị</label>
+          <label class="mb-2 block text-sm font-medium text-gray-700">Loai de nghi</label>
           <select v-model="requestForm.requested_status" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-            <option value="late">Xin đi muộn</option>
-            <option value="early_leave">Xin về sớm</option>
+            <option value="late">Xin di muon</option>
+            <option value="early_leave">Xin ve som</option>
           </select>
           <p v-if="requestForm.errors.requested_status" class="mt-1 text-sm text-red-500">{{ requestForm.errors.requested_status }}</p>
         </div>
-        <div v-if="requestForm.request_type && requestForm.request_type !== 'overtime'">
-          <label class="mb-2 block text-sm font-medium text-gray-700">Từ ngày</label>
-          <input v-model="requestForm.from_date" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-          <p v-if="requestForm.errors.from_date" class="mt-1 text-sm text-red-500">{{ requestForm.errors.from_date }}</p>
-        </div>
-        <div v-if="requestForm.request_type && requestForm.request_type !== 'overtime'">
-          <label class="mb-2 block text-sm font-medium text-gray-700">Đến ngày</label>
-          <input v-model="requestForm.to_date" type="date" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-          <p v-if="requestForm.errors.to_date" class="mt-1 text-sm text-red-500">{{ requestForm.errors.to_date }}</p>
-        </div>
-        <div v-if="requestForm.request_type && requestForm.request_type !== 'overtime'">
-          <label class="mb-2 block text-sm font-medium text-gray-700">Từ giờ</label>
-          <input v-model="requestForm.from_time" type="time" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-          <p v-if="requestForm.errors.from_time" class="mt-1 text-sm text-red-500">{{ requestForm.errors.from_time }}</p>
-        </div>
-        <div v-if="requestForm.request_type && requestForm.request_type !== 'overtime'">
-          <label class="mb-2 block text-sm font-medium text-gray-700">Đến giờ</label>
-          <input v-model="requestForm.to_time" type="time" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-          <p v-if="requestForm.errors.to_time" class="mt-1 text-sm text-red-500">{{ requestForm.errors.to_time }}</p>
-        </div>
-        <div v-if="requestForm.request_type === 'overtime'">
-          <label class="mb-2 block text-sm font-medium text-gray-700">Bắt đầu tăng ca</label>
-          <input v-model="requestForm.start_at" type="datetime-local" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-          <p v-if="requestForm.errors.start_at" class="mt-1 text-sm text-red-500">{{ requestForm.errors.start_at }}</p>
-        </div>
-        <div v-if="requestForm.request_type === 'overtime'">
-          <label class="mb-2 block text-sm font-medium text-gray-700">Kết thúc tăng ca</label>
-          <input v-model="requestForm.end_at" type="datetime-local" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-          <p v-if="requestForm.errors.end_at" class="mt-1 text-sm text-red-500">{{ requestForm.errors.end_at }}</p>
+
+        <InputDate
+          v-if="showTimeRange"
+          v-model="requestForm.from_time"
+          :label="fromTimeLabel"
+          placeholder="Chon gio"
+          :error="requestForm.errors.from_time"
+          :config="timePickerConfig"
+        />
+
+        <InputDate
+          v-if="showTimeRange"
+          v-model="requestForm.to_time"
+          :label="toTimeLabel"
+          placeholder="Chon gio"
+          :error="requestForm.errors.to_time"
+          :config="timePickerConfig"
+        />
+
+        <InputDate
+          v-if="requestForm.request_type === 'overtime'"
+          v-model="requestForm.request_date"
+          label="Ngay tang ca"
+          placeholder="Chon ngay"
+          :error="requestForm.errors.request_date"
+          :config="datePickerConfig"
+        />
+
+        <div v-if="requestForm.request_type === 'overtime'" class="md:col-span-2 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
+          <div class="font-semibold">Khung tang ca theo danh muc cham cong</div>
+          <div class="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+            <div>
+              <span class="text-blue-600">Ca ap dung:</span>
+              <strong class="ml-1">{{ overtimeCatalog.shift_name || '-' }}</strong>
+            </div>
+            <div>
+              <span class="text-blue-600">Thoi gian:</span>
+              <strong class="ml-1">{{ overtimeWindowLabel }}</strong>
+            </div>
+            <div>
+              <span class="text-blue-600">So gio tang ca:</span>
+              <strong class="ml-1">{{ formatMinutes(overtimeCatalog.requested_minutes) }}</strong>
+            </div>
+          </div>
+          <p v-if="!overtimeCatalog.start_time || !overtimeCatalog.end_time" class="mt-2 text-red-600">
+            Ca lam hien tai chua cau hinh khung tang ca. Vui long lien he HR cap nhat danh muc cham cong.
+          </p>
+          <p v-if="requestForm.errors.start_at || requestForm.errors.end_at" class="mt-2 text-red-600">
+            {{ requestForm.errors.start_at || requestForm.errors.end_at }}
+          </p>
         </div>
       </div>
 
       <div class="mt-4">
-        <label class="mb-2 block text-sm font-medium text-gray-700">Lý do</label>
-        <textarea v-model="requestForm.reason" rows="3" class="w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="Nhập lý do chi tiết"></textarea>
+        <label class="mb-2 block text-sm font-medium text-gray-700">Ly do</label>
+        <textarea v-model="requestForm.reason" rows="3" class="w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="Nhap ly do chi tiet"></textarea>
         <p v-if="requestForm.errors.reason" class="mt-1 text-sm text-red-500">{{ requestForm.errors.reason }}</p>
       </div>
 
@@ -117,17 +174,17 @@
           :disabled="requestForm.processing"
           @click="submitAttendanceRequest"
         >
-          {{ requestForm.processing ? 'Đang gửi...' : 'Gửi đơn' }}
+          {{ requestForm.processing ? 'Dang gui...' : 'Gui don' }}
         </button>
       </div>
     </div>
 
     <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="mb-4">
-        <h3 class="text-lg font-semibold text-gray-900">Bảng công cá nhân</h3>
+        <h3 class="text-lg font-semibold text-gray-900">Bang cong ca nhan</h3>
       </div>
 
-      <DataTable :columns="columns" :data="records" empty-message="Chưa có dữ liệu chấm công.">
+      <DataTable :columns="columns" :data="records" empty-message="Chua co du lieu cham cong.">
         <template #cell-work_date="{ item }">
           {{ formatDate(item.work_date) }}
         </template>
@@ -141,17 +198,17 @@
           {{ formatMinutes(item.worked_minutes) }}
         </template>
         <template #cell-late_minutes="{ item }">
-          {{ formatMinutes(item.late_minutes) }}
+          {{ shouldShowViolationMinutes(item) ? formatMinutes(item.late_minutes) : '-' }}
         </template>
         <template #cell-early_leave_minutes="{ item }">
-          {{ formatMinutes(item.early_leave_minutes) }}
+          {{ shouldShowViolationMinutes(item) ? formatMinutes(item.early_leave_minutes) : '-' }}
         </template>
         <template #cell-overtime_minutes="{ item }">
           {{ formatMinutes(item.overtime_minutes) }}
         </template>
         <template #cell-attendance_status="{ item }">
-          <span :class="statusClass(item.attendance_status, item.day_status, item.work_unit)" class="rounded-full px-3 py-1 text-xs font-semibold">
-            {{ formatAttendanceStatus(item.attendance_status, item.day_status, item.work_unit) }}
+          <span :class="statusClass(item)" class="rounded-full px-3 py-1 text-xs font-semibold">
+            {{ formatAttendanceStatus(item) }}
           </span>
         </template>
         <template #cell-day_status="{ item }">
@@ -164,18 +221,23 @@
             {{ formatApprovalStatus(item.approval_status) }}
           </span>
         </template>
+        <template #cell-request_presence_label="{ item }">
+          <span :class="requestPresenceClass(item)" class="rounded-full px-3 py-1 text-xs font-semibold">
+            {{ item.request_presence_label || 'Khong co don' }}
+          </span>
+        </template>
       </DataTable>
     </div>
 
     <div class="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="mb-4">
-        <h3 class="text-lg font-semibold text-gray-900">Đơn chấm công đã gửi</h3>
-        <p class="mt-1 text-sm text-gray-500">Theo dõi các đơn bạn đã gửi và trạng thái duyệt hiện tại.</p>
+        <h3 class="text-lg font-semibold text-gray-900">Don cham cong da gui</h3>
+        <p class="mt-1 text-sm text-gray-500">Theo doi cac don ban da gui va trang thai duyet hien tai.</p>
       </div>
 
-      <DataTable :columns="requestColumns" :data="recent_requests" empty-message="Bạn chưa gửi đơn chấm công nào.">
+      <DataTable :columns="requestColumns" :data="recent_requests" empty-message="Ban chua gui don cham cong nao.">
         <template #cell-request_type_label="{ item }">
-          {{ requestTypeLabel(item.request_type) }}
+          {{ item.request_type_label || requestTypeLabel(item.request_type) }}
         </template>
         <template #cell-request_date="{ item }">
           {{ formatDate(item.request_date) }}
@@ -194,11 +256,12 @@
 </template>
 
 <script setup>
-import { computed, reactive } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import DataTable from '@/components/tables/DataTable.vue'
+import InputDate from '@/components/forms/InputDate.vue'
 
 const props = defineProps({
   filters: { type: Object, required: true },
@@ -206,14 +269,18 @@ const props = defineProps({
   summary: { type: Object, default: () => ({}) },
   request_types: { type: Array, default: () => [] },
   recent_requests: { type: Array, default: () => [] },
+  overtime_catalog: { type: Object, default: () => ({}) },
 })
 
 const page = usePage()
 
 const filterForm = reactive({
-  month: props.filters.month,
-  year: props.filters.year,
+  month: Number(props.filters.month),
+  year: Number(props.filters.year),
+  period: buildPeriodValue(Number(props.filters.year), Number(props.filters.month)),
 })
+
+let lastAppliedPeriod = `${filterForm.year}-${filterForm.month}`
 
 const requestForm = useForm({
   request_type: '',
@@ -230,46 +297,157 @@ const requestForm = useForm({
 })
 
 const columns = [
-  { label: 'Ngày công', key: 'work_date' },
+  { label: 'Ngay cong', key: 'work_date' },
   { label: 'Check in', key: 'check_in_at' },
   { label: 'Check out', key: 'check_out_at' },
-  { label: 'Giờ làm', key: 'worked_minutes', align: 'text-center' },
-  { label: 'Đi muộn', key: 'late_minutes', align: 'text-center' },
-  { label: 'Về sớm', key: 'early_leave_minutes', align: 'text-center' },
-  { label: 'Tăng ca', key: 'overtime_minutes', align: 'text-center' },
-  { label: 'Trạng thái công', key: 'attendance_status', align: 'text-center' },
-  { label: 'Trạng thái ngày', key: 'day_status', align: 'text-center' },
-  { label: 'Duyệt', key: 'approval_status', align: 'text-center' },
-  { label: 'Công thức áp dụng', key: 'formula_detail' },
+  { label: 'Gio lam', key: 'worked_minutes', align: 'text-center' },
+  { label: 'Di muon', key: 'late_minutes', align: 'text-center' },
+  { label: 'Ve som', key: 'early_leave_minutes', align: 'text-center' },
+  { label: 'Tang ca', key: 'overtime_minutes', align: 'text-center' },
+  { label: 'Ket qua cong', key: 'attendance_status', align: 'text-center' },
+  { label: 'Trang thai ngay', key: 'day_status', align: 'text-center' },
+  { label: 'Duyet', key: 'approval_status', align: 'text-center' },
+  { label: 'Don lien quan', key: 'request_presence_label', align: 'text-center' },
 ]
 
 const requestColumns = [
-  { label: 'Loại đơn', key: 'request_type_label' },
-  { label: 'Ngày áp dụng', key: 'request_date' },
-  { label: 'Khoảng thời gian', key: 'period' },
-  { label: 'Trạng thái', key: 'status_label', align: 'text-center' },
-  { label: 'Người duyệt', key: 'reviewed_by_name' },
-  { label: 'Ghi chú duyệt', key: 'review_note' },
-  { label: 'Gửi lúc', key: 'submitted_at' },
+  { label: 'Loai don', key: 'request_type_label' },
+  { label: 'Ngay ap dung', key: 'request_date' },
+  { label: 'Khoang thoi gian', key: 'period' },
+  { label: 'Trang thai', key: 'status_label', align: 'text-center' },
+  { label: 'Nguoi duyet', key: 'reviewed_by_name' },
+  { label: 'Ghi chu duyet', key: 'review_note' },
+  { label: 'Gui luc', key: 'submitted_at' },
 ]
 
 const summaryCards = computed(() => [
-  { label: 'Tổng ngày công', value: formatWorkUnits(props.summary.total_work_units ?? 0) },
-  { label: 'Đã duyệt', value: props.summary.confirmed_records ?? 0 },
-  { label: 'Chờ duyệt', value: props.summary.pending_records ?? 0 },
-  { label: 'Tổng giờ làm', value: formatMinutes(props.summary.total_worked_minutes ?? 0) },
+  { label: 'Ngay cong hop le', value: formatWorkUnits(props.summary.approved_work_units ?? props.summary.total_work_units ?? 0) },
+  { label: 'Ngay can xu ly', value: props.summary.action_required_records ?? props.summary.pending_records ?? 0 },
+  { label: 'Don cho duyet', value: props.summary.pending_request_records ?? 0 },
+  { label: 'Gio lam da duyet', value: formatMinutes(props.summary.approved_worked_minutes ?? props.summary.total_worked_minutes ?? 0) },
 ])
 
+const currentPeriodLabel = computed(() => {
+  const date = parsePeriodValue(filterForm.period)
+  if (!date) return `Thang ${filterForm.month} / ${filterForm.year}`
+
+  return new Intl.DateTimeFormat('vi-VN', {
+    month: 'long',
+    year: 'numeric',
+  }).format(date)
+})
+
 const formError = computed(() => requestForm.errors.error || page.props.errors?.error || '')
+const overtimeCatalog = computed(() => props.overtime_catalog || {})
+const overtimeWindowLabel = computed(() => {
+  if (!overtimeCatalog.value.start_time || !overtimeCatalog.value.end_time) return 'Chua cau hinh'
+  return `${overtimeCatalog.value.start_time} - ${overtimeCatalog.value.end_time}`
+})
+const showSingleDate = computed(() => ['forgot_check', 'late_early', 'make_up'].includes(requestForm.request_type))
+const showDateRange = computed(() => ['leave', 'business_trip'].includes(requestForm.request_type))
+const showTimeRange = computed(() => ['late_early', 'make_up'].includes(requestForm.request_type))
+const singleDateLabel = computed(() => requestForm.request_type === 'forgot_check' ? 'Ngay quen cham cong' : 'Ngay ap dung')
+const fromTimeLabel = computed(() => requestForm.request_type === 'make_up' ? 'Bat dau lam bu' : 'Tu gio')
+const toTimeLabel = computed(() => requestForm.request_type === 'make_up' ? 'Ket thuc lam bu' : 'Den gio')
+
+const datePickerConfig = {
+  allowInput: false,
+  dateFormat: 'Y-m-d',
+  altInput: true,
+  altFormat: 'd/m/Y',
+}
+
+const periodPickerConfig = {
+  allowInput: false,
+  dateFormat: 'Y-m-01',
+  altInput: true,
+  altFormat: 'm/Y',
+  defaultDate: buildPeriodValue(Number(props.filters.year), Number(props.filters.month)),
+}
+
+const timePickerConfig = {
+  allowInput: false,
+  enableTime: true,
+  noCalendar: true,
+  time_24hr: true,
+  minuteIncrement: 5,
+  dateFormat: 'H:i',
+  altInput: true,
+  altFormat: 'H:i',
+}
+
+const dateTimePickerConfig = {
+  allowInput: false,
+  enableTime: true,
+  time_24hr: true,
+  minuteIncrement: 5,
+  dateFormat: 'Y-m-d H:i',
+  altInput: true,
+  altFormat: 'd/m/Y H:i',
+}
 
 const REQUEST_TYPE_LABELS = {
- leave: 'Xin nghỉ phép',
-late_early: 'Xin đi muộn / về sớm',
-forgot_check: 'Xin quên chấm công',
-business_trip: 'Xin công tác',
-make_up: 'Xin làm bù',
-overtime: 'Đăng ký tăng ca',
+  leave: 'Xin nghi phep',
+  late_early: 'Xin di muon / ve som',
+  forgot_check: 'Xin quen cham cong',
+  business_trip: 'Xin cong tac',
+  make_up: 'Xin lam bu',
+  overtime: 'Dang ky tang ca',
 }
+
+watch(() => requestForm.request_type, (type) => {
+  requestForm.clearErrors()
+  requestForm.request_date = ''
+  requestForm.from_date = ''
+  requestForm.to_date = ''
+  requestForm.from_time = ''
+  requestForm.to_time = ''
+  requestForm.start_at = ''
+  requestForm.end_at = ''
+
+  if (type !== 'leave') {
+    requestForm.leave_type = 'paid'
+  }
+
+  if (type !== 'late_early') {
+    requestForm.requested_status = 'late'
+  }
+
+  if (type === 'overtime') {
+    requestForm.request_date = overtimeCatalog.value.work_date || new Date().toISOString().slice(0, 10)
+  }
+})
+
+watch(
+  () => [Number(filterForm.month), Number(filterForm.year)],
+  ([month, year]) => {
+    if (!month || !year) return
+
+    const nextPeriod = `${year}-${month}`
+    if (nextPeriod === lastAppliedPeriod) return
+
+    lastAppliedPeriod = nextPeriod
+    applyFilters()
+  }
+)
+
+watch(
+  () => filterForm.period,
+  (value) => {
+    const date = parsePeriodValue(value)
+    if (!date) return
+
+    const nextMonth = date.getMonth() + 1
+    const nextYear = date.getFullYear()
+
+    if (nextMonth === Number(filterForm.month) && nextYear === Number(filterForm.year)) {
+      return
+    }
+
+    filterForm.month = nextMonth
+    filterForm.year = nextYear
+  }
+)
 
 function requestTypeLabel(value) {
   return REQUEST_TYPE_LABELS[value] || value || '-'
@@ -283,6 +461,35 @@ function applyFilters() {
     preserveState: true,
     preserveScroll: true,
   })
+}
+
+function shiftPeriod(direction) {
+  const currentMonth = Number(filterForm.month)
+  const currentYear = Number(filterForm.year)
+
+  if (!currentMonth || !currentYear) return
+
+  const period = new Date(currentYear, currentMonth - 1 + direction, 1)
+  filterForm.month = period.getMonth() + 1
+  filterForm.year = period.getFullYear()
+}
+
+function jumpToCurrentPeriod() {
+  const now = new Date()
+  filterForm.month = now.getMonth() + 1
+  filterForm.year = now.getFullYear()
+  filterForm.period = buildPeriodValue(filterForm.year, filterForm.month)
+}
+
+function buildPeriodValue(year, month) {
+  if (!year || !month) return ''
+  return `${year}-${String(month).padStart(2, '0')}-01`
+}
+
+function parsePeriodValue(value) {
+  if (!value) return null
+  const date = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
 }
 
 function submitAttendanceRequest() {
@@ -304,12 +511,12 @@ function formatDateTime(value) {
 
 function formatMinutes(value) {
   const minutes = Number(value) || 0
-  if (minutes <= 0) return '0 phút'
+  if (minutes <= 0) return '0 phut'
   const hours = Math.floor(minutes / 60)
   const remainMinutes = minutes % 60
-  if (hours <= 0) return `${remainMinutes} phút`
-  if (remainMinutes === 0) return `${hours} giờ`
-  return `${hours} giờ ${remainMinutes} phút`
+  if (hours <= 0) return `${remainMinutes} phut`
+  if (remainMinutes === 0) return `${hours} gio`
+  return `${hours} gio ${remainMinutes} phut`
 }
 
 function formatWorkUnits(value) {
@@ -317,59 +524,79 @@ function formatWorkUnits(value) {
   return Number.isInteger(units) ? `${units}` : units.toFixed(1)
 }
 
-function formatAttendanceStatus(value, dayStatus = null, workUnit = null) {
-  const resolvedUnit = Number(workUnit)
+function hasMissingCheck(item) {
+  return item?.day_status === 'missing_check_in' || item?.day_status === 'missing_check_out' || item?.missing_check_in || item?.missing_check_out
+}
+
+function shouldShowViolationMinutes(item) {
+  return item?.approval_status !== 'rejected' && !hasMissingCheck(item)
+}
+
+function formatAttendanceStatus(item) {
+  const resolvedUnit = Number(item?.work_unit)
+
+  if (hasMissingCheck(item)) {
+    return 'Chua tinh cong'
+  }
+
+  if (item?.approval_status === 'rejected') {
+    return 'Khong duyet cong'
+  }
 
   if (resolvedUnit === 1) {
-    return 'Đủ công'
+    return 'Du cong'
   }
 
   if (resolvedUnit === 0.5) {
-    return 'Nửa công'
+    return 'Nua cong'
   }
 
   if (!Number.isNaN(resolvedUnit) && resolvedUnit === 0) {
-    return 'Không công'
-  }
-
-  if (dayStatus === 'early_leave' || dayStatus === 'missing_check_in' || dayStatus === 'missing_check_out') {
-    return 'Không công'
+    return 'Khong cong'
   }
 
   const labels = {
-    on_time: 'Đúng giờ',
-    late: 'Trễ',
-    absent: 'Vắng',
+    on_time: 'Dung gio',
+    late: 'Tre',
+    absent: 'Vang',
   }
-  return labels[value] || '-'
+  return labels[item?.attendance_status] || '-'
 }
 
 function formatDayStatus(value) {
   const labels = {
-    present: 'Đi làm',
-    late: 'Đi muộn',
-    early_leave: 'Về sớm',
-    leave: 'Nghỉ phép',
-    unpaid_leave: 'Nghỉ không phép',
-    business_trip: 'Công tác',
-    missing_check_in: 'Thiếu check in',
-    missing_check_out: 'Thiếu check out',
-    absent: 'Vắng',
+    present: 'Di lam',
+    late: 'Di muon',
+    early_leave: 'Ve som',
+    leave: 'Nghi phep',
+    unpaid_leave: 'Nghi khong phep',
+    business_trip: 'Cong tac',
+    missing_check_in: 'Thieu check in',
+    missing_check_out: 'Thieu check out',
+    absent: 'Vang',
   }
   return labels[value] || '-'
 }
 
 function formatApprovalStatus(value) {
   const labels = {
-    pending: 'Chờ duyệt',
-    approved: 'Đã duyệt',
-    rejected: 'Từ chối',
+    pending: 'Cho duyet',
+    approved: 'Da duyet',
+    rejected: 'Tu choi',
   }
   return labels[value] || '-'
 }
 
-function statusClass(value, dayStatus = null, workUnit = null) {
-  const resolvedUnit = Number(workUnit)
+function statusClass(item) {
+  const resolvedUnit = Number(item?.work_unit)
+
+  if (hasMissingCheck(item)) {
+    return 'bg-yellow-50 text-yellow-700'
+  }
+
+  if (item?.approval_status === 'rejected') {
+    return 'bg-rose-50 text-rose-700'
+  }
 
   if (resolvedUnit === 1) {
     return 'bg-emerald-50 text-emerald-700'
@@ -383,13 +610,9 @@ function statusClass(value, dayStatus = null, workUnit = null) {
     return 'bg-orange-50 text-orange-700'
   }
 
-  if (dayStatus === 'early_leave' || dayStatus === 'missing_check_in' || dayStatus === 'missing_check_out') {
-    return 'bg-orange-50 text-orange-700'
-  }
-
-  return value === 'late'
+  return item?.attendance_status === 'late'
     ? 'bg-amber-50 text-amber-700'
-    : value === 'absent'
+    : item?.attendance_status === 'absent'
       ? 'bg-rose-50 text-rose-700'
       : 'bg-emerald-50 text-emerald-700'
 }
@@ -417,7 +640,11 @@ function approvalStatusClass(value) {
   }
   return classes[value] || 'bg-slate-50 text-slate-700'
 }
+
+function requestPresenceClass(item) {
+  if (item?.request_status === 'approved') return 'bg-emerald-50 text-emerald-700'
+  if (item?.request_status === 'pending') return 'bg-amber-50 text-amber-700'
+  if (item?.request_status === 'rejected') return 'bg-rose-50 text-rose-700'
+  return 'bg-slate-50 text-slate-700'
+}
 </script>
-
-
-

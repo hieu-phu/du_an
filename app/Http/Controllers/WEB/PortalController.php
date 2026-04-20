@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AttendanceRecord;
 use App\Models\Department;
 use App\Models\EmployeeProfile;
+use App\Models\EmployeeWorkShiftAssignment;
 use App\Models\Position;
 use App\Models\Project;
 use App\Models\ProjectImplementationDetail;
@@ -332,7 +333,9 @@ class PortalController extends Controller
             'employeeProfile.position',
             'employeeProfile.province:id,name',
             'employeeProfile.ward:id,name',
+            'employeeProfile.defaultWorkShift:id,shift_name,start_time,end_time,is_overnight',
         ]);
+        $currentShift = $this->resolveCurrentWorkShift($user->employeeProfile);
 
         return Inertia::render('Profile/My', [
             'profile' => [
@@ -362,8 +365,66 @@ class PortalController extends Controller
                     $user->employeeProfile?->ward?->name,
                     $user->employeeProfile?->province?->name,
                 ])->filter()->join(', '),
+                'current_shift' => $currentShift,
             ],
         ]);
+    }
+
+    private function resolveCurrentWorkShift(?EmployeeProfile $profile): ?array
+    {
+        if (!$profile) {
+            return null;
+        }
+
+        $today = now('Asia/Ho_Chi_Minh');
+        $weekday = (int) $today->dayOfWeekIso;
+
+        $assignment = EmployeeWorkShiftAssignment::query()
+            ->with('workShift:id,shift_name,start_time,end_time,is_overnight')
+            ->where('is_active', true)
+            ->where(function (Builder $query) use ($profile) {
+                $query->where('employee_profile_id', $profile->id);
+
+                if ($profile->department_id) {
+                    $query->orWhere(function (Builder $departmentQuery) use ($profile) {
+                        $departmentQuery
+                            ->whereNull('employee_profile_id')
+                            ->where('department_id', $profile->department_id);
+                    });
+                }
+            })
+            ->whereDate('effective_from', '<=', $today->toDateString())
+            ->where(function (Builder $query) use ($today) {
+                $query->whereNull('effective_to')
+                    ->orWhereDate('effective_to', '>=', $today->toDateString());
+            })
+            ->orderByDesc('employee_profile_id')
+            ->orderByDesc('effective_from')
+            ->get()
+            ->first(function (EmployeeWorkShiftAssignment $item) use ($weekday) {
+                $weekdays = collect($item->weekdays ?? [])
+                    ->map(fn ($day) => (int) $day)
+                    ->filter()
+                    ->values();
+
+                return $weekdays->isEmpty() || $weekdays->contains($weekday);
+            });
+
+        $workShift = $assignment?->workShift ?: $profile->defaultWorkShift;
+
+        if (!$workShift) {
+            return null;
+        }
+
+        return [
+            'shift_name' => $workShift->shift_name,
+            'start_time' => filled($workShift->start_time) ? substr((string) $workShift->start_time, 0, 5) : null,
+            'end_time' => filled($workShift->end_time) ? substr((string) $workShift->end_time, 0, 5) : null,
+            'is_overnight' => (bool) ($workShift->is_overnight ?? false),
+            'source' => $assignment ? 'assignment' : 'default',
+            'effective_from' => optional($assignment?->effective_from)->format('Y-m-d'),
+            'effective_to' => optional($assignment?->effective_to)->format('Y-m-d'),
+        ];
     }
 
     public function myAttendance(Request $request): Response

@@ -220,12 +220,19 @@
                                     <div
                                         v-for="override in selectedUser.position_capability_overrides"
                                         :key="override.id"
-                                        class="flex items-start justify-between gap-3 rounded-md border border-gray-200 px-3 py-2"
+                                        :class="override.is_expired ? 'border-amber-200 bg-amber-50/60' : 'border-gray-200'"
+                                        class="flex items-start justify-between gap-3 rounded-md border px-3 py-2"
                                     >
                                         <div class="min-w-0">
-                                            <div class="text-sm font-medium text-gray-800">
+                                            <div class="flex flex-wrap items-center gap-2 text-sm font-medium text-gray-800">
                                                 {{ getCapabilityLabel(override.capability_code) }}
                                                 <span class="text-xs text-gray-500">({{ override.capability_code }})</span>
+                                                <span
+                                                    v-if="override.is_expired"
+                                                    class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800"
+                                                >
+                                                    Đã hết hạn
+                                                </span>
                                             </div>
                                             <div class="mt-0.5 text-xs" :class="override.effect === 'allow' ? 'text-emerald-700' : 'text-rose-700'">
                                                 {{ override.effect === 'allow' ? 'Cho phép' : 'Từ chối' }}
@@ -500,14 +507,18 @@ const formatDate = (value) => {
     return new Date(value).toLocaleDateString('vi-VN')
 }
 
+const stripAdministrativePrefix = (name = '') => String(name || '')
+    .replace(/^(thành phố|thị trấn|thị xã|tỉnh|phường|xã|thanh pho|thi tran|thi xa|tinh|phuong|xa|tp\.?|tt\.?|p\.)\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
 const formatFullAddress = (user) => {
     if (!user) return '-'
 
     const parts = [
         user.address_line,
-        user.ward?.name,
-        user.district?.name,
-        user.province?.name,
+        stripAdministrativePrefix(user.ward?.name),
+        stripAdministrativePrefix(user.province?.name),
         user.address,
     ].filter(Boolean)
 

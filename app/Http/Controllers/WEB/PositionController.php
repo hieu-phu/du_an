@@ -115,7 +115,7 @@ class PositionController extends Controller
             'name.unique' => 'Tên chức vụ này đã tồn tại.',
             'authority_level.required' => 'Vui lòng chọn mức quyền hạn.',
             'authority_level.integer' => 'Mức quyền hạn phải là số nguyên.',
-            'authority_level.in' => 'Mức quyền hạn không hợp lệ.',
+            'authority_level.in' => 'Mức quyền hạn không `hợp lệ.',
         ]);
 
         $actorLevel = $this->resolveActorAuthorityLevel($request->user());
@@ -190,7 +190,6 @@ class PositionController extends Controller
         if ($baseCode === '') {
             $baseCode = 'custom_capability';
         }
-
         $code = $baseCode;
         $suffix = 2;
         while (PositionCapabilityModel::query()->where('code', $code)->exists()) {
@@ -323,7 +322,6 @@ class PositionController extends Controller
                 ->values()
                 ->all();
         }
-
         return [
             ['value' => 1, 'label' => 'Mức 1 - Nhân viên'],
             ['value' => 2, 'label' => 'Mức 2 - Tổ phó / Senior'],
@@ -337,7 +335,6 @@ class PositionController extends Controller
             ['value' => 10, 'label' => 'Mức 10 - Quản trị hệ thống (System Admin)'],
         ];
     }
-
     private function allowedAuthorityLevelValues(): array
     {
         $values = collect($this->authorityLevelOptions())

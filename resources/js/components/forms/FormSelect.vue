@@ -6,7 +6,7 @@
                 <svg v-if="icon" class="w-4 h-4 mr-1 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
                     <path :d="icon" />
                 </svg>
-                {{ required ? label : `${label} (nếu có)` }}
+                {{ required || !showOptionalLabel ? label : `${label} (nếu có)` }}
                 <span v-if="required" class="text-red-500 ml-1">*</span>
             </span>
         </label>
@@ -118,6 +118,10 @@ const props = defineProps({
     required: {
         type: Boolean,
         default: false
+    },
+    showOptionalLabel: {
+        type: Boolean,
+        default: true
     },
     placeholder: {
         type: String,

@@ -96,7 +96,6 @@ class UserRepository extends BaseRepository
             'employeeProfile.department:id,name',
             'employeeProfile.position:id,name,authority_level,capabilities',
             'employeeProfile.province:id,name',
-            'employeeProfile.district:id,name',
             'employeeProfile.ward:id,name',
         ];
 
@@ -140,7 +139,6 @@ class UserRepository extends BaseRepository
             'department_id' => $profile?->department_id,
             'position_id' => $profile?->position_id,
             'province_id' => $profile?->province_id,
-            'district_id' => $profile?->district_id,
             'ward_id' => $profile?->ward_id,
             'address_line' => $profile?->address_line,
             'department' => $profile?->department ? [
@@ -164,6 +162,7 @@ class UserRepository extends BaseRepository
                         'effect' => $override->effect,
                         'reason' => $override->reason,
                         'expires_at' => $override->expires_at?->format('Y-m-d H:i:s'),
+                        'is_expired' => $override->expires_at ? $override->expires_at->lte(now()) : false,
                         'created_by' => $override->created_by,
                     ])
                     ->values()
@@ -172,10 +171,6 @@ class UserRepository extends BaseRepository
             'province' => $profile?->province ? [
                 'id' => $profile->province->id,
                 'name' => $profile->province->name,
-            ] : null,
-            'district' => $profile?->district ? [
-                'id' => $profile->district->id,
-                'name' => $profile->district->name,
             ] : null,
             'ward' => $profile?->ward ? [
                 'id' => $profile->ward->id,

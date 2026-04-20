@@ -25,12 +25,16 @@ class FeedbackMessage extends Model
         'reply_message',
         'replied_by',
         'replied_at',
+        'last_escalated_at',
+        'escalation_count',
     ];
 
     protected $casts = [
         'read_at' => 'datetime',
         'replied_at' => 'datetime',
+        'last_escalated_at' => 'datetime',
         'is_replied' => 'boolean',
+        'escalation_count' => 'integer',
     ];
 
     public function sender(): BelongsTo
@@ -56,5 +60,10 @@ class FeedbackMessage extends Model
     public function replies(): HasMany
     {
         return $this->hasMany(FeedbackReply::class)->latest('id');
+    }
+
+    public function escalations(): HasMany
+    {
+        return $this->hasMany(FeedbackEscalation::class)->latest('escalated_at');
     }
 }

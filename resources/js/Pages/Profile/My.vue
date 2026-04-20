@@ -124,6 +124,28 @@ const employmentTypeLabel = computed(() => ({
   collaborator: 'Cộng tác viên',
 }[props.profile.employment_type] || props.profile.employment_type))
 
+const currentShiftLabel = computed(() => {
+  const shift = props.profile.current_shift
+  if (!shift) return 'Chua duoc phan ca'
+
+  const timeRange = shift.start_time && shift.end_time
+    ? `${shift.start_time} - ${shift.end_time}${shift.is_overnight ? ' (+1)' : ''}`
+    : 'Chua co khung gio'
+
+  return `${shift.shift_name} | ${timeRange}`
+})
+
+const currentShiftHint = computed(() => {
+  const shift = props.profile.current_shift
+  if (!shift) return 'Hien tai chua co ca lam ap dung cho tai khoan nay.'
+
+  if (shift.source === 'assignment') {
+    return `Dang lay theo phan ca${shift.effective_from ? ` tu ${shift.effective_from}` : ''}${shift.effective_to ? ` den ${shift.effective_to}` : ''}.`
+  }
+
+  return 'Dang hien theo ca mac dinh trong ho so nhan vien.'
+})
+
 function formatCurrency(value) {
   if (!value) return '-'
   return `${new Intl.NumberFormat('vi-VN').format(Number(value))} VND`
@@ -270,6 +292,11 @@ const triggerAvatarUpload = () => {
               <span class="font-medium">Chức vụ</span>
               <span class="font-semibold text-gray-900">{{ profile.position || '-' }}</span>
             </div>
+            <div class="py-2 text-sm text-gray-600">
+              <div class="font-medium">Ca lam hien tai</div>
+              <div class="mt-1 font-semibold text-gray-900">{{ currentShiftLabel }}</div>
+              <div class="mt-1 text-xs text-gray-500">{{ currentShiftHint }}</div>
+            </div>
           </div>
         </div>
 
@@ -351,6 +378,11 @@ const triggerAvatarUpload = () => {
               <div class="space-y-1 rounded-xl p-4 transition hover:bg-gray-50 border border-transparent hover:border-gray-100 md:col-span-2">
                  <div class="text-xs font-bold uppercase tracking-wider text-gray-400">Địa chỉ hiện tại</div>
                  <div class="text-base font-semibold text-gray-900">{{ profile.full_address || 'Chưa cập nhật' }}</div>
+              </div>
+              <div class="space-y-2 rounded-xl border border-blue-100 bg-blue-50 p-4 md:col-span-2">
+                 <div class="text-xs font-bold uppercase tracking-wider text-blue-500">Ca lam dang ap dung</div>
+                 <div class="text-base font-semibold text-blue-900">{{ currentShiftLabel }}</div>
+                 <div class="text-sm text-blue-700">{{ currentShiftHint }}</div>
               </div>
             </div>
             <div class="pt-4 mt-4 border-t border-gray-100">

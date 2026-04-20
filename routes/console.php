@@ -5,8 +5,10 @@ use Illuminate\Support\Facades\Artisan;
 use App\Models\Position;
 use App\Models\PositionCapability as PositionCapabilityModel;
 use App\Services\AttendanceService;
+use App\Services\FeedbackEscalationService;
 use App\Support\PositionRoleResolver;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -68,3 +70,13 @@ Artisan::command('positions:sync-capabilities-pivot {--dry-run}', function () {
     $this->info("Checked: {$checked}");
     $this->info($dryRun ? 'Dry-run: no data changed.' : "Updated: {$updated}");
 })->purpose('Sync position capability pivot from positions.capabilities JSON');
+
+Artisan::command('feedbacks:escalate-stale {--hours=}', function () {
+    $configuredHours = (int) config('feedback.escalation_hours', 24);
+    $hours = max(1, (int) ($this->option('hours') ?: $configuredHours));
+    $count = app(FeedbackEscalationService::class)->escalateStaleFeedbacks($hours);
+
+    $this->info("Escalated {$count} stale feedback message(s) older than {$hours} hour(s).");
+})->purpose('Escalate unreplied feedback messages to the next superior level after a timeout');
+
+Schedule::command('feedbacks:escalate-stale')->hourly();

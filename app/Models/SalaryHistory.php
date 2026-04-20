@@ -19,4 +19,10 @@ class SalaryHistory extends Model
         'approved_by',
         'note',
     ];
+
+    protected $casts = [
+        'old_salary' => 'decimal:2',
+        'new_salary' => 'decimal:2',
+        'effective_date' => 'date',
+    ];
 }

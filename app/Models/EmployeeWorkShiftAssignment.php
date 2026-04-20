@@ -17,6 +17,7 @@ class EmployeeWorkShiftAssignment extends Model
         'work_shift_id',
         'effective_from',
         'effective_to',
+        'weekdays',
         'is_active',
         'note',
         'created_by',
@@ -25,6 +26,7 @@ class EmployeeWorkShiftAssignment extends Model
     protected $casts = [
         'effective_from' => 'date',
         'effective_to' => 'date',
+        'weekdays' => 'array',
         'is_active' => 'boolean',
     ];
 

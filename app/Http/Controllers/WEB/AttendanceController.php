@@ -30,7 +30,7 @@ class AttendanceController extends Controller
 
     public function approvals(Request $request): Response
     {
-        return Inertia::render('Attendance/Approvals', $this->attendanceService->getApprovalsData($request->all()));
+        return Inertia::render('Attendance/Approvals', $this->attendanceService->getApprovalsData($request->all(), $request->user()));
     }
 
     public function reports(Request $request): Response
