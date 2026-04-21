@@ -93,11 +93,39 @@
 
         <div v-if="requestForm.request_type === 'leave'">
           <label class="mb-2 block text-sm font-medium text-gray-700">Loai nghi</label>
-          <select v-model="requestForm.leave_type" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-            <option value="paid">Nghi phep</option>
-            <option value="unpaid">Nghi khong phep</option>
+          <select v-model="requestForm.leave_type_id" class="w-full rounded-lg border border-gray-300 px-3 py-2">
+            <option value="">Chon loai nghi</option>
+            <option v-for="type in leave_types" :key="type.id" :value="type.id">
+              {{ type.name }} - {{ type.is_paid ? 'co luong' : 'khong luong' }}
+            </option>
           </select>
-          <p v-if="requestForm.errors.leave_type" class="mt-1 text-sm text-red-500">{{ requestForm.errors.leave_type }}</p>
+          <p v-if="selectedLeaveType" class="mt-1 text-xs text-gray-500">
+            {{ selectedLeaveType.deducts_balance ? `Con lai: ${formatWorkUnits(selectedLeaveAvailableDays)} ngay` : 'Loai nghi nay khong tru quy phep.' }}
+          </p>
+          <p v-if="requestForm.errors.leave_type_id || requestForm.errors.leave_type" class="mt-1 text-sm text-red-500">{{ requestForm.errors.leave_type_id || requestForm.errors.leave_type }}</p>
+        </div>
+
+        <div v-if="requestForm.request_type === 'leave'">
+          <label class="mb-2 block text-sm font-medium text-gray-700">Thoi luong nghi</label>
+          <select v-model="requestForm.leave_duration_type" class="w-full rounded-lg border border-gray-300 px-3 py-2">
+            <option value="full_day">Ca ngay</option>
+            <option value="half_day">Nua ngay</option>
+            <option value="hourly">Theo gio</option>
+          </select>
+          <p v-if="requestForm.errors.leave_duration_type" class="mt-1 text-sm text-red-500">{{ requestForm.errors.leave_duration_type }}</p>
+        </div>
+
+        <div v-if="requestForm.request_type === 'leave' && requestForm.leave_duration_type === 'hourly'">
+          <label class="mb-2 block text-sm font-medium text-gray-700">So gio nghi</label>
+          <input v-model.number="requestForm.leave_hours" class="w-full rounded-lg border border-gray-300 px-3 py-2" type="number" min="0.5" max="24" step="0.5">
+          <p v-if="requestForm.errors.leave_hours" class="mt-1 text-sm text-red-500">{{ requestForm.errors.leave_hours }}</p>
+        </div>
+
+        <div v-if="showLeaveAttachmentField">
+          <label class="mb-2 block text-sm font-medium text-gray-700">Minh chung</label>
+          <input ref="attachmentInput" class="w-full rounded-lg border border-gray-300 px-3 py-2" type="file" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx" @change="setAttachment">
+          <p v-if="selectedLeaveType?.requires_attachment" class="mt-1 text-xs text-amber-700">Loai nghi nay bat buoc co minh chung.</p>
+          <p v-if="requestForm.errors.attachment" class="mt-1 text-sm text-red-500">{{ requestForm.errors.attachment }}</p>
         </div>
 
         <div v-if="requestForm.request_type === 'late_early'">
@@ -235,7 +263,7 @@
         <p class="mt-1 text-sm text-gray-500">Theo doi cac don ban da gui va trang thai duyet hien tai.</p>
       </div>
 
-      <DataTable :columns="requestColumns" :data="recent_requests" empty-message="Ban chua gui don cham cong nao.">
+      <DataTable :columns="requestColumns" :data="recent_requests" :actions="requestActions" empty-message="Ban chua gui don cham cong nao.">
         <template #cell-request_type_label="{ item }">
           {{ item.request_type_label || requestTypeLabel(item.request_type) }}
         </template>
@@ -252,16 +280,88 @@
         </template>
       </DataTable>
     </div>
+
+    <Modal :show="!!selectedSubmittedRequest" @close="closeSubmittedRequestDetail">
+      <div v-if="selectedSubmittedRequest" class="p-6">
+        <h3 class="mb-4 text-lg font-semibold text-gray-900">Chi tiet don da gui</h3>
+        <div class="grid grid-cols-1 gap-3 text-sm text-gray-700 md:grid-cols-2">
+          <div><span class="font-medium text-gray-900">Loai don:</span> {{ selectedSubmittedRequest.request_type_label || '-' }}</div>
+          <div><span class="font-medium text-gray-900">Trang thai:</span> {{ selectedSubmittedRequest.status_label || '-' }}</div>
+          <div><span class="font-medium text-gray-900">Ngay ap dung:</span> {{ formatDate(selectedSubmittedRequest.request_date) }}</div>
+          <div><span class="font-medium text-gray-900">Khoang thoi gian:</span> {{ selectedSubmittedRequest.period || '-' }}</div>
+          <div><span class="font-medium text-gray-900">Gui luc:</span> {{ formatDateTime(selectedSubmittedRequest.submitted_at) }}</div>
+          <div><span class="font-medium text-gray-900">Nguoi duyet:</span> {{ selectedSubmittedRequest.reviewed_by_name || '-' }}</div>
+          <div><span class="font-medium text-gray-900">Duyet luc:</span> {{ formatDateTime(selectedSubmittedRequest.reviewed_at) }}</div>
+          <div class="md:col-span-2"><span class="font-medium text-gray-900">Ly do:</span> {{ selectedSubmittedRequest.reason || '-' }}</div>
+          <div class="md:col-span-2"><span class="font-medium text-gray-900">Ghi chu duyet:</span> {{ selectedSubmittedRequest.review_note || '-' }}</div>
+        </div>
+
+        <div v-if="selectedSubmittedRequest.target_type === 'attendance'" class="mt-4 rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
+          <div class="mb-2 font-semibold text-gray-900">Thong tin don nghi/cham cong</div>
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div><span class="font-medium text-gray-900">Tu ngay:</span> {{ formatDate(selectedSubmittedRequest.from_date) }}</div>
+            <div><span class="font-medium text-gray-900">Den ngay:</span> {{ formatDate(selectedSubmittedRequest.to_date) }}</div>
+            <div><span class="font-medium text-gray-900">Tu gio:</span> {{ selectedSubmittedRequest.from_time || '-' }}</div>
+            <div><span class="font-medium text-gray-900">Den gio:</span> {{ selectedSubmittedRequest.to_time || '-' }}</div>
+            <div><span class="font-medium text-gray-900">Loai nghi:</span> {{ selectedSubmittedRequest.leave_type_name || selectedSubmittedRequest.leave_type || '-' }}</div>
+            <div><span class="font-medium text-gray-900">Thoi luong:</span> {{ leaveDurationLabel(selectedSubmittedRequest) }}</div>
+            <div v-if="selectedSubmittedRequest.leave_days !== null && selectedSubmittedRequest.leave_days !== undefined">
+              <span class="font-medium text-gray-900">So ngay nghi:</span> {{ formatWorkUnits(selectedSubmittedRequest.leave_days) }} ngay
+            </div>
+            <div v-if="selectedSubmittedRequest.requested_status">
+              <span class="font-medium text-gray-900">Trang thai de nghi:</span> {{ selectedSubmittedRequest.requested_status }}
+            </div>
+          </div>
+
+          <div v-if="selectedSubmittedRequest.request_type === 'leave'" class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <div class="font-medium text-amber-900">Minh chung</div>
+            <div v-if="selectedSubmittedRequest.attachment_url" class="mt-1">
+              <a
+                :href="selectedSubmittedRequest.attachment_url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-sm font-semibold text-blue-700 underline underline-offset-2"
+              >
+                Xem tep dinh kem
+              </a>
+            </div>
+            <div v-else-if="selectedSubmittedRequest.leave_type_requires_attachment" class="mt-1 text-sm text-rose-700">
+              Loai nghi nay yeu cau minh chung nhung don hien khong co tep dinh kem.
+            </div>
+            <div v-else class="mt-1 text-sm text-gray-500">
+              Loai nghi nay khong yeu cau minh chung.
+            </div>
+          </div>
+        </div>
+
+        <div v-if="selectedSubmittedRequest.target_type === 'overtime'" class="mt-4 rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
+          <div class="mb-2 font-semibold text-gray-900">Thong tin tang ca</div>
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div><span class="font-medium text-gray-900">Bat dau:</span> {{ formatDateTime(selectedSubmittedRequest.overtime_start_at) }}</div>
+            <div><span class="font-medium text-gray-900">Ket thuc:</span> {{ formatDateTime(selectedSubmittedRequest.overtime_end_at) }}</div>
+            <div><span class="font-medium text-gray-900">Phut de nghi:</span> {{ formatMinutes(selectedSubmittedRequest.requested_minutes) }}</div>
+            <div><span class="font-medium text-gray-900">Phut duyet:</span> {{ formatMinutes(selectedSubmittedRequest.approved_minutes) }}</div>
+          </div>
+        </div>
+
+        <div class="mt-6 flex justify-end">
+          <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700" @click="closeSubmittedRequestDetail">
+            Dong
+          </button>
+        </div>
+      </div>
+    </Modal>
   </AdminLayout>
 </template>
 
 <script setup>
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import DataTable from '@/components/tables/DataTable.vue'
 import InputDate from '@/components/forms/InputDate.vue'
+import Modal from '@/components/ui/Modal.vue'
 
 const props = defineProps({
   filters: { type: Object, required: true },
@@ -270,9 +370,13 @@ const props = defineProps({
   request_types: { type: Array, default: () => [] },
   recent_requests: { type: Array, default: () => [] },
   overtime_catalog: { type: Object, default: () => ({}) },
+  leave_types: { type: Array, default: () => [] },
+  leave_balances: { type: Array, default: () => [] },
 })
 
 const page = usePage()
+const attachmentInput = ref(null)
+const selectedSubmittedRequest = ref(null)
 
 const filterForm = reactive({
   month: Number(props.filters.month),
@@ -289,7 +393,11 @@ const requestForm = useForm({
   to_date: '',
   from_time: '',
   to_time: '',
+  leave_type_id: '',
   leave_type: 'paid',
+  leave_duration_type: 'full_day',
+  leave_hours: '',
+  attachment: null,
   requested_status: 'late',
   start_at: '',
   end_at: '',
@@ -320,6 +428,17 @@ const requestColumns = [
   { label: 'Gui luc', key: 'submitted_at' },
 ]
 
+const requestActions = [
+  {
+    label: 'Chi tiet',
+    buttonProps: {
+      title: 'Xem chi tiet don da gui',
+      class: 'border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 shadow-sm hover:border-blue-300 hover:bg-blue-100 hover:text-blue-800',
+    },
+    onClick: (item) => openSubmittedRequestDetail(item),
+  },
+]
+
 const summaryCards = computed(() => [
   { label: 'Ngay cong hop le', value: formatWorkUnits(props.summary.approved_work_units ?? props.summary.total_work_units ?? 0) },
   { label: 'Ngay can xu ly', value: props.summary.action_required_records ?? props.summary.pending_records ?? 0 },
@@ -339,16 +458,28 @@ const currentPeriodLabel = computed(() => {
 
 const formError = computed(() => requestForm.errors.error || page.props.errors?.error || '')
 const overtimeCatalog = computed(() => props.overtime_catalog || {})
+const selectedLeaveType = computed(() => (props.leave_types || []).find((type) => Number(type.id) === Number(requestForm.leave_type_id)) || null)
+const selectedLeaveBalance = computed(() => (props.leave_balances || []).find((balance) => Number(balance.leave_type_id) === Number(requestForm.leave_type_id)) || null)
+const selectedLeaveAvailableDays = computed(() => selectedLeaveBalance.value?.available_days ?? selectedLeaveType.value?.annual_quota ?? 0)
+const showLeaveAttachmentField = computed(() => requestForm.request_type === 'leave' && Boolean(selectedLeaveType.value?.requires_attachment))
 const overtimeWindowLabel = computed(() => {
   if (!overtimeCatalog.value.start_time || !overtimeCatalog.value.end_time) return 'Chua cau hinh'
   return `${overtimeCatalog.value.start_time} - ${overtimeCatalog.value.end_time}`
 })
 const showSingleDate = computed(() => ['forgot_check', 'late_early', 'make_up'].includes(requestForm.request_type))
 const showDateRange = computed(() => ['leave', 'business_trip'].includes(requestForm.request_type))
-const showTimeRange = computed(() => ['late_early', 'make_up'].includes(requestForm.request_type))
+const showTimeRange = computed(() => ['forgot_check', 'late_early', 'make_up'].includes(requestForm.request_type))
 const singleDateLabel = computed(() => requestForm.request_type === 'forgot_check' ? 'Ngay quen cham cong' : 'Ngay ap dung')
-const fromTimeLabel = computed(() => requestForm.request_type === 'make_up' ? 'Bat dau lam bu' : 'Tu gio')
-const toTimeLabel = computed(() => requestForm.request_type === 'make_up' ? 'Ket thuc lam bu' : 'Den gio')
+const fromTimeLabel = computed(() => {
+  if (requestForm.request_type === 'make_up') return 'Bat dau lam bu'
+  if (requestForm.request_type === 'forgot_check') return 'Gio check-in neu quen'
+  return 'Tu gio'
+})
+const toTimeLabel = computed(() => {
+  if (requestForm.request_type === 'make_up') return 'Ket thuc lam bu'
+  if (requestForm.request_type === 'forgot_check') return 'Gio check-out neu quen'
+  return 'Den gio'
+})
 
 const datePickerConfig = {
   allowInput: false,
@@ -402,6 +533,13 @@ watch(() => requestForm.request_type, (type) => {
   requestForm.to_date = ''
   requestForm.from_time = ''
   requestForm.to_time = ''
+  requestForm.leave_type_id = ''
+  requestForm.leave_duration_type = 'full_day'
+  requestForm.leave_hours = ''
+  requestForm.attachment = null
+  if (attachmentInput.value) {
+    attachmentInput.value.value = ''
+  }
   requestForm.start_at = ''
   requestForm.end_at = ''
 
@@ -415,6 +553,13 @@ watch(() => requestForm.request_type, (type) => {
 
   if (type === 'overtime') {
     requestForm.request_date = overtimeCatalog.value.work_date || new Date().toISOString().slice(0, 10)
+  }
+})
+
+watch(() => requestForm.leave_type_id, () => {
+  requestForm.attachment = null
+  if (attachmentInput.value) {
+    attachmentInput.value.value = ''
   }
 })
 
@@ -493,10 +638,26 @@ function parsePeriodValue(value) {
 }
 
 function submitAttendanceRequest() {
+  if (requestForm.request_type === 'leave' && selectedLeaveType.value) {
+    requestForm.leave_type = selectedLeaveType.value.is_paid ? 'paid' : 'unpaid'
+  }
+
   requestForm.post(route('attendance.requests.store'), {
     preserveScroll: true,
     onSuccess: () => requestForm.reset(),
   })
+}
+
+function setAttachment(event) {
+  requestForm.attachment = event.target.files?.[0] || null
+}
+
+function openSubmittedRequestDetail(item) {
+  selectedSubmittedRequest.value = item
+}
+
+function closeSubmittedRequestDetail() {
+  selectedSubmittedRequest.value = null
 }
 
 function formatDate(value) {
@@ -522,6 +683,17 @@ function formatMinutes(value) {
 function formatWorkUnits(value) {
   const units = Number(value) || 0
   return Number.isInteger(units) ? `${units}` : units.toFixed(1)
+}
+
+function leaveDurationLabel(item) {
+  if (!item?.leave_duration_type) return '-'
+  if (item.leave_duration_type === 'full_day') return 'Ca ngay'
+  if (item.leave_duration_type === 'half_day') return 'Nua ngay'
+  if (item.leave_duration_type === 'hourly') {
+    return `Theo gio${item.leave_hours ? ` (${formatWorkUnits(item.leave_hours)} gio)` : ''}`
+  }
+
+  return item.leave_duration_type
 }
 
 function hasMissingCheck(item) {

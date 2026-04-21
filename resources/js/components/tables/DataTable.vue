@@ -103,16 +103,16 @@
                     <Tooltip v-else-if="action.buttonProps?.title" :text="action.buttonProps.title">
                       <button type="button" v-bind="filteredButtonProps(action.buttonProps)"
                         @click="action.onClick?.(item)"
-                        class="inline-flex items-center justify-center rounded-md p-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                        :class="actionButtonClass(action)">
                         <component :is="typeof action.icon === 'function' ? action.icon(item) : action.icon"
                           class="w-5 h-5" v-if="action.icon" />
                         <span v-if="action.label" class="ml-1 text-xs">{{ action.label }}</span>
                       </button>
                     </Tooltip>
 
-                    <button v-else type="button" v-bind="action.buttonProps || {}" @click="action.onClick?.(item)"
+                    <button v-else type="button" v-bind="filteredButtonProps(action.buttonProps)" @click="action.onClick?.(item)"
                       :title="action.buttonProps?.title || ''"
-                      class="inline-flex items-center justify-center rounded-md p-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                      :class="actionButtonClass(action)">
                       <component :is="typeof action.icon === 'function' ? action.icon(item) : action.icon"
                         class="w-5 h-5" v-if="action.icon" />
                       <span v-if="action.label" class="ml-1 text-xs">{{ action.label }}</span>
@@ -236,9 +236,14 @@ const tableData = computed(() => props.data)
 
 const filteredButtonProps = (props) => {
   if (!props) return {}
-  const { title, ...rest } = props
+  const { title, class: _class, ...rest } = props
   return rest
 }
+
+const actionButtonClass = (action) => [
+  'inline-flex items-center justify-center rounded-md p-2 text-gray-600 transition-colors hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400',
+  action.buttonProps?.class,
+]
 
 const totalColumns = computed(() => {
   let count = props.columns.length

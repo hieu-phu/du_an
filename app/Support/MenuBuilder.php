@@ -32,6 +32,9 @@ class MenuBuilder
                     $can(PositionCapability::VIEW_OWN_SALARY)
                         ? self::item('Bang luong ca nhan', '/my-salary', 'MoneyIcon')
                         : null,
+                    $can(PositionCapability::VIEW_ALL_SALARY)
+                        ? self::item('Bang luong cong ty', '/salary/company', 'MoneyIcon2')
+                        : null,
                 ])),
             ],
             [
@@ -60,11 +63,17 @@ class MenuBuilder
                     $can(PositionCapability::APPROVE_ATTENDANCE)
                         ? self::item('Duyet cong', '/attendance/approvals', 'CheckCircleIcon')
                         : null,
+                    $can(PositionCapability::APPROVE_LEAVE)
+                        ? self::item('Duyet nghi phep', '/leave/approvals', 'CheckCircleIcon')
+                        : null,
                     $can(PositionCapability::APPROVE_ATTENDANCE)
                         ? self::item('Duyet dieu chinh cong', '/attendance/adjustments/approvals', 'ListCheckIcon')
                         : null,
                     $can(PositionCapability::APPROVE_ATTENDANCE)
                         ? self::item('Danh muc cham cong', '/attendance/catalogs', 'Calendar2Line')
+                        : null,
+                    $can(PositionCapability::MANAGE_LEAVE_POLICY)
+                        ? self::item('Quan ly nghi phep', '/leave-management', 'Calendar2Line')
                         : null,
                 ])),
             ],

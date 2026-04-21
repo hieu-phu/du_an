@@ -39,6 +39,22 @@
             </button>
           </div>
         </div>
+
+        <div
+          v-if="periodStatus"
+          class="mt-4 rounded-2xl px-4 py-3 text-sm"
+          :class="periodStatus.is_locked ? 'border border-amber-200 bg-amber-50 text-amber-800' : 'border border-blue-200 bg-blue-50 text-blue-800'"
+        >
+          <div class="font-semibold">{{ periodStatus.status_label }}</div>
+          <div class="mt-1">
+            <template v-if="periodStatus.is_locked">
+              Snapshot khoa luc {{ formatDateTime(periodStatus.locked_at) }} boi {{ periodStatus.locked_by_name || 'He thong' }}.
+            </template>
+            <template v-else>
+              Ky luong hien dang o trang thai tinh dong, du lieu se cap nhat theo cham cong va dieu chinh moi nhat.
+            </template>
+          </div>
+        </div>
       </section>
 
       <section class="grid grid-cols-1 gap-4 lg:grid-cols-4">
@@ -56,9 +72,13 @@
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:col-span-3 xl:grid-cols-4">
           <SummaryCard label="Luong co ban" :value="formatCurrency(summary.base_salary)" />
           <SummaryCard label="Cong duyet" :value="`${formatNumber(summary.approved_work_units)} / ${formatNumber(summary.expected_work_days)}`" />
-          <SummaryCard label="Tang ca duyet" :value="formatMinutes(summary.approved_overtime_minutes)" />
-          <SummaryCard label="Thuc linh tam tinh" :value="formatCurrency(summary.net_amount)" tone="green" />
+          <SummaryCard label="Thu nhap phat sinh" :value="formatCurrency(summary.gross_amount)" />
+          <SummaryCard label="So du sau doi tru" :value="formatCurrency(summary.net_amount)" tone="green" />
         </div>
+      </section>
+
+      <section class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 shadow-theme-sm">
+        Thu nhap theo cong la tien cua cong da lam va da duyet. "Khau tru do thieu cong" la phan thu nhap khong duoc huong do chua du cong chuan trong ky dang tinh.
       </section>
 
       <section v-if="showPayslip" id="payslip-print" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-theme-sm">
@@ -70,7 +90,7 @@
               <p class="mt-1 text-sm text-slate-300">Ky luong: {{ payslipPeriod }}</p>
             </div>
             <div class="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-right">
-              <div class="text-xs uppercase tracking-wide text-slate-300">Thuc linh tam tinh</div>
+              <div class="text-xs uppercase tracking-wide text-slate-300">So du sau doi tru</div>
               <div class="mt-1 text-2xl font-bold text-emerald-300">{{ formatCurrency(summary.net_amount) }}</div>
             </div>
           </div>
@@ -92,9 +112,10 @@
             <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Thu nhap</h3>
             <div class="mt-4 space-y-3">
               <PayslipLine label="Luong co ban" :value="formatCurrency(summary.base_salary)" />
-              <PayslipLine label="Luong theo cong duyet" :value="formatCurrency(summary.base_salary_amount)" />
+              <PayslipLine label="Thu nhap theo cong duyet" :value="formatCurrency(summary.base_salary_amount)" />
               <PayslipLine label="Tien tang ca" :value="formatCurrency(summary.overtime_amount)" />
-              <PayslipLine label="Tong thu nhap" :value="formatCurrency(summary.gross_amount)" strong />
+              <PayslipLine label="Phu cap" :value="formatCurrency(summary.allowance_amount)" />
+              <PayslipLine label="Tong thu nhap phat sinh" :value="formatCurrency(summary.gross_amount)" strong />
             </div>
           </div>
 
@@ -104,7 +125,8 @@
               <PayslipLine label="Cong duyet" :value="`${formatNumber(summary.approved_work_units)} / ${formatNumber(summary.expected_work_days)}`" />
               <PayslipLine label="Tang ca duyet" :value="formatMinutes(summary.approved_overtime_minutes)" />
               <PayslipLine label="Tien cho duyet" :value="formatCurrency(summary.pending_amount)" />
-              <PayslipLine label="Tam tru chua tinh" :value="formatCurrency(summary.deduction_amount)" danger />
+              <PayslipLine label="Khau tru do thieu cong" :value="formatCurrency(summary.attendance_deduction_amount)" danger />
+              <PayslipLine label="Khau tru khac tam tinh" :value="formatCurrency(summary.manual_deduction_amount)" danger />
             </div>
           </div>
         </div>
@@ -120,7 +142,7 @@
               <div class="mt-1 font-semibold text-slate-900">{{ formatCurrency(summary.hourly_rate) }}</div>
             </div>
             <div class="rounded-xl bg-white p-4 shadow-sm">
-              <div class="text-slate-500">Thuc linh</div>
+              <div class="text-slate-500">So du sau doi tru</div>
               <div class="mt-1 text-2xl font-bold text-emerald-700">{{ formatCurrency(summary.net_amount) }}</div>
             </div>
           </div>
@@ -144,13 +166,23 @@
         <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           <BreakdownItem label="Don gia ngay" :value="formatCurrency(summary.daily_rate)" />
           <BreakdownItem label="Don gia gio" :value="formatCurrency(summary.hourly_rate)" />
-          <BreakdownItem label="Luong theo cong duyet" :value="formatCurrency(summary.base_salary_amount)" />
+          <BreakdownItem label="Thu nhap theo cong duyet" :value="formatCurrency(summary.base_salary_amount)" />
           <BreakdownItem label="Tien tang ca" :value="formatCurrency(summary.overtime_amount)" />
+          <BreakdownItem label="Phu cap" :value="formatCurrency(summary.allowance_amount)" />
+          <BreakdownItem label="Tong thu nhap phat sinh" :value="formatCurrency(summary.gross_amount)" />
           <BreakdownItem label="Cong cho duyet" :value="formatNumber(summary.pending_work_units)" />
           <BreakdownItem label="Tien cho duyet" :value="formatCurrency(summary.pending_amount)" />
           <BreakdownItem label="Cong chua tinh" :value="formatNumber(summary.unpaid_work_units)" />
-          <BreakdownItem label="Tam tru chua tinh" :value="formatCurrency(summary.deduction_amount)" tone="red" />
+          <BreakdownItem label="Khau tru do thieu cong" :value="formatCurrency(summary.attendance_deduction_amount)" tone="red" />
+          <BreakdownItem label="Khau tru khac tam tinh" :value="formatCurrency(summary.manual_deduction_amount)" tone="red" />
         </div>
+      </section>
+
+      <section v-if="summary.warnings?.length" class="rounded-xl border border-amber-200 bg-amber-50 p-6 shadow-theme-sm">
+        <h3 class="text-lg font-semibold text-amber-900">Canh bao du lieu</h3>
+        <ul class="mt-3 space-y-2 text-sm text-amber-800">
+          <li v-for="warning in summary.warnings" :key="warning">{{ warning }}</li>
+        </ul>
       </section>
 
       <section class="rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
@@ -187,7 +219,10 @@
                   <div>{{ formatMinutes(item.overtime_minutes) }}</div>
                   <div class="text-xs text-gray-500">{{ item.overtime_type_label || '-' }}</div>
                 </td>
-                <td class="p-2">{{ formatMultiplier(item.overtime_multiplier) }}</td>
+                <td class="p-2">
+                  <div class="font-medium text-gray-900">{{ formatMultiplier(item.overtime_multiplier) }}</div>
+                  <div class="text-xs text-gray-500">{{ overtimeRateLabel(item) }}</div>
+                </td>
                 <td class="p-2 font-medium text-gray-900">{{ formatCurrency(item.overtime_amount) }}</td>
                 <td class="p-2">{{ dayStatusLabel(item.day_status, item.attendance_status) }}</td>
                 <td class="p-2">
@@ -248,6 +283,7 @@ const props = defineProps({
   summary: { type: Object, required: true },
   records: { type: Array, default: () => [] },
   salaryHistory: { type: Array, default: () => [] },
+  periodStatus: { type: Object, default: null },
 })
 
 const filterForm = reactive({
@@ -394,10 +430,28 @@ function formatMultiplier(value) {
   return amount > 0 ? `${amount.toFixed(1)}x` : '-'
 }
 
+function overtimeRateLabel(item) {
+  if (Number(item.overtime_hourly_rate || 0) > 0) {
+    return `Don gia danh muc: ${formatCurrency(item.overtime_hourly_rate)}/gio`
+  }
+
+  if (Number(item.overtime_multiplier || 0) > 0) {
+    return `Theo ${item.overtime_type_label || 'loai ngay'}`
+  }
+
+  return '-'
+}
+
 function formatDate(value) {
   if (!value) return '-'
   const [year, month, day] = String(value).slice(0, 10).split('-')
   return `${day}/${month}/${year}`
+}
+
+function formatDateTime(value) {
+  if (!value) return '-'
+  const [date, time] = String(value).split(' ')
+  return `${formatDate(date)} ${time || ''}`.trim()
 }
 
 function formatMinutes(minutes) {

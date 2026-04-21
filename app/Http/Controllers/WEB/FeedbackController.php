@@ -29,6 +29,8 @@ class FeedbackController extends Controller
 
     public function index(Request $request): Response
     {
+        $this->feedbackEscalationService->triggerAutoEscalationSweep();
+
         $user = $request->user();
         $status = $request->input('status');
         $processingState = $request->input('processing_state');
@@ -75,12 +77,12 @@ class FeedbackController extends Controller
         }
 
         $sentMapped = $sent
-            ->map(fn (FeedbackMessage $item) => $this->mapFeedback($item))
+            ->map(fn (FeedbackMessage $item) => $this->mapFeedback($item, $user))
             ->values()
             ->all();
 
         $inboxMapped = collect($inbox)
-            ->map(fn (FeedbackMessage $item) => $this->mapFeedback($item))
+            ->map(fn (FeedbackMessage $item) => $this->mapFeedback($item, $user))
             ->values()
             ->all();
 
@@ -129,22 +131,24 @@ class FeedbackController extends Controller
                 ['value' => 'archived', 'label' => 'Da luu'],
             ],
             'processingOptions' => [
-                ['value' => 'unprocessed', 'label' => 'Chua xu ly'],
-                ['value' => 'processed', 'label' => 'Da xu ly'],
+                ['value' => 'unprocessed', 'label' => 'Chua duoc phan hoi'],
+                ['value' => 'processed', 'label' => 'Da duoc phan hoi'],
             ],
             'summary' => [
                 'sent_total' => $sent->count(),
-                'sent_unprocessed' => $sent->where('is_replied', false)->count(),
-                'sent_processed' => $sent->where('is_replied', true)->count(),
+                'sent_unprocessed' => $sent->filter(fn (FeedbackMessage $item) => !$this->hasRecipientReply($item))->count(),
+                'sent_processed' => $sent->filter(fn (FeedbackMessage $item) => $this->hasRecipientReply($item))->count(),
                 'inbox_total' => collect($inbox)->count(),
-                'inbox_unprocessed' => collect($inbox)->where('is_replied', false)->count(),
-                'inbox_processed' => collect($inbox)->where('is_replied', true)->count(),
+                'inbox_unprocessed' => collect($inbox)->filter(fn (FeedbackMessage $item) => !$this->hasRecipientReply($item))->count(),
+                'inbox_processed' => collect($inbox)->filter(fn (FeedbackMessage $item) => $this->hasRecipientReply($item))->count(),
             ],
         ]);
     }
 
     public function store(Request $request)
     {
+        $this->feedbackEscalationService->triggerAutoEscalationSweep();
+
         $user = $request->user();
 
         $validated = $request->validate([
@@ -172,6 +176,8 @@ class FeedbackController extends Controller
             'subject' => $validated['subject'],
             'message' => $validated['message'],
             'status' => 'sent',
+            'conversation_status' => 'waiting_handler',
+            'waiting_for' => 'handler',
         ]);
 
         $recipients = $this->feedbackEscalationService->recipientsForPosition($receiverPosition, $user);
@@ -211,12 +217,17 @@ class FeedbackController extends Controller
 
     public function reply(Request $request, FeedbackMessage $feedbackMessage)
     {
+        $this->feedbackEscalationService->triggerAutoEscalationSweep();
+
         $user = $request->user();
         abort_unless($this->canReplyFeedback($user, $feedbackMessage), 403);
+
+        $isSenderReply = $feedbackMessage->sender_id === $user->id;
 
         $validated = $request->validate([
             'reply_message' => ['required', 'string', 'max:5000'],
             'status' => ['nullable', 'in:sent,read,archived'],
+            'conversation_status' => [$isSenderReply ? 'nullable' : 'required', 'in:waiting_sender,resolved'],
         ]);
 
         FeedbackReply::query()->create([
@@ -224,8 +235,6 @@ class FeedbackController extends Controller
             'replied_by' => $user->id,
             'message' => $validated['reply_message'],
         ]);
-
-        $isSenderReply = $feedbackMessage->sender_id === $user->id;
 
         $feedbackMessage->update(
             $isSenderReply
@@ -235,6 +244,10 @@ class FeedbackController extends Controller
                     'replied_at' => now(),
                     'is_replied' => false,
                     'status' => $validated['status'] ?? 'sent',
+                    'conversation_status' => 'waiting_handler',
+                    'waiting_for' => 'handler',
+                    'resolved_at' => null,
+                    'closed_at' => null,
                     'read_at' => null,
                 ]
                 : [
@@ -243,6 +256,10 @@ class FeedbackController extends Controller
                     'replied_at' => now(),
                     'is_replied' => true,
                     'status' => $validated['status'] ?? 'read',
+                    'conversation_status' => $validated['conversation_status'],
+                    'waiting_for' => $validated['conversation_status'] === 'waiting_sender' ? 'sender' : null,
+                    'resolved_at' => $validated['conversation_status'] === 'resolved' ? now() : null,
+                    'closed_at' => null,
                     'read_at' => $feedbackMessage->read_at ?: now(),
                 ]
         );
@@ -258,6 +275,8 @@ class FeedbackController extends Controller
 
     public function markRead(Request $request, FeedbackMessage $feedbackMessage)
     {
+        $this->feedbackEscalationService->triggerAutoEscalationSweep();
+
         $user = $request->user();
         abort_unless($this->canReadFeedback($user, $feedbackMessage), 403);
 
@@ -296,19 +315,20 @@ class FeedbackController extends Controller
     private function canReplyFeedback(User $user, FeedbackMessage $feedbackMessage): bool
     {
         if ($feedbackMessage->sender_id === $user->id) {
-            return true;
+            return $this->canSenderReply($feedbackMessage);
         }
 
         if ($feedbackMessage->receiver_id) {
-            return $feedbackMessage->receiver_id === $user->id;
+            return $feedbackMessage->receiver_id === $user->id && $this->canHandlerReply($feedbackMessage);
         }
 
         if ($feedbackMessage->receiver_position_id) {
-            return $this->feedbackEscalationService->canReplyFeedbackForPosition($user, (int) $feedbackMessage->receiver_position_id);
+            return $this->feedbackEscalationService->canReplyFeedbackForPosition($user, (int) $feedbackMessage->receiver_position_id)
+                && $this->canHandlerReply($feedbackMessage);
         }
 
         if (AccessMatrix::canReceiveFeedbackGroup($user, (string) $feedbackMessage->receiver_group)) {
-            return true;
+            return $this->canHandlerReply($feedbackMessage);
         }
 
         return false;
@@ -341,11 +361,15 @@ class FeedbackController extends Controller
     private function applyProcessingStateFilter(Builder $query, ?string $processingState): void
     {
         if ($processingState === 'processed') {
-            $query->where('is_replied', true);
+            $query->whereHas('replies', function (Builder $replyQuery): void {
+                $replyQuery->whereColumn('feedback_replies.replied_by', '!=', 'feedback_messages.sender_id');
+            });
         }
 
         if ($processingState === 'unprocessed') {
-            $query->where('is_replied', false);
+            $query->whereDoesntHave('replies', function (Builder $replyQuery): void {
+                $replyQuery->whereColumn('feedback_replies.replied_by', '!=', 'feedback_messages.sender_id');
+            });
         }
     }
 
@@ -387,8 +411,26 @@ class FeedbackController extends Controller
         }
     }
 
-    private function mapFeedback(FeedbackMessage $item): array
+    private function mapFeedback(FeedbackMessage $item, User $user): array
     {
+        $hasRecipientReply = $this->hasRecipientReply($item);
+        $actionState = $this->conversationState($item);
+        $waitingFor = $this->waitingFor($item);
+
+        // Check specific permissions for the current viewing user
+        $isSender = (int) $item->sender_id === (int) $user->id;
+        $isHandler = false;
+
+        if (!$isSender) {
+            if ($item->receiver_id) {
+                $isHandler = (int) $item->receiver_id === (int) $user->id;
+            } elseif ($item->receiver_position_id) {
+                $isHandler = $this->feedbackEscalationService->canReplyFeedbackForPosition($user, (int) $item->receiver_position_id);
+            } elseif ($item->receiver_group) {
+                $isHandler = AccessMatrix::canReceiveFeedbackGroup($user, (string) $item->receiver_group);
+            }
+        }
+
         return [
             'id' => $item->id,
             'subject' => $item->subject,
@@ -407,8 +449,19 @@ class FeedbackController extends Controller
                 'archived' => 'Da luu',
                 default => '-',
             },
-            'processing_state' => $item->is_replied ? 'processed' : 'unprocessed',
-            'processing_state_label' => $item->is_replied ? 'Da xu ly' : 'Chua xu ly',
+            'processing_state' => $hasRecipientReply ? 'processed' : 'unprocessed',
+            'processing_state_label' => $hasRecipientReply ? 'Da duoc phan hoi' : 'Chua duoc phan hoi',
+            'action_state' => $actionState,
+            'action_state_label' => match ($actionState) {
+                'waiting_handler' => 'Cho xu ly',
+                'waiting_sender' => 'Cho phan hoi tiep',
+                'resolved' => 'Da giai quyet',
+                'closed' => 'Da dong',
+                default => '-',
+            },
+            'waiting_for' => $waitingFor,
+            'can_sender_reply' => $isSender && $this->canSenderReply($item),
+            'can_handler_reply' => $isHandler && $this->canHandlerReply($item),
             'is_replied' => (bool) $item->is_replied,
             'escalation_count' => (int) ($item->escalation_count ?? 0),
             'last_escalated_at' => optional($item->last_escalated_at)->toDateTimeString(),
@@ -456,7 +509,71 @@ class FeedbackController extends Controller
             'created_at' => optional($item->created_at)->toDateTimeString(),
             'read_at' => optional($item->read_at)->toDateTimeString(),
             'replied_at' => optional($item->replied_at)->toDateTimeString(),
+            'resolved_at' => optional($item->resolved_at)->toDateTimeString(),
+            'closed_at' => optional($item->closed_at)->toDateTimeString(),
         ];
+    }
+
+    private function hasRecipientReply(FeedbackMessage $item): bool
+    {
+        return $item->replies->contains(
+            fn (FeedbackReply $reply) => (int) $reply->replied_by !== (int) $item->sender_id
+        );
+    }
+
+    private function latestReplyBySender(FeedbackMessage $item): bool
+    {
+        $latestReply = $item->replies->sortByDesc('id')->first();
+
+        if (!$latestReply) {
+            return true;
+        }
+
+        return (int) $latestReply->replied_by === (int) $item->sender_id;
+    }
+
+    private function conversationState(FeedbackMessage $item): string
+    {
+        $status = (string) ($item->conversation_status ?? '');
+
+        if (in_array($status, ['waiting_handler', 'waiting_sender', 'resolved', 'closed'], true)) {
+            return $status;
+        }
+
+        if ($item->closed_at) {
+            return 'closed';
+        }
+
+        if ($this->hasRecipientReply($item) && !$this->latestReplyBySender($item)) {
+            return 'resolved';
+        }
+
+        return 'waiting_handler';
+    }
+
+    private function waitingFor(FeedbackMessage $item): ?string
+    {
+        $waitingFor = (string) ($item->waiting_for ?? '');
+
+        if (in_array($waitingFor, ['handler', 'sender'], true)) {
+            return $waitingFor;
+        }
+
+        return match ($this->conversationState($item)) {
+            'waiting_sender' => 'sender',
+            'waiting_handler' => 'handler',
+            default => null,
+        };
+    }
+
+    private function canSenderReply(FeedbackMessage $item): bool
+    {
+        return $this->conversationState($item) === 'waiting_sender' && $this->waitingFor($item) === 'sender';
+    }
+
+    private function canHandlerReply(FeedbackMessage $item): bool
+    {
+        return $this->conversationState($item) === 'waiting_handler' && $this->waitingFor($item) === 'handler';
     }
 
     private function notifyFeedbackSender(FeedbackMessage $feedbackMessage, User $actor, string $replyMessage): void

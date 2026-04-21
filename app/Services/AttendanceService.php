@@ -14,6 +14,8 @@ use App\Models\AttendanceAdjustment;
 use App\Models\EmployeeProfile;
 use App\Models\EmployeeWorkShiftAssignment;
 use App\Models\ExportHistory;
+use App\Models\EmployeeLeaveBalance;
+use App\Models\LeaveType;
 use App\Models\OvertimeRequest;
 use App\Models\User;
 use App\Models\WorkShift;
@@ -38,7 +40,8 @@ class AttendanceService extends BaseService
 
     public function __construct(
         protected AttendanceRepository $attendanceRepository,
-        protected NotificationService $notificationService
+        protected NotificationService $notificationService,
+        protected LeaveManagementService $leaveService
     ) {}
 
     public function checkIn(int $employeeProfileId, ?string $ipAddress, ?string $userAgent): AttendanceRecord
@@ -171,13 +174,51 @@ class AttendanceService extends BaseService
         });
     }
 
-    public function confirmAttendance(AttendanceRecord $record, User $approver, ?string $note = null): AttendanceRecord
+    public function confirmAttendance(AttendanceRecord $record, User $approver, ?string $note = null, ?string $resolvedCheckOutTime = null): AttendanceRecord
     {
-        return $this->handleTransaction(function () use ($record, $approver, $note) {
+        return $this->handleTransaction(function () use ($record, $approver, $note, $resolvedCheckOutTime) {
             $record->loadMissing(['employeeProfile.user', 'employeeProfile.position', 'workShift']);
             $this->ensureReviewerOutranksEmployee($approver, $record->employeeProfile);
 
             $workDate = Carbon::parse($record->work_date, self::TIMEZONE)->toDateString();
+            if (!$record->check_out_at && $record->check_in_at && filled($resolvedCheckOutTime)) {
+                $resolvedCheckIn = Carbon::parse($record->check_in_at, self::TIMEZONE);
+                $resolvedCheckOut = $this->resolveTimeForRecordDate($record, $resolvedCheckOutTime);
+
+                if ($resolvedCheckOut->lessThanOrEqualTo($resolvedCheckIn)) {
+                    throw new \RuntimeException('Gio check-out bo sung phai sau gio check-in.');
+                }
+
+                [$attendanceStatus, $dayStatus, $workedMinutes, $lateMinutes, $earlyLeaveMinutes, $overtimeMinutes] =
+                    $this->previewAttendanceMetrics($record, $resolvedCheckIn, $resolvedCheckOut);
+
+                $record->forceFill([
+                    'check_out_at' => $resolvedCheckOut,
+                    'worked_minutes' => $workedMinutes,
+                    'late_minutes' => $lateMinutes,
+                    'early_leave_minutes' => $earlyLeaveMinutes,
+                    'overtime_minutes' => $overtimeMinutes,
+                    'missing_check_out' => false,
+                    'attendance_status' => $attendanceStatus,
+                    'day_status' => $dayStatus,
+                    'note' => trim(collect(array_filter([
+                        $record->note,
+                        'Admin resolved missing check-out at ' . $resolvedCheckOut->format('H:i'),
+                    ]))->implode(' | ')),
+                ])->save();
+
+                AttendanceEvent::query()->create([
+                    'attendance_record_id' => $record->id,
+                    'employee_profile_id' => $record->employee_profile_id,
+                    'event_type' => 'manual_update',
+                    'event_time' => $resolvedCheckOut,
+                    'note' => 'Admin resolved missing check-out before approval',
+                    'created_by' => $approver->id,
+                ]);
+
+                $record->refresh();
+            }
+
             $lateMinutes = $record->check_in_at
                 ? $this->determineLateMinutes(Carbon::parse($record->check_in_at, self::TIMEZONE), $record->workShift)
                 : (int) ($record->late_minutes ?? 0);
@@ -197,7 +238,7 @@ class AttendanceService extends BaseService
                     'confirmed_at' => null,
                 ]);
 
-                throw new \RuntimeException('Ban ghi di muon/ve som chi duoc duyet khi da co don cham cong duoc phe duyet.');
+                throw new \RuntimeException('Ban ghi thieu check-in/check-out, di muon hoac ve som chi duoc duyet khi da co don cham cong duoc phe duyet hoac admin bo sung gio ra hop le.');
             }
 
             if ($record->is_confirmed) {
@@ -299,6 +340,8 @@ class AttendanceService extends BaseService
             'request_types' => $this->attendanceRequestTypes(),
             'recent_requests' => $this->getMyRequestHistory($user),
             'overtime_catalog' => $profile ? $this->buildOvertimeCatalogPayload($profile, now(self::TIMEZONE)) : null,
+            'leave_types' => $this->leaveService->leaveTypeOptions(true),
+            'leave_balances' => $profile ? $this->getLeaveBalancePayload($profile, $year) : [],
         ];
     }
 
@@ -306,20 +349,28 @@ class AttendanceService extends BaseService
     {
         $viewer ??= $this->user();
         $sanitizedFilters = $this->sanitizeFilters($filters);
-        $query = $this->buildScopedQuery($sanitizedFilters, false, $viewer);
-        $this->applyReviewerVisibilityToRecordQuery($query, $viewer);
+        $onlyLeave = (bool) ($filters['only_leave'] ?? false);
+        $allRecords = collect();
+        $records = collect();
+        $reviewedRecords = collect();
 
-        $allRecords = $this->reconcileRecords($query->orderBy('work_date')->get());
-        $records = $allRecords
-            ->filter(fn (AttendanceRecord $record) => ($record->approval_status ?? 'pending') === 'pending' && !(bool) $record->is_confirmed)
-            ->values();
-        $reviewedRecords = $allRecords
-            ->filter(fn (AttendanceRecord $record) => in_array((string) ($record->approval_status ?? ''), ['approved', 'rejected'], true))
-            ->sortByDesc(fn (AttendanceRecord $record) => optional($record->confirmed_at ?? $record->rejected_at ?? $record->updated_at)->timestamp)
-            ->take(200)
-            ->values();
+        if (!$onlyLeave) {
+            $query = $this->buildScopedQuery($sanitizedFilters, false, $viewer);
+            $this->applyReviewerVisibilityToRecordQuery($query, $viewer);
+
+            $allRecords = $this->reconcileRecords($query->orderBy('work_date')->get());
+            $records = $allRecords
+                ->filter(fn (AttendanceRecord $record) => ($record->approval_status ?? 'pending') === 'pending' && !(bool) $record->is_confirmed)
+                ->values();
+            $reviewedRecords = $allRecords
+                ->filter(fn (AttendanceRecord $record) => in_array((string) ($record->approval_status ?? ''), ['approved', 'rejected'], true))
+                ->sortByDesc(fn (AttendanceRecord $record) => optional($record->confirmed_at ?? $record->rejected_at ?? $record->updated_at)->timestamp)
+                ->take(200)
+                ->values();
+        }
 
         return [
+            'approval_mode' => $onlyLeave ? 'leave' : 'attendance',
             'filters' => $this->buildFiltersPayload(
                 $sanitizedFilters['month'],
                 $sanitizedFilters['year'],
@@ -335,8 +386,8 @@ class AttendanceService extends BaseService
             'records' => $records->map(fn (AttendanceRecord $record) => $this->transformRecord($record))->values(),
             'reviewed_records' => $reviewedRecords->map(fn (AttendanceRecord $record) => $this->transformRecord($record))->values(),
             'employees' => $this->employeeOptionsForReviewer($viewer),
-            'request_approvals' => $this->getPendingApprovalRequests($sanitizedFilters, $viewer),
-            'reviewed_request_approvals' => $this->getReviewedApprovalRequests($sanitizedFilters, $viewer),
+            'request_approvals' => $this->getPendingApprovalRequests([...$sanitizedFilters, 'only_leave' => $onlyLeave], $viewer),
+            'reviewed_request_approvals' => $this->getReviewedApprovalRequests([...$sanitizedFilters, 'only_leave' => $onlyLeave], $viewer),
         ];
     }
 
@@ -528,6 +579,7 @@ class AttendanceService extends BaseService
                 'employee_profile_id' => $profile->id,
                 'approval_request_id' => $approvalRequest->id,
                 'request_type' => $requestType,
+                'leave_type_id' => $normalizedAttendance['leave_type_id'],
                 'status' => 'pending',
                 'request_date' => $normalizedAttendance['request_date'],
                 'from_date' => $normalizedAttendance['from_date'],
@@ -535,9 +587,27 @@ class AttendanceService extends BaseService
                 'from_time' => $normalizedAttendance['from_time'],
                 'to_time' => $normalizedAttendance['to_time'],
                 'leave_type' => $normalizedAttendance['leave_type'],
+                'leave_days' => $normalizedAttendance['leave_days'],
+                'leave_duration_type' => $normalizedAttendance['leave_duration_type'],
+                'leave_hours' => $normalizedAttendance['leave_hours'],
                 'requested_status' => $normalizedAttendance['requested_status'],
+                'attachment_path' => $normalizedAttendance['attachment_path'],
                 'reason' => $reason,
             ]);
+
+            if ($requestType === 'leave' && $normalizedAttendance['leave_type_id'] && (float) $normalizedAttendance['leave_days'] > 0) {
+                $leaveType = LeaveType::query()->find((int) $normalizedAttendance['leave_type_id']);
+                if ($leaveType) {
+                    $this->leaveService->reserveForRequest(
+                        $user,
+                        (int) $profile->id,
+                        $leaveType,
+                        (int) Carbon::parse((string) $normalizedAttendance['from_date'], self::TIMEZONE)->year,
+                        (int) $request->id,
+                        (float) $normalizedAttendance['leave_days']
+                    );
+                }
+            }
 
             $approvalRequest->update([
                 'target_type' => AttendanceRequest::class,
@@ -857,6 +927,14 @@ class AttendanceService extends BaseService
                 throw new \RuntimeException('Loại yêu cầu không hợp lệ.');
             }
 
+            if ($approvalRequest->request_type === 'leave') {
+                if (!$reviewer->hasPositionCapability(PositionCapability::APPROVE_LEAVE) && !$reviewer->hasPositionCapability(PositionCapability::APPROVE_ATTENDANCE)) {
+                    throw new \RuntimeException('Ban khong co quyen duyet nghi phep.');
+                }
+            } elseif (!$reviewer->hasPositionCapability(PositionCapability::APPROVE_ATTENDANCE)) {
+                throw new \RuntimeException('Ban khong co quyen duyet cham cong.');
+            }
+
             if (!$approvalRequest->target) {
                 throw new \RuntimeException('Không tìm thấy đối tượng yêu cầu.');
             }
@@ -885,6 +963,10 @@ class AttendanceService extends BaseService
                     'applied_at' => $decision === 'approved' ? now(self::TIMEZONE) : null,
                     'applied_by' => $decision === 'approved' ? $reviewer->id : null,
                 ]);
+
+                if ($target->request_type === 'leave') {
+                    $this->leaveService->finalizeRequest($reviewer, $target->fresh(['leaveType']), $decision);
+                }
 
                 if ($decision === 'approved') {
                     $this->applyAttendanceRequestToRecords($target, $reviewer, $note);
@@ -1147,6 +1229,7 @@ class AttendanceService extends BaseService
         $requestPresenceLabel = $hasRequest
             ? sprintf('Co don (%s)', $this->approvalStatusLabel((string) $latestRequest->status))
             : 'Khong co don';
+        $shiftConfig = $this->resolveShiftConfig($record);
 
         return [
             'id' => $record->id,
@@ -1159,6 +1242,7 @@ class AttendanceService extends BaseService
             'work_date' => optional($record->work_date)->format('Y-m-d'),
             'check_in_at' => optional($record->check_in_at)->format('Y-m-d H:i:s'),
             'check_out_at' => optional($record->check_out_at)->format('Y-m-d H:i:s'),
+            'shift_end_time' => substr((string) ($shiftConfig['end_time'] ?? ''), 0, 5) ?: null,
             'check_in_ip_address' => $record->check_in_ip_address,
             'check_out_ip_address' => $record->check_out_ip_address,
             'check_in_device' => $record->check_in_device,
@@ -1206,6 +1290,18 @@ class AttendanceService extends BaseService
                 'label' => trim(($profile->employee_code ?: 'EMP') . ' - ' . ($profile->user?->name ?: 'Unknown')),
                 'department_name' => $profile->department?->name,
             ])
+            ->values()
+            ->all();
+    }
+
+    private function getLeaveBalancePayload(EmployeeProfile $profile, int $year): array
+    {
+        return EmployeeLeaveBalance::query()
+            ->with('leaveType:id,name,code,is_paid,deducts_balance')
+            ->where('employee_profile_id', $profile->id)
+            ->where('year', $year)
+            ->get()
+            ->map(fn (EmployeeLeaveBalance $balance) => $this->leaveService->transformBalance($balance))
             ->values()
             ->all();
     }
@@ -1489,6 +1585,31 @@ class AttendanceService extends BaseService
                     $updatedWorkedMinutes,
                 ];
             case 'forgot_check':
+                $requestDate = optional($request->request_date)->format('Y-m-d');
+                $resolvedCheckIn = null;
+                $resolvedCheckOut = null;
+
+                if ($requestDate && filled($request->from_time)) {
+                    $resolvedCheckIn = Carbon::parse($requestDate . ' ' . $request->from_time, self::TIMEZONE);
+                }
+
+                if ($requestDate && filled($request->to_time)) {
+                    $resolvedCheckOut = Carbon::parse($requestDate . ' ' . $request->to_time, self::TIMEZONE);
+                    if ($resolvedCheckIn && $resolvedCheckOut->lessThanOrEqualTo($resolvedCheckIn)) {
+                        $resolvedCheckOut->addDay();
+                    }
+                }
+
+                if (!$resolvedCheckIn && !$resolvedCheckOut) {
+                    return [
+                        $attendanceStatus,
+                        $dayStatus,
+                        $lateMinutes,
+                        $earlyLeaveMinutes,
+                        $workedMinutes,
+                    ];
+                }
+
                 return [
                     $attendanceStatus,
                     $dayStatus,
@@ -1678,6 +1799,16 @@ class AttendanceService extends BaseService
 
     private function resolveWorkUnit(AttendanceRecord $record): float
     {
+        if (($record->day_status ?? null) === 'leave') {
+            $workedMinutes = $this->resolveWorkedMinutes($record);
+
+            return $workedMinutes > 0 ? $this->resolveWorkUnitByMinutes($workedMinutes) : 1.0;
+        }
+
+        if (($record->day_status ?? null) === 'unpaid_leave') {
+            return 0.0;
+        }
+
         if ($record->missing_check_in || $record->missing_check_out || ($record->check_in_at && !$record->check_out_at)) {
             return 0.0;
         }
@@ -1732,11 +1863,9 @@ class AttendanceService extends BaseService
             return $minutes;
         }
 
-        $breakMinutes = $this->calculateShiftBreakMinutes($checkInAt, $checkOutAt, $shiftConfig);
-        $remainingMinutes = max(0, $minutes - $breakMinutes);
-        $handoverMinutes = min($remainingMinutes, max(0, (int) ($shiftConfig['handover_break_minutes'] ?? 0)));
-
-        return max(0, $remainingMinutes - $handoverMinutes);
+        $breakMinutes = $this->calculateShiftBreakMinutes($checkInAt, $checkOutAt, $shiftConfig)
+            + $this->calculateHandoverBreakMinutes($checkInAt, $checkOutAt, $shiftConfig);
+        return max(0, $minutes - $breakMinutes);
     }
 
     private function refreshMonthlySummary(AttendanceRecord $record): void
@@ -2015,21 +2144,36 @@ class AttendanceService extends BaseService
 
         $attendanceRequests = AttendanceRequest::query()
             ->where('employee_profile_id', $profileId)
-            ->with('approvalRequest.reviewer:id,name')
+            ->with(['approvalRequest.reviewer:id,name', 'leaveType:id,name,requires_attachment'])
             ->latest('id')
             ->limit(10)
             ->get()
             ->map(fn (AttendanceRequest $request) => [
                 'id' => 'attendance-' . $request->id,
+                'target_type' => 'attendance',
                 'request_type' => $request->request_type,
                 'request_type_label' => $this->attendanceRequestTypeLabel($request->request_type),
                 'request_date' => optional($request->request_date)->format('Y-m-d'),
                 'period' => $this->formatRequestPeriod($request->from_date, $request->to_date, $request->from_time, $request->to_time),
+                'from_date' => optional($request->from_date)->format('Y-m-d'),
+                'to_date' => optional($request->to_date)->format('Y-m-d'),
+                'from_time' => $request->from_time,
+                'to_time' => $request->to_time,
+                'leave_type' => $request->leave_type,
+                'leave_type_name' => $request->leaveType?->name,
+                'leave_type_requires_attachment' => (bool) $request->leaveType?->requires_attachment,
+                'leave_days' => (float) ($request->leave_days ?? 0),
+                'leave_duration_type' => $request->leave_duration_type,
+                'leave_hours' => (float) ($request->leave_hours ?? 0),
+                'requested_status' => $request->requested_status,
+                'attachment_path' => $request->attachment_path,
+                'attachment_url' => $request->attachment_path ? asset('storage/' . ltrim($request->attachment_path, '/')) : null,
                 'status' => $request->status,
                 'status_label' => $this->approvalStatusLabel($request->status),
                 'reason' => $request->reason,
                 'review_note' => $request->approvalRequest?->review_note,
                 'reviewed_by_name' => $request->approvalRequest?->reviewer?->name,
+                'reviewed_at' => optional($request->approvalRequest?->reviewed_at)->format('Y-m-d H:i:s'),
                 'submitted_at' => optional($request->approvalRequest?->submitted_at ?? $request->created_at)->format('Y-m-d H:i:s'),
             ]);
 
@@ -2041,6 +2185,7 @@ class AttendanceService extends BaseService
             ->get()
             ->map(fn (OvertimeRequest $request) => [
                 'id' => 'overtime-' . $request->id,
+                'target_type' => 'overtime',
                 'request_type' => 'overtime',
                 'request_type_label' => $this->attendanceRequestTypeLabel('overtime'),
                 'request_date' => optional($request->work_date)->format('Y-m-d'),
@@ -2048,11 +2193,16 @@ class AttendanceService extends BaseService
                     optional($request->start_at)->format('d/m/Y H:i'),
                     optional($request->end_at)->format('d/m/Y H:i'),
                 ])->filter()->join(' - ')),
+                'overtime_start_at' => optional($request->start_at)->format('Y-m-d H:i:s'),
+                'overtime_end_at' => optional($request->end_at)->format('Y-m-d H:i:s'),
+                'requested_minutes' => (int) ($request->requested_minutes ?? 0),
+                'approved_minutes' => (int) ($request->approved_minutes ?? 0),
                 'status' => $request->status,
                 'status_label' => $this->approvalStatusLabel($request->status),
                 'reason' => $request->reason,
                 'review_note' => $request->review_note,
                 'reviewed_by_name' => $request->approvalRequest?->reviewer?->name,
+                'reviewed_at' => optional($request->approvalRequest?->reviewed_at ?? $request->reviewed_at)->format('Y-m-d H:i:s'),
                 'submitted_at' => optional($request->approvalRequest?->submitted_at ?? $request->created_at)->format('Y-m-d H:i:s'),
             ]);
 
@@ -2073,8 +2223,14 @@ class AttendanceService extends BaseService
                 'requester.employeeProfile:id,user_id,employee_code,department_id',
                 'requester.employeeProfile.department:id,name',
                 'reviewer:id,name',
-                'target',
+                'target' => fn ($morphTo) => $morphTo->morphWith([
+                    AttendanceRequest::class => ['leaveType:id,name,requires_attachment'],
+                ]),
             ]);
+
+        if ((bool) ($filters['only_leave'] ?? false)) {
+            $query->where('request_type', 'leave');
+        }
 
         $this->applyAttendanceApprovalRequestFilters($query, $filters, $viewer);
 
@@ -2095,8 +2251,14 @@ class AttendanceService extends BaseService
                 'requester.employeeProfile:id,user_id,employee_code,department_id',
                 'requester.employeeProfile.department:id,name',
                 'reviewer:id,name',
-                'target',
+                'target' => fn ($morphTo) => $morphTo->morphWith([
+                    AttendanceRequest::class => ['leaveType:id,name,requires_attachment'],
+                ]),
             ]);
+
+        if ((bool) ($filters['only_leave'] ?? false)) {
+            $query->where('request_type', 'leave');
+        }
 
         $this->applyAttendanceApprovalRequestFilters($query, $filters, $viewer);
 
@@ -2190,6 +2352,14 @@ class AttendanceService extends BaseService
             'period' => $period ?: '-',
             'reason' => $approvalRequest->reason,
             'leave_type' => $target instanceof AttendanceRequest ? $target->leave_type : null,
+            'leave_type_id' => $target instanceof AttendanceRequest ? $target->leave_type_id : null,
+            'leave_type_name' => $target instanceof AttendanceRequest ? $target->leaveType?->name : null,
+            'leave_type_requires_attachment' => $target instanceof AttendanceRequest ? (bool) $target->leaveType?->requires_attachment : false,
+            'leave_days' => $target instanceof AttendanceRequest ? (float) ($target->leave_days ?? 0) : null,
+            'leave_duration_type' => $target instanceof AttendanceRequest ? $target->leave_duration_type : null,
+            'leave_hours' => $target instanceof AttendanceRequest ? (float) ($target->leave_hours ?? 0) : null,
+            'attachment_path' => $target instanceof AttendanceRequest ? $target->attachment_path : null,
+            'attachment_url' => $target instanceof AttendanceRequest && $target->attachment_path ? asset('storage/' . ltrim($target->attachment_path, '/')) : null,
             'requested_status' => $target instanceof AttendanceRequest ? $target->requested_status : null,
             'from_date' => $target instanceof AttendanceRequest ? optional($target->from_date)->format('Y-m-d') : null,
             'to_date' => $target instanceof AttendanceRequest ? optional($target->to_date)->format('Y-m-d') : null,
@@ -2450,9 +2620,11 @@ class AttendanceService extends BaseService
         switch ($request->request_type) {
             case 'leave':
                 $isUnpaidLeave = $request->leave_type === 'unpaid';
+                $standardMinutes = $this->resolveStandardMinutesForRecord($record);
+                $leaveUnit = $this->leaveUnitForRecord($request, $record);
                 $record->day_status = $isUnpaidLeave ? 'unpaid_leave' : 'leave';
                 $record->attendance_status = 'absent';
-                $record->worked_minutes = 0;
+                $record->worked_minutes = $isUnpaidLeave ? 0 : (int) round($standardMinutes * $leaveUnit);
                 $record->late_minutes = 0;
                 $record->early_leave_minutes = 0;
                 $record->missing_check_in = false;
@@ -2488,9 +2660,45 @@ class AttendanceService extends BaseService
                 $record->day_status = $dayStatus;
                 break;
             case 'forgot_check':
-                // Forgot-check chi xu ly thieu cham cong, khong doi ket qua vao/ra thuc te.
-                $record->missing_check_in = false;
-                $record->missing_check_out = false;
+                $requestDate = optional($request->request_date)->format('Y-m-d');
+                $resolvedCheckIn = $record->check_in_at ? Carbon::parse($record->check_in_at, self::TIMEZONE) : null;
+                $resolvedCheckOut = $record->check_out_at ? Carbon::parse($record->check_out_at, self::TIMEZONE) : null;
+
+                if ($requestDate) {
+                    $workDateAtTz = Carbon::parse($requestDate, self::TIMEZONE);
+                    $workShift = $record->workShift ?: $this->resolveWorkShift($record->employeeProfile, $workDateAtTz);
+                    [$shiftStart, $shiftEnd] = $this->shiftBoundaries($workDateAtTz, $workShift);
+
+                    if (!$resolvedCheckIn) {
+                        $resolvedCheckIn = filled($request->from_time)
+                            ? Carbon::parse($requestDate . ' ' . $request->from_time, self::TIMEZONE)
+                            : $shiftStart;
+                    }
+
+                    if (!$resolvedCheckOut) {
+                        $resolvedCheckOut = filled($request->to_time)
+                            ? Carbon::parse($requestDate . ' ' . $request->to_time, self::TIMEZONE)
+                            : $shiftEnd;
+
+                        if ($resolvedCheckIn && $resolvedCheckOut->lessThanOrEqualTo($resolvedCheckIn)) {
+                            $resolvedCheckOut->addDay();
+                        }
+                    }
+                }
+
+                [$attendanceStatus, $dayStatus, $workedMinutes, $lateMinutes, $earlyLeaveMinutes, $overtimeMinutes] =
+                    $this->previewAttendanceMetrics($record, $resolvedCheckIn, $resolvedCheckOut);
+
+                $record->check_in_at = $resolvedCheckIn;
+                $record->check_out_at = $resolvedCheckOut;
+                $record->worked_minutes = $workedMinutes;
+                $record->late_minutes = $lateMinutes;
+                $record->early_leave_minutes = $earlyLeaveMinutes;
+                $record->overtime_minutes = $overtimeMinutes;
+                $record->attendance_status = $attendanceStatus;
+                $record->day_status = $dayStatus;
+                $record->missing_check_in = !$resolvedCheckIn;
+                $record->missing_check_out = !$resolvedCheckOut;
                 break;
             case 'late_early':
                 $requestedStatus = (string) ($request->requested_status ?? '');
@@ -2511,6 +2719,23 @@ class AttendanceService extends BaseService
             default:
                 break;
         }
+    }
+
+    private function leaveUnitForRecord(AttendanceRequest $request, AttendanceRecord $record): float
+    {
+        $durationType = (string) ($request->leave_duration_type ?: 'full_day');
+
+        if ($durationType === 'half_day') {
+            return 0.5;
+        }
+
+        if ($durationType === 'hourly') {
+            $standardMinutes = max(1, $this->resolveStandardMinutesForRecord($record));
+
+            return min(1.0, max(0.0, ((float) $request->leave_hours * 60) / $standardMinutes));
+        }
+
+        return 1.0;
     }
 
     private function requestDates(AttendanceRequest $request): array
@@ -2569,7 +2794,26 @@ class AttendanceService extends BaseService
             : null;
         $fromTime = filled($payload['from_time'] ?? null) ? (string) $payload['from_time'] : null;
         $toTime = filled($payload['to_time'] ?? null) ? (string) $payload['to_time'] : null;
-        $leaveType = $requestType === 'leave' ? (((string) ($payload['leave_type'] ?? 'paid')) === 'unpaid' ? 'unpaid' : 'paid') : null;
+        $leaveDurationType = $requestType === 'leave' ? (string) ($payload['leave_duration_type'] ?? 'full_day') : null;
+        $leaveHours = $requestType === 'leave' ? (float) ($payload['leave_hours'] ?? 0) : 0.0;
+        $selectedLeaveType = null;
+        if ($requestType === 'leave') {
+            $selectedLeaveType = filled($payload['leave_type_id'] ?? null)
+                ? LeaveType::query()->where('is_active', true)->find((int) $payload['leave_type_id'])
+                : LeaveType::query()
+                    ->where('is_active', true)
+                    ->where('is_paid', ((string) ($payload['leave_type'] ?? 'paid')) !== 'unpaid')
+                    ->orderByDesc('deducts_balance')
+                    ->orderBy('id')
+                    ->first();
+
+            if (!$selectedLeaveType) {
+                throw ValidationException::withMessages([
+                    'leave_type_id' => 'Loai nghi phep khong hop le hoac da ngung dung.',
+                ]);
+            }
+        }
+        $leaveType = $selectedLeaveType ? ($selectedLeaveType->is_paid ? 'paid' : 'unpaid') : null;
         $requestedStatus = $requestType === 'late_early' ? (string) ($payload['requested_status'] ?? '') : null;
 
         if ($fromDate && $toDate && $fromDate > $toDate) {
@@ -2579,14 +2823,14 @@ class AttendanceService extends BaseService
             ]);
         }
 
-        if (($fromTime && !$toTime) || (!$fromTime && $toTime)) {
+        if ($requestType !== 'forgot_check' && (($fromTime && !$toTime) || (!$fromTime && $toTime))) {
             throw ValidationException::withMessages([
                 'from_time' => 'Can nhap du gio bat dau va gio ket thuc.',
                 'to_time' => 'Can nhap du gio bat dau va gio ket thuc.',
             ]);
         }
 
-        if ($fromTime && $toTime && $fromTime >= $toTime) {
+        if ($requestType !== 'forgot_check' && $fromTime && $toTime && $fromTime >= $toTime) {
             throw ValidationException::withMessages([
                 'from_time' => 'Thoi gian bat dau phai truoc thoi gian ket thuc.',
                 'to_time' => 'Thoi gian ket thuc phai sau thoi gian bat dau.',
@@ -2657,6 +2901,71 @@ class AttendanceService extends BaseService
             }
         }
 
+        $leaveDays = 0.0;
+        if ($requestType === 'leave') {
+            if (!in_array($leaveDurationType, ['full_day', 'half_day', 'hourly'], true)) {
+                throw ValidationException::withMessages([
+                    'leave_duration_type' => 'Kieu thoi luong nghi khong hop le.',
+                ]);
+            }
+
+            if (!$fromDate || !$toDate) {
+                throw ValidationException::withMessages([
+                    'from_date' => 'Nghi phep yeu cau tu ngay.',
+                    'to_date' => 'Nghi phep yeu cau den ngay.',
+                ]);
+            }
+
+            if (Carbon::parse($fromDate, self::TIMEZONE)->year !== Carbon::parse($toDate, self::TIMEZONE)->year) {
+                throw ValidationException::withMessages([
+                    'from_date' => 'Don nghi phep khong duoc vuot qua 2 nam. Vui long tach thanh 2 don.',
+                    'to_date' => 'Don nghi phep khong duoc vuot qua 2 nam. Vui long tach thanh 2 don.',
+                ]);
+            }
+
+            if (in_array($leaveDurationType, ['half_day', 'hourly'], true) && $fromDate !== $toDate) {
+                throw ValidationException::withMessages([
+                    'from_date' => 'Nghi nua ngay/theo gio chi ap dung cho mot ngay.',
+                    'to_date' => 'Nghi nua ngay/theo gio chi ap dung cho mot ngay.',
+                ]);
+            }
+
+            if ($leaveDurationType === 'hourly' && $leaveHours <= 0) {
+                throw ValidationException::withMessages([
+                    'leave_hours' => 'Vui long nhap so gio nghi.',
+                ]);
+            }
+
+            $leaveDays = $this->calculateLeaveDays($profile, $affectedDates, $leaveDurationType, $leaveHours);
+            if ($leaveDays <= 0) {
+                throw ValidationException::withMessages([
+                    'from_date' => 'Khoang nghi khong co ngay lam viec hop le de tinh phep.',
+                    'to_date' => 'Khoang nghi khong co ngay lam viec hop le de tinh phep.',
+                ]);
+            }
+
+            if ($selectedLeaveType?->max_days_per_request !== null && $leaveDays > (float) $selectedLeaveType->max_days_per_request) {
+                throw ValidationException::withMessages([
+                    'leave_type_id' => 'So ngay nghi vuot qua gioi han moi don cua loai phep.',
+                ]);
+            }
+
+            if ($selectedLeaveType?->deducts_balance) {
+                $balance = $this->leaveService->ensureBalance((int) $profile->id, (int) $selectedLeaveType->id, (int) Carbon::parse($fromDate, self::TIMEZONE)->year);
+                if ($balance->available_days < $leaveDays) {
+                    throw ValidationException::withMessages([
+                        'leave_type_id' => 'So du phep hien con ' . round($balance->available_days, 2) . ' ngay, khong du cho don ' . round($leaveDays, 2) . ' ngay.',
+                    ]);
+                }
+            }
+
+            if ($selectedLeaveType?->requires_attachment && blank($payload['attachment_path'] ?? null)) {
+                throw ValidationException::withMessages([
+                    'attachment' => 'Loai nghi nay yeu cau tai len minh chung.',
+                ]);
+            }
+        }
+
         $minDate = min($affectedDates);
         $maxDate = max($affectedDates);
         $duplicateQuery = AttendanceRequest::query()
@@ -2695,8 +3004,13 @@ class AttendanceService extends BaseService
             'to_date' => $toDate,
             'from_time' => $fromTime,
             'to_time' => $toTime,
+            'leave_type_id' => $selectedLeaveType?->id,
             'leave_type' => $leaveType,
+            'leave_days' => $leaveDays,
+            'leave_duration_type' => $leaveDurationType,
+            'leave_hours' => $leaveHours,
             'requested_status' => $requestedStatus ?: null,
+            'attachment_path' => filled($payload['attachment_path'] ?? null) ? (string) $payload['attachment_path'] : null,
         ];
     }
     private function validateOvertimeRequestOnSubmit(EmployeeProfile $profile, array $payload): array
@@ -2815,6 +3129,57 @@ class AttendanceService extends BaseService
         return [];
     }
 
+    private function calculateLeaveDays(EmployeeProfile $profile, array $dates, string $durationType = 'full_day', float $leaveHours = 0.0): float
+    {
+        $days = 0.0;
+
+        foreach ($dates as $date) {
+            $workDate = Carbon::parse($date, self::TIMEZONE);
+
+            if ($this->isPaidHolidayDate($workDate)) {
+                continue;
+            }
+
+            $workShift = $this->resolveWorkShift($profile, $workDate->copy());
+            if (!$workShift && $workDate->isWeekend()) {
+                continue;
+            }
+
+            if ($durationType === 'half_day') {
+                $days += 0.5;
+                continue;
+            }
+
+            if ($durationType === 'hourly') {
+                $standardMinutes = $this->resolveStandardMinutesFromShiftConfig($this->buildShiftSnapshot($workShift));
+                $standardHours = max(1.0, $standardMinutes / 60);
+                $days += min(1.0, max(0.0, $leaveHours / $standardHours));
+                continue;
+            }
+
+            $days += 1.0;
+        }
+
+        return round($days, 2);
+    }
+
+    private function isPaidHolidayDate(Carbon $workDate): bool
+    {
+        return Holiday::query()
+            ->where('is_paid_leave', true)
+            ->where(function (Builder $query) use ($workDate) {
+                $query
+                    ->whereDate('holiday_date', $workDate->toDateString())
+                    ->orWhere(function (Builder $recurringQuery) use ($workDate) {
+                        $recurringQuery
+                            ->where('is_recurring', true)
+                            ->whereMonth('holiday_date', $workDate->month)
+                            ->whereDay('holiday_date', $workDate->day);
+                    });
+            })
+            ->exists();
+    }
+
     private function getMonthLockPayload(int $month, int $year): array
     {
         $lock = AttendanceMonthLock::query()
@@ -2883,7 +3248,7 @@ class AttendanceService extends BaseService
         $startAt = $window[0] ?? null;
         $endAt = $window[1] ?? null;
         $minutes = ($startAt && $endAt && $endAt->gt($startAt))
-            ? $this->calculateWorkedMinutes($startAt, $endAt)
+            ? $this->calculatePaidOvertimeMinutes($startAt, $endAt, $startAt, $endAt, $workShift)
             : 0;
 
         return [
@@ -3171,7 +3536,7 @@ class AttendanceService extends BaseService
                 $this->minutesOfDay((string) $overtimeEndTime) <= $this->minutesOfDay((string) $overtimeStartTime)
             );
 
-            return $this->calculateOverlapMinutes($startAt, $endAt, $overtimeStart, $overtimeEnd);
+            return $this->calculatePaidOvertimeMinutes($startAt, $endAt, $overtimeStart, $overtimeEnd, $workShift);
         }
 
         [$shiftStart, $shiftEnd] = $this->shiftBoundaries($startAt->copy(), $workShift);
@@ -3184,7 +3549,7 @@ class AttendanceService extends BaseService
 
         if ($endAt->gt($shiftEnd)) {
             $afterStart = $startAt->gt($shiftEnd) ? $startAt : $shiftEnd;
-            $minutes += $this->calculateWorkedMinutes($afterStart, $endAt);
+            $minutes += $this->calculatePaidOvertimeMinutes($afterStart, $endAt, $shiftEnd, $endAt, $workShift);
         }
 
         return max(0, $minutes);
@@ -3235,7 +3600,16 @@ class AttendanceService extends BaseService
             ->where('employee_profile_id', $employeeProfileId)
             ->whereDate('work_date', $workDate)
             ->where('status', 'approved')
-            ->sum('approved_minutes');
+            ->with('employeeProfile.defaultWorkShift')
+            ->get()
+            ->sum(function (OvertimeRequest $request) {
+                $approvedMinutes = max(0, (int) ($request->approved_minutes ?? 0));
+                if ($approvedMinutes === 0) {
+                    return 0;
+                }
+
+                return min($approvedMinutes, $this->calculateApprovedOvertimeMinutesFromRequest($request));
+            });
     }
 
     private function determineDayStatus(Carbon $checkInAt, Carbon $checkOutAt, ?WorkShift $workShift): string
@@ -3282,6 +3656,19 @@ class AttendanceService extends BaseService
         return $nextDay ? $point->addDay() : $point;
     }
 
+    private function resolveTimeForRecordDate(AttendanceRecord $record, string $time): Carbon
+    {
+        $baseDate = Carbon::parse($record->work_date, self::TIMEZONE);
+        $resolved = $this->resolveShiftTimePoint($baseDate, $time);
+        $checkInAt = $record->check_in_at ? Carbon::parse($record->check_in_at, self::TIMEZONE) : null;
+
+        if ($checkInAt && $resolved->lessThanOrEqualTo($checkInAt)) {
+            $resolved->addDay();
+        }
+
+        return $resolved;
+    }
+
     private function calculateOverlapMinutes(Carbon $rangeStart, Carbon $rangeEnd, Carbon $windowStart, Carbon $windowEnd): int
     {
         $start = $rangeStart->greaterThan($windowStart) ? $rangeStart : $windowStart;
@@ -3292,6 +3679,26 @@ class AttendanceService extends BaseService
         }
 
         return $this->calculateWorkedMinutes($start, $end);
+    }
+
+    private function calculatePaidOvertimeMinutes(
+        Carbon $rangeStart,
+        Carbon $rangeEnd,
+        Carbon $windowStart,
+        Carbon $windowEnd,
+        ?WorkShift $workShift
+    ): int {
+        $minutes = $this->calculateOverlapMinutes($rangeStart, $rangeEnd, $windowStart, $windowEnd);
+        $handoverMinutes = max(0, (int) ($workShift?->handover_break_minutes ?? 0));
+
+        if ($minutes === 0 || $handoverMinutes === 0) {
+            return $minutes;
+        }
+
+        $handoverEnd = $windowStart->copy()->addMinutes($handoverMinutes);
+        $unpaidMinutes = $this->calculateOverlapMinutes($rangeStart, $rangeEnd, $windowStart, $handoverEnd);
+
+        return max(0, $minutes - $unpaidMinutes);
     }
 
     private function resolveShiftConfig(AttendanceRecord $record): ?array
@@ -3357,6 +3764,26 @@ class AttendanceService extends BaseService
         );
 
         return $this->calculateOverlapMinutes($checkInAt, $checkOutAt, $breakStartAt, $breakEndAt);
+    }
+
+    private function calculateHandoverBreakMinutes(Carbon $checkInAt, Carbon $checkOutAt, array $shiftConfig): int
+    {
+        $handoverMinutes = max(0, (int) ($shiftConfig['handover_break_minutes'] ?? 0));
+        $endTime = $shiftConfig['end_time'] ?? null;
+
+        if ($handoverMinutes === 0 || !filled($endTime)) {
+            return 0;
+        }
+
+        $shiftEndAt = $this->resolveShiftTimePoint(
+            $checkInAt,
+            (string) $endTime,
+            (bool) ($shiftConfig['is_overnight'] ?? false)
+                && $this->minutesOfDay((string) $endTime) <= $this->minutesOfDay((string) ($shiftConfig['start_time'] ?? $endTime))
+        );
+        $handoverStartAt = $shiftEndAt->copy()->subMinutes($handoverMinutes);
+
+        return $this->calculateOverlapMinutes($checkInAt, $checkOutAt, $handoverStartAt, $shiftEndAt);
     }
 
     private function resolveOvertimeStartForShift(?WorkShift $workShift, Carbon $dateTime): ?Carbon

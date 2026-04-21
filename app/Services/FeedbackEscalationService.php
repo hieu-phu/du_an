@@ -9,6 +9,7 @@ use App\Models\Position;
 use App\Models\User;
 use App\Support\PositionCapability;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
 
 class FeedbackEscalationService
@@ -60,6 +61,19 @@ class FeedbackEscalationService
             ]);
     }
 
+    public function triggerAutoEscalationSweep(): int
+    {
+        $intervalMinutes = max(1, (int) config('feedback.auto_escalation_check_interval_minutes', 5));
+        $hours = max(1, (int) config('feedback.escalation_hours', 24));
+        $cacheKey = 'feedback:auto-escalation:last-check';
+
+        if (!Cache::add($cacheKey, now()->timestamp, now()->addMinutes($intervalMinutes))) {
+            return 0;
+        }
+
+        return $this->escalateStaleFeedbacks($hours);
+    }
+
     public function escalateStaleFeedbacks(int $hours = 24): int
     {
         $cutoff = now()->subHours($hours);
@@ -67,7 +81,8 @@ class FeedbackEscalationService
 
         FeedbackMessage::query()
             ->with(['sender.employeeProfile.position', 'receiverPosition'])
-            ->where('is_replied', false)
+            ->whereNotIn('conversation_status', ['resolved', 'closed'])
+            ->where('waiting_for', 'handler')
             ->whereNotNull('receiver_position_id')
             ->where(function ($query) use ($cutoff): void {
                 $query->where(function ($subQuery) use ($cutoff): void {
@@ -110,6 +125,8 @@ class FeedbackEscalationService
             'last_escalated_at' => now(),
             'escalation_count' => $nextEscalationCount,
             'status' => 'sent',
+            'conversation_status' => 'waiting_handler',
+            'waiting_for' => 'handler',
             'read_at' => null,
         ]);
 

@@ -1,8 +1,8 @@
 <template>
-  <Head title="Duyệt chấm công" />
+  <Head :title="pageTitle" />
 
   <AdminLayout>
-    <PageBreadcrumb title="Duyệt chấm công" :items="[{ text: 'Chấm công', link: null }, { text: 'Duyệt công', link: null }]" />
+    <PageBreadcrumb :title="pageTitle" :items="breadcrumbItems" />
 
     <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
       <div v-for="card in summaryCards" :key="card.label" class="rounded-xl border border-gray-200 bg-white p-5 shadow-theme-sm">
@@ -14,7 +14,7 @@
     <div class="mb-6 rounded-[24px] border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <div class="text-sm font-semibold text-gray-900">Bo loc ky duyet cong</div>
+          <div class="text-sm font-semibold text-gray-900">{{ filterTitle }}</div>
           <div class="mt-1 text-sm text-gray-500">Chon thang nam bang lich va loc them theo nhan vien neu can.</div>
         </div>
         <div class="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
@@ -55,7 +55,7 @@
       </div>
     </div>
 
-    <div class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
+    <div v-if="!isLeaveApproval" class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="mb-4">
         <h3 class="text-lg font-semibold text-gray-900">Bản ghi chấm công chờ duyệt</h3>
       </div>
@@ -80,9 +80,16 @@
           {{ formatMinutes(item.early_leave_minutes) }}
         </template>
         <template #cell-day_status="{ item }">
-          <span :class="dayStatusClass(item.day_status)" class="rounded-full px-3 py-1 text-xs font-semibold">
-            {{ formatDayStatus(item.day_status) }}
-          </span>
+          <div class="flex flex-wrap justify-center gap-1.5">
+            <span
+              v-for="badge in dayStatusBadges(item)"
+              :key="badge.label"
+              :class="badge.class"
+              class="rounded-full px-3 py-1 text-xs font-semibold"
+            >
+              {{ badge.label }}
+            </span>
+          </div>
         </template>
         <template #cell-approval_status="{ item }">
           <span :class="approvalStatusClass(item.approval_status)" class="rounded-full px-3 py-1 text-xs font-semibold">
@@ -109,10 +116,10 @@
 
     <div class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="mb-4">
-        <h3 class="text-lg font-semibold text-gray-900">Đơn chấm công chờ duyệt</h3>
+        <h3 class="text-lg font-semibold text-gray-900">{{ pendingRequestTitle }}</h3>
       </div>
 
-      <DataTable :columns="requestColumns" :data="paginatedRequestApprovals" :actions="requestActions" :show-index="true" :index-offset="pageOffset('requests')" empty-message="Không có đơn chấm công chờ duyệt.">
+      <DataTable :columns="requestColumns" :data="paginatedRequestApprovals" :actions="requestActions" :show-index="true" :index-offset="pageOffset('requests')" :empty-message="pendingRequestEmptyMessage">
         <template #cell-request_date="{ item }">
           {{ formatDate(item.request_date) }}
         </template>
@@ -137,7 +144,7 @@
       />
     </div>
 
-    <div class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
+    <div v-if="!isLeaveApproval" class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="mb-4">
         <h3 class="text-lg font-semibold text-gray-900">Lich su duyet cong</h3>
       </div>
@@ -156,9 +163,16 @@
           {{ formatMinutes(item.early_leave_minutes) }}
         </template>
         <template #cell-day_status="{ item }">
-          <span :class="dayStatusClass(item.day_status)" class="rounded-full px-3 py-1 text-xs font-semibold">
-            {{ formatDayStatus(item.day_status) }}
-          </span>
+          <div class="flex flex-wrap justify-center gap-1.5">
+            <span
+              v-for="badge in dayStatusBadges(item)"
+              :key="badge.label"
+              :class="badge.class"
+              class="rounded-full px-3 py-1 text-xs font-semibold"
+            >
+              {{ badge.label }}
+            </span>
+          </div>
         </template>
         <template #cell-approval_status="{ item }">
           <span :class="approvalStatusClass(item.approval_status)" class="rounded-full px-3 py-1 text-xs font-semibold">
@@ -170,23 +184,23 @@
         </template>
       </DataTable>
       <LocalPagination
-        v-if="request_approvals.length"
-        label="don"
-        :total="request_approvals.length"
-        :page="pagination.requests"
-        :per-page="perPage.requests"
+        v-if="reviewed_records.length"
+        label="ban ghi"
+        :total="reviewed_records.length"
+        :page="pagination.reviewedRecords"
+        :per-page="perPage.reviewedRecords"
         :options="perPageOptions"
-        @page="setPage('requests', $event)"
-        @per-page="setPerPage('requests', $event)"
+        @page="setPage('reviewedRecords', $event)"
+        @per-page="setPerPage('reviewedRecords', $event)"
       />
     </div>
 
     <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="mb-4">
-        <h3 class="text-lg font-semibold text-gray-900">Lich su duyet don cham cong</h3>
+        <h3 class="text-lg font-semibold text-gray-900">{{ reviewedRequestTitle }}</h3>
       </div>
 
-      <DataTable :columns="reviewedRequestColumns" :data="paginatedReviewedRequestApprovals" :show-index="true" :index-offset="pageOffset('reviewedRequests')" empty-message="Chua co lich su duyet don trong ky.">
+      <DataTable :columns="reviewedRequestColumns" :data="paginatedReviewedRequestApprovals" :actions="requestActions" :show-index="true" :index-offset="pageOffset('reviewedRequests')" :empty-message="reviewedRequestEmptyMessage">
         <template #cell-request_date="{ item }">
           {{ formatDate(item.request_date) }}
         </template>
@@ -203,20 +217,20 @@
         </template>
       </DataTable>
       <LocalPagination
-        v-if="reviewed_records.length"
-        label="ban ghi"
-        :total="reviewed_records.length"
-        :page="pagination.reviewedRecords"
-        :per-page="perPage.reviewedRecords"
+        v-if="reviewed_request_approvals.length"
+        label="don"
+        :total="reviewed_request_approvals.length"
+        :page="pagination.reviewedRequests"
+        :per-page="perPage.reviewedRequests"
         :options="perPageOptions"
-        @page="setPage('reviewedRecords', $event)"
-        @per-page="setPerPage('reviewedRecords', $event)"
+        @page="setPage('reviewedRequests', $event)"
+        @per-page="setPerPage('reviewedRequests', $event)"
       />
     </div>
 
     <Modal :show="!!selectedRequest" @close="closeRequestDetail">
       <div v-if="selectedRequest" class="p-6">
-        <h3 class="mb-4 text-lg font-semibold text-gray-900">Chi tiết đơn chấm công</h3>
+        <h3 class="mb-4 text-lg font-semibold text-gray-900">{{ requestDetailTitle }}</h3>
         <div class="grid grid-cols-1 gap-3 text-sm text-gray-700 md:grid-cols-2">
           <div><span class="font-medium text-gray-900">Nhân viên:</span> {{ selectedRequest.employee_name || '-' }}</div>
           <div><span class="font-medium text-gray-900">Mã NV:</span> {{ selectedRequest.employee_code || '-' }}</div>
@@ -228,13 +242,32 @@
         </div>
 
         <div v-if="selectedRequest.target_type === 'attendance'" class="mt-4 rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
-          <div class="mb-2 font-semibold text-gray-900">Thông tin bổ sung đơn chấm công</div>
+          <div class="mb-2 font-semibold text-gray-900">{{ requestSupplementTitle }}</div>
           <div><span class="font-medium text-gray-900">Từ ngày:</span> {{ formatDate(selectedRequest.from_date) }}</div>
           <div><span class="font-medium text-gray-900">Đến ngày:</span> {{ formatDate(selectedRequest.to_date) }}</div>
           <div><span class="font-medium text-gray-900">Từ giờ:</span> {{ selectedRequest.from_time || '-' }}</div>
           <div><span class="font-medium text-gray-900">Đến giờ:</span> {{ selectedRequest.to_time || '-' }}</div>
-          <div><span class="font-medium text-gray-900">Loại nghỉ:</span> {{ selectedRequest.leave_type || '-' }}</div>
+          <div><span class="font-medium text-gray-900">Loại nghỉ:</span> {{ selectedRequest.leave_type_name || selectedRequest.leave_type || '-' }}</div>
           <div><span class="font-medium text-gray-900">Trạng thái đề nghị:</span> {{ selectedRequest.requested_status || '-' }}</div>
+          <div v-if="selectedRequest.request_type === 'leave'" class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <div class="font-medium text-amber-900">Minh chứng</div>
+            <div v-if="selectedRequest.attachment_url" class="mt-1">
+              <a
+                :href="selectedRequest.attachment_url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-sm font-semibold text-blue-700 underline underline-offset-2"
+              >
+                Xem tệp đính kèm
+              </a>
+            </div>
+            <div v-else-if="selectedRequest.leave_type_requires_attachment" class="mt-1 text-sm text-rose-700">
+              Loại nghỉ này yêu cầu minh chứng nhưng đơn hiện không có tệp đính kèm.
+            </div>
+            <div v-else class="mt-1 text-sm text-gray-500">
+              Loại nghỉ này không yêu cầu minh chứng.
+            </div>
+          </div>
         </div>
 
         <div v-if="selectedRequest.target_type === 'overtime'" class="mt-4 rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
@@ -266,6 +299,7 @@ import InputDate from '@/components/forms/InputDate.vue'
 import FormSelect from '@/components/forms/FormSelect.vue'
 
 const props = defineProps({
+  approval_mode: { type: String, default: 'attendance' },
   filters: { type: Object, required: true },
   records: { type: Array, default: () => [] },
   summary: { type: Object, default: () => ({}) },
@@ -277,9 +311,25 @@ const props = defineProps({
 })
 
 const page = usePage()
+const isLeaveApproval = computed(() => props.approval_mode === 'leave')
+const pageTitle = computed(() => isLeaveApproval.value ? 'Duyệt nghỉ phép' : 'Duyệt chấm công')
+const breadcrumbItems = computed(() => isLeaveApproval.value
+  ? [{ text: 'Nghỉ phép', link: null }, { text: 'Duyệt nghỉ phép', link: null }]
+  : [{ text: 'Chấm công', link: null }, { text: 'Duyệt công', link: null }]
+)
+const filterTitle = computed(() => isLeaveApproval.value ? 'Bo loc ky duyet nghi phep' : 'Bo loc ky duyet cong')
+const pendingRequestTitle = computed(() => isLeaveApproval.value ? 'Đơn nghỉ phép chờ duyệt' : 'Đơn chấm công chờ duyệt')
+const pendingRequestEmptyMessage = computed(() => isLeaveApproval.value ? 'Không có đơn nghỉ phép chờ duyệt.' : 'Không có đơn chấm công chờ duyệt.')
+const reviewedRequestTitle = computed(() => isLeaveApproval.value ? 'Lich su duyet nghi phep' : 'Lich su duyet don cham cong')
+const reviewedRequestEmptyMessage = computed(() => isLeaveApproval.value ? 'Chua co lich su duyet nghi phep trong ky.' : 'Chua co lich su duyet don trong ky.')
+const requestDetailTitle = computed(() => isLeaveApproval.value ? 'Chi tiết đơn nghỉ phép' : 'Chi tiết đơn chấm công')
+const requestSupplementTitle = computed(() => isLeaveApproval.value ? 'Thông tin nghỉ phép' : 'Thông tin bổ sung đơn chấm công')
 const currentAuthorityLevel = computed(() => Number(page.props.auth?.user?.authority_level || 0))
 const selectedRequest = ref(null)
-const decisionForm = useForm({ note: '' })
+const decisionForm = useForm({
+  note: '',
+  resolved_check_out_time: '',
+})
 const requestDecisionForm = useForm({ note: '' })
 const filterForm = reactive({
   month: Number(props.filters.month),
@@ -453,12 +503,23 @@ const reviewedRequestColumns = [
   { label: 'Ghi chu', key: 'review_note' },
 ]
 
-const summaryCards = computed(() => [
-  { label: 'Công chờ duyệt', value: props.approval_summary.pending_records ?? props.summary.pending_records ?? 0 },
-  { label: 'Đã duyệt', value: props.approval_summary.approved_records ?? props.summary.confirmed_records ?? 0 },
-  { label: 'Từ chối', value: props.approval_summary.rejected_records ?? props.summary.rejected_records ?? 0 },
-  { label: 'Đơn chờ duyệt', value: props.request_approvals.length },
-])
+const summaryCards = computed(() => {
+  if (isLeaveApproval.value) {
+    return [
+      { label: 'Đơn nghỉ chờ duyệt', value: props.request_approvals.length },
+      { label: 'Đã duyệt', value: props.reviewed_request_approvals.filter((item) => item.status === 'approved').length },
+      { label: 'Từ chối', value: props.reviewed_request_approvals.filter((item) => item.status === 'rejected').length },
+      { label: 'Lịch sử đơn', value: props.reviewed_request_approvals.length },
+    ]
+  }
+
+  return [
+    { label: 'Công chờ duyệt', value: props.approval_summary.pending_records ?? props.summary.pending_records ?? 0 },
+    { label: 'Đã duyệt', value: props.approval_summary.approved_records ?? props.summary.confirmed_records ?? 0 },
+    { label: 'Từ chối', value: props.approval_summary.rejected_records ?? props.summary.rejected_records ?? 0 },
+    { label: 'Đơn chờ duyệt', value: props.request_approvals.length },
+  ]
+})
 
 const currentPeriodLabel = computed(() => {
   const date = parsePeriodValue(filterForm.period)
@@ -489,13 +550,19 @@ const employeeOptionItems = computed(() => [
 const actions = [
   {
     label: 'Duyệt',
-    buttonProps: { title: 'Duyệt ngày công' },
+    buttonProps: {
+      title: 'Duyệt ngày công',
+      class: 'rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-800',
+    },
     hidden: (item) => item.approval_status !== 'pending' || (Number(item.employee_authority_level || 0) >= currentAuthorityLevel.value),
     onClick: (item) => decide(item, 'approve'),
   },
   {
     label: 'Từ chối',
-    buttonProps: { title: 'Từ chối ngày công' },
+    buttonProps: {
+      title: 'Từ chối ngày công',
+      class: 'rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:border-rose-300 hover:bg-rose-100 hover:text-rose-800',
+    },
     hidden: (item) => item.approval_status !== 'pending' || (Number(item.employee_authority_level || 0) >= currentAuthorityLevel.value),
     onClick: (item) => decide(item, 'reject'),
   },
@@ -504,18 +571,27 @@ const actions = [
 const requestActions = [
   {
     label: 'Chi tiết',
-    buttonProps: { title: 'Xem chi tiết đơn' },
+    buttonProps: {
+      title: 'Xem chi tiết đơn',
+      class: 'border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 shadow-sm hover:border-blue-300 hover:bg-blue-100 hover:text-blue-800',
+    },
     onClick: (item) => openRequestDetail(item),
   },
   {
     label: 'Duyệt đơn',
-    buttonProps: { title: 'Duyệt đơn chấm công' },
+    buttonProps: {
+      title: 'Duyệt đơn',
+      class: 'rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-800',
+    },
     hidden: (item) => item.status !== 'pending',
     onClick: (item) => reviewRequest(item, 'approve'),
   },
   {
     label: 'Từ chối',
-    buttonProps: { title: 'Từ chối đơn chấm công' },
+    buttonProps: {
+      title: 'Từ chối đơn',
+      class: 'rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:border-rose-300 hover:bg-rose-100 hover:text-rose-800',
+    },
     hidden: (item) => item.status !== 'pending',
     onClick: (item) => reviewRequest(item, 'reject'),
   },
@@ -553,7 +629,7 @@ watch(
 )
 
 function applyFilters() {
-  router.get(route('attendance.approvals'), {
+  router.get(route(isLeaveApproval.value ? 'leave.approvals' : 'attendance.approvals'), {
     month: filterForm.month,
     year: filterForm.year,
     employee_profile_id: filterForm.employee_profile_id,
@@ -578,9 +654,31 @@ function decide(item, action) {
     return
   }
   decisionForm.note = String(note).trim()
+  decisionForm.resolved_check_out_time = ''
+
+  if (action === 'approve' && needsResolvedCheckOut(item)) {
+    const suggestedTime = suggestedCheckOutTime(item)
+    const resolvedTime = window.prompt('Bản ghi thiếu check-out. Nhập giờ check-out để admin xác nhận công:', suggestedTime)
+    if (resolvedTime === null) return
+    if (!/^\d{2}:\d{2}$/.test(String(resolvedTime).trim())) {
+      window.alert('Giờ check-out phải có định dạng HH:mm.')
+      return
+    }
+
+    decisionForm.resolved_check_out_time = String(resolvedTime).trim()
+  }
+
   decisionForm.post(route(action === 'approve' ? 'attendance.confirm' : 'attendance.reject', item.id), {
     preserveScroll: true,
   })
+}
+
+function needsResolvedCheckOut(item) {
+  return Boolean(item.check_in_at) && (!item.check_out_at || item.missing_check_out || item.day_status === 'missing_check_out')
+}
+
+function suggestedCheckOutTime(item) {
+  return item.shift_end_time || '17:30'
 }
 
 function reviewRequest(item, action) {
@@ -591,7 +689,8 @@ function reviewRequest(item, action) {
     return
   }
   requestDecisionForm.note = String(note).trim()
-  requestDecisionForm.post(route(action === 'approve' ? 'attendance.request-approvals.approve' : 'attendance.request-approvals.reject', item.id), {
+  const routePrefix = isLeaveApproval.value ? 'leave' : 'attendance'
+  requestDecisionForm.post(route(`${routePrefix}.request-approvals.${action === 'approve' ? 'approve' : 'reject'}`, item.id), {
     preserveScroll: true,
   })
 }
@@ -637,6 +736,37 @@ function formatDayStatus(value) {
     absent: 'Vắng',
   }
   return labels[value] || '-'
+}
+
+function dayStatusBadges(item) {
+  const badges = []
+  const isOnTimeCheckIn = item.check_in_at
+    && Number(item.late_minutes || 0) <= 0
+    && ['on_time', 'present'].includes(String(item.attendance_status || ''))
+
+  if (isOnTimeCheckIn) {
+    badges.push({
+      label: 'Đi làm đúng giờ',
+      class: 'bg-emerald-50 text-emerald-700',
+    })
+  }
+
+  if (item.day_status === 'missing_check_out') {
+    badges.push({
+      label: 'Thiếu check out',
+      class: dayStatusClass('missing_check_out'),
+    })
+  } else if (!isOnTimeCheckIn || item.day_status !== 'present') {
+    badges.push({
+      label: formatDayStatus(item.day_status),
+      class: dayStatusClass(item.day_status),
+    })
+  }
+
+  return badges.length ? badges : [{
+    label: '-',
+    class: dayStatusClass(null),
+  }]
 }
 
 function formatApprovalStatus(value) {

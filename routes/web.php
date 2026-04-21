@@ -7,6 +7,7 @@ use App\Http\Controllers\WEB\AttendanceCatalogController;
 use App\Http\Controllers\WEB\DepartmentApprovalController;
 use App\Http\Controllers\WEB\DepartmentController;
 use App\Http\Controllers\WEB\FeedbackController;
+use App\Http\Controllers\WEB\LeaveManagementController;
 use App\Http\Controllers\WEB\PortalController;
 use App\Http\Controllers\WEB\PositionController;
 use App\Http\Controllers\WEB\ProjectController;
@@ -102,6 +103,34 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
         ->middleware('position.capability:' . PositionCapability::VIEW_OWN_SALARY)
         ->name('salary.mine');
 
+    Route::get('/salary/company', [SalaryController::class, 'company'])
+        ->middleware('position.capability:' . PositionCapability::VIEW_ALL_SALARY)
+        ->name('salary.company');
+
+    Route::get('/salary/company/export/excel', [SalaryController::class, 'exportCompanyExcel'])
+        ->middleware('position.capability:' . PositionCapability::VIEW_ALL_SALARY)
+        ->name('salary.company.export.excel');
+
+    Route::post('/salary/company/lock', [SalaryController::class, 'lockCompanyPeriod'])
+        ->middleware('position.capability:' . PositionCapability::MANAGE_SALARY)
+        ->name('salary.company.lock');
+
+    Route::post('/salary/company/unlock', [SalaryController::class, 'unlockCompanyPeriod'])
+        ->middleware('position.capability:' . PositionCapability::MANAGE_SALARY)
+        ->name('salary.company.unlock');
+
+    Route::post('/salary/company/recalculate', [SalaryController::class, 'recalculateCompanyPeriod'])
+        ->middleware('position.capability:' . PositionCapability::MANAGE_SALARY)
+        ->name('salary.company.recalculate');
+
+    Route::post('/salary/company/adjustments', [SalaryController::class, 'storeAdjustment'])
+        ->middleware('position.capability:' . PositionCapability::MANAGE_SALARY)
+        ->name('salary.company.adjustments.store');
+
+    Route::delete('/salary/company/adjustments/{salaryAdjustment}', [SalaryController::class, 'destroyAdjustment'])
+        ->middleware('position.capability:' . PositionCapability::MANAGE_SALARY)
+        ->name('salary.company.adjustments.destroy');
+
     Route::get('/my-projects', [ProjectController::class, 'myProjects'])
         ->middleware('position.capability:' . PositionCapability::VIEW_OWN_PROJECTS)
         ->name('projects.mine');
@@ -174,9 +203,35 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
             ->name('attendance.adjustments.reject');
     });
 
+    Route::middleware(['position.capability:' . PositionCapability::APPROVE_LEAVE])->group(function () {
+        Route::get('/leave/approvals', [AttendanceController::class, 'leaveApprovals'])
+            ->name('leave.approvals');
+        Route::post('/leave/request-approvals/{approvalRequest}/approve', [AttendanceController::class, 'approveRequest'])
+            ->name('leave.request-approvals.approve');
+        Route::post('/leave/request-approvals/{approvalRequest}/reject', [AttendanceController::class, 'rejectRequest'])
+            ->name('leave.request-approvals.reject');
+    });
+
     Route::middleware(['position.capability:' . PositionCapability::VIEW_ALL_ATTENDANCE])->group(function () {
         Route::get('/attendance/reports', [AttendanceController::class, 'reports'])
             ->name('attendance.reports');
+    });
+
+    Route::middleware(['position.capability:' . PositionCapability::MANAGE_LEAVE_POLICY])->group(function () {
+        Route::get('/leave-management', [LeaveManagementController::class, 'index'])
+            ->name('leave-management.index');
+        Route::post('/leave-management/types', [LeaveManagementController::class, 'storeType'])
+            ->name('leave-management.types.store');
+        Route::put('/leave-management/types/{leaveType}', [LeaveManagementController::class, 'updateType'])
+            ->name('leave-management.types.update');
+        Route::put('/leave-management/types/{leaveType}/toggle', [LeaveManagementController::class, 'toggleType'])
+            ->name('leave-management.types.toggle');
+        Route::post('/leave-management/balances/grant', [LeaveManagementController::class, 'grantBalance'])
+            ->name('leave-management.balances.grant');
+        Route::post('/leave-management/balances/grant-bulk', [LeaveManagementController::class, 'grantBulk'])
+            ->name('leave-management.balances.grant-bulk');
+        Route::post('/leave-management/balances/{balance}/adjust', [LeaveManagementController::class, 'adjustBalance'])
+            ->name('leave-management.balances.adjust');
     });
 
     Route::middleware(['position.capability:' . PositionCapability::EXPORT_ATTENDANCE])->group(function () {

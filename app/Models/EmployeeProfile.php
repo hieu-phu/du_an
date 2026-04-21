@@ -80,4 +80,14 @@ class EmployeeProfile extends Model
     {
         return $this->hasMany(ProjectMember::class);
     }
+
+    public function salaryAdjustments(): HasMany
+    {
+        return $this->hasMany(SalaryAdjustment::class);
+    }
+
+    public function leaveBalances(): HasMany
+    {
+        return $this->hasMany(EmployeeLeaveBalance::class);
+    }
 }

@@ -47,6 +47,15 @@ class UserRepository extends BaseRepository
             $query->whereHas('employeeProfile', fn ($q) => $q->whereDate('hire_date', $hireDate));
         }
 
+        if (!empty($filters['max_authority_level'])) {
+            $maxRank = (int) $filters['max_authority_level'];
+            $query->where(function ($q) use ($maxRank) {
+                $q->whereHas('employeeProfile.position', function ($sub) use ($maxRank) {
+                    $sub->where('authority_level', '<=', $maxRank);
+                })->orWhereDoesntHave('employeeProfile.position');
+            });
+        }
+
         return $query->latest()->paginate($perPage)->through(fn (User $user) => $this->transformUser($user));
     }
 

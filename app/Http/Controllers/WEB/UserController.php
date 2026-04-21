@@ -34,6 +34,7 @@ class UserController extends Controller
     public function index(Request $request)
     {
         $filters = $request->only(['search', 'status', 'per_page', 'department_id', 'hire_date']);
+        $filters['max_authority_level'] = $this->resolveActorAuthorityLevel($request->user());
         
         $filters['scope'] = 'accounts';
         $perPage = $request->integer('per_page', 15);
@@ -56,6 +57,7 @@ class UserController extends Controller
     public function employees(Request $request)
     {
         $filters = $request->only(['search', 'status', 'per_page', 'department_id', 'hire_date']);
+        $filters['max_authority_level'] = $this->resolveActorAuthorityLevel($request->user());
         
         $filters['scope'] = 'employees';
         $perPage = $request->integer('per_page', 15);
@@ -489,7 +491,7 @@ class UserController extends Controller
             }
         }
 
-        return (int) ($position->authority_level ?? 0) >= 4;
+        return false;
     }
 
     private function resolveApproverIds(?int $excludeUserId = null): array
@@ -505,4 +507,3 @@ class UserController extends Controller
             ->all();
     }
 }
-

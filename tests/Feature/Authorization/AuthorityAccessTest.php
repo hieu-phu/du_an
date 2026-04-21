@@ -51,6 +51,18 @@ class AuthorityAccessTest extends TestCase
         $this->actingAs($employee)->get('/projects')->assertForbidden();
         $this->actingAs($employee)->get('/attendance/reports')->assertRedirect();
         $this->actingAs($employee)->get('/departments')->assertRedirect();
+        $this->actingAs($employee)->get('/salary/company')->assertRedirect();
+        $this->actingAs($employee)->get('/salary/company/export/excel')->assertRedirect();
+    }
+
+    public function test_user_with_view_all_salary_capability_can_access_company_salary_page(): void
+    {
+        $manager = $this->makeUserWithCapabilities([Capability::VIEW_ALL_SALARY]);
+
+        $this->actingAs($manager)->get('/salary/company')->assertOk();
+        $this->actingAs($manager)->get('/salary/company/export/excel')->assertOk();
+        $this->actingAs($manager)->post('/salary/company/recalculate')->assertRedirect();
+        $this->actingAs($manager)->post('/salary/company/adjustments')->assertRedirect();
     }
 
     public function test_hr_cannot_update_admin_account_by_url(): void

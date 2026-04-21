@@ -33,6 +33,14 @@ class AttendanceController extends Controller
         return Inertia::render('Attendance/Approvals', $this->attendanceService->getApprovalsData($request->all(), $request->user()));
     }
 
+    public function leaveApprovals(Request $request): Response
+    {
+        return Inertia::render('Attendance/Approvals', $this->attendanceService->getApprovalsData([
+            ...$request->all(),
+            'only_leave' => true,
+        ], $request->user()));
+    }
+
     public function reports(Request $request): Response
     {
         return Inertia::render('Attendance/Reports', $this->attendanceService->getReportData($request->user(), $request->all()));
@@ -84,13 +92,15 @@ class AttendanceController extends Controller
     {
         $request->validate([
             'note' => ['nullable', 'string', 'max:1000'],
+            'resolved_check_out_time' => ['nullable', 'date_format:H:i'],
         ]);
 
         try {
             $this->attendanceService->confirmAttendance(
                 $attendanceRecord,
                 $request->user(),
-                $request->string('note')->toString() ?: null
+                $request->string('note')->toString() ?: null,
+                $request->string('resolved_check_out_time')->toString() ?: null
             );
         } catch (\Throwable $exception) {
             return back()->withErrors(['error' => $exception->getMessage()]);
@@ -128,7 +138,11 @@ class AttendanceController extends Controller
             'from_time' => ['nullable', 'date_format:H:i'],
             'to_time' => ['nullable', 'date_format:H:i'],
             'requested_status' => ['nullable', 'string', 'max:50'],
+            'leave_type_id' => ['nullable', 'integer', 'exists:leave_types,id'],
             'leave_type' => ['nullable', 'string', 'max:20'],
+            'leave_duration_type' => ['nullable', 'string', 'in:full_day,half_day,hourly'],
+            'leave_hours' => ['nullable', 'numeric', 'min:0.5', 'max:24'],
+            'attachment' => ['nullable', 'file', 'max:5120', 'mimes:jpg,jpeg,png,pdf,doc,docx'],
             'start_at' => ['nullable', 'date'],
             'end_at' => ['nullable', 'date'],
             'reason' => ['required', 'string', 'max:2000'],
@@ -152,7 +166,12 @@ class AttendanceController extends Controller
         ]);
 
         try {
-            $this->attendanceService->submitAttendanceRequest($request->user(), $request->all());
+            $payload = $request->all();
+            if ($request->hasFile('attachment')) {
+                $payload['attachment_path'] = $request->file('attachment')->store('attendance-requests', 'public');
+            }
+
+            $this->attendanceService->submitAttendanceRequest($request->user(), $payload);
         } catch (ValidationException $exception) {
             throw $exception;
         } catch (\Throwable $exception) {

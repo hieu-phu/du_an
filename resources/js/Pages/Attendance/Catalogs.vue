@@ -37,10 +37,12 @@
               <InputDate v-model="shiftForm.break_start_time" label="Bat dau nghi giua ca" placeholder="Khong nghi" :config="timePickerConfig" :error="shiftForm.errors.break_start_time" />
               <InputDate v-model="shiftForm.break_end_time" label="Ket thuc nghi giua ca" placeholder="Khong nghi" :config="timePickerConfig" :error="shiftForm.errors.break_end_time" />
               <Field label="Phut chuan" :error="shiftForm.errors.standard_minutes">
-                <input v-model.number="shiftForm.standard_minutes" class="form-input" type="number" min="1">
+                <input v-model.number="shiftForm.standard_minutes" class="form-input bg-gray-100 text-gray-700" type="number" min="1" readonly>
+                <p class="text-xs text-gray-500">Tu tinh bang thoi luong ca tru nghi giua ca va nghi giao ca.</p>
               </Field>
               <Field label="Nguong nua cong" :error="shiftForm.errors.half_day_minutes">
-                <input v-model.number="shiftForm.half_day_minutes" class="form-input" type="number" min="1">
+                <input v-model.number="shiftForm.half_day_minutes" class="form-input bg-gray-100 text-gray-700" type="number" min="1" readonly>
+                <p class="text-xs text-gray-500">Tu tinh bang 50% phut chuan.</p>
               </Field>
             </div>
 
@@ -52,7 +54,7 @@
                 <input v-model.number="shiftForm.handover_break_minutes" class="form-input" type="number" min="0" max="240">
               </Field>
               <div class="md:col-span-2 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
-                So phut nay se duoc ap dung cho ca di muon va ve som. Nghi giao ca se bi tru khoi thoi gian tinh cong.
+                So phut nay dung de ghi nhan quy tac giao ca, khong bi tru khoi phut chuan va thoi gian tinh cong.
               </div>
             </div>
 
@@ -87,9 +89,10 @@
             <div class="font-semibold">Tom tat ca sau khi luu</div>
             <div class="mt-2 grid grid-cols-1 gap-2 md:grid-cols-4">
               <div>Tong thoi gian tu dau ca den cuoi ca: <strong>{{ formatMinutes(shiftDurationMinutes) }}</strong></div>
-              <div>Thoi gian nghi giua/giao ca: <strong>{{ formatMinutes(totalBreakMinutes) }}</strong></div>
+              <div>Thoi gian nghi giua ca: <strong>{{ formatMinutes(breakMinutes) }}</strong></div>
               <div>Thoi luong ca sau khi tru nghi: <strong>{{ formatMinutes(netShiftMinutes) }}</strong></div>
               <div>Thoi gian tinh cong theo phut chuan: <strong>{{ formatMinutes(standardMinutes) }}</strong></div>
+              <div>Nghi giao ca: <strong>{{ formatMinutes(Number(shiftForm.handover_break_minutes || 0)) }}</strong></div>
               <div>Khung tang ca: <strong>{{ overtimePreviewLabel }}</strong></div>
               <div>Trang thai kiem tra du lieu: <strong>{{ shiftPreviewError || 'Hop le de luu' }}</strong></div>
             </div>
@@ -518,8 +521,7 @@ const breakMinutes = computed(() => {
   if (!shiftForm.break_start_time || !shiftForm.break_end_time) return 0
   return timeRangeMinutes(shiftForm.break_start_time, shiftForm.break_end_time, shiftForm.is_overnight)
 })
-const totalBreakMinutes = computed(() => Math.max(0, breakMinutes.value + Number(shiftForm.handover_break_minutes || 0)))
-const netShiftMinutes = computed(() => Math.max(0, shiftDurationMinutes.value - totalBreakMinutes.value))
+const netShiftMinutes = computed(() => Math.max(0, shiftDurationMinutes.value - breakMinutes.value))
 const standardMinutes = computed(() => Number(shiftForm.standard_minutes || 0))
 const overtimeGapMinutes = computed(() => {
   if (!shiftForm.overtime_start_time || !shiftForm.end_time) return 0
@@ -543,7 +545,7 @@ const shiftPreviewError = computed(() => {
   if ((shiftForm.break_start_time && !shiftForm.break_end_time) || (!shiftForm.break_start_time && shiftForm.break_end_time)) return 'Can nhap du gio nghi'
   if ((shiftForm.overtime_start_time && !shiftForm.overtime_end_time) || (!shiftForm.overtime_start_time && shiftForm.overtime_end_time)) return 'Can nhap du gio tang ca'
   if (breakMinutes.value < 0 || breakMinutes.value >= shiftDurationMinutes.value || !rangeInsideShift(shiftForm.start_time, shiftForm.end_time, shiftForm.break_start_time, shiftForm.break_end_time, shiftForm.is_overnight)) return 'Gio nghi khong hop le'
-  if (Number(shiftForm.handover_break_minutes || 0) >= shiftDurationMinutes.value) return 'Nghi giao ca khong hop le'
+  if (Number(shiftForm.handover_break_minutes || 0) < 0) return 'Nghi giao ca khong hop le'
   if (!shiftForm.allows_overtime && (shiftForm.overtime_start_time || shiftForm.overtime_end_time || shiftForm.overtime_hourly_rate)) return 'Dang tat tinh tang ca nhung van con cau hinh OT'
   if (standardMinutes.value !== netShiftMinutes.value) return `Phut chuan phai bang ${netShiftMinutes.value} phut`
   if (Number(shiftForm.half_day_minutes) > Number(shiftForm.standard_minutes)) return 'Nguong nua cong vuot phut chuan'
@@ -565,6 +567,35 @@ watch(() => shiftForm.grace_minutes, (value) => {
   shiftForm.late_grace_minutes = normalized
   shiftForm.early_leave_grace_minutes = normalized
 })
+
+watch(
+  () => [
+    shiftForm.start_time,
+    shiftForm.end_time,
+    shiftForm.break_start_time,
+    shiftForm.break_end_time,
+    shiftForm.is_overnight,
+  ],
+  () => syncShiftWorkThresholds(),
+  { immediate: true }
+)
+
+function syncShiftWorkThresholds() {
+  if (!canAutoCalculateShiftThresholds()) return
+
+  const minutes = netShiftMinutes.value
+  shiftForm.standard_minutes = minutes
+  shiftForm.half_day_minutes = Math.ceil(minutes / 2)
+}
+
+function canAutoCalculateShiftThresholds() {
+  const hasBreakPair = Boolean(shiftForm.break_start_time) === Boolean(shiftForm.break_end_time)
+  return shiftDurationMinutes.value > 0
+    && hasBreakPair
+    && breakMinutes.value >= 0
+    && rangeInsideShift(shiftForm.start_time, shiftForm.end_time, shiftForm.break_start_time, shiftForm.break_end_time, shiftForm.is_overnight)
+    && netShiftMinutes.value > 0
+}
 
 function resetShiftForm() {
   shiftForm.reset()

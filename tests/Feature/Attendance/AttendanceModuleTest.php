@@ -12,10 +12,13 @@ use App\Models\Department;
 use App\Models\EmployeeProfile;
 use App\Models\EmployeeWorkShiftAssignment;
 use App\Models\Position;
+use App\Models\PayrollPeriod;
 use Carbon\Carbon;
 use App\Models\Holiday;
 use App\Models\Notification;
 use App\Models\OvertimeRequest;
+use App\Models\SalaryAdjustment;
+use App\Models\SalarySnapshot;
 use App\Models\User;
 use App\Models\WorkShift;
 use App\Support\PositionCapability as Capability;
@@ -635,7 +638,7 @@ class AttendanceModuleTest extends TestCase
         $this->assertSame(1.0, (float) data_get($page, 'props.summary.approved_work_units'));
         $this->assertSame(0.5, (float) data_get($page, 'props.summary.pending_work_units'));
         $this->assertSame(60, (int) data_get($page, 'props.summary.approved_overtime_minutes'));
-        $this->assertSame(187500.0, (float) data_get($page, 'props.summary.overtime_amount'));
+        $this->assertSame(412500.0, (float) data_get($page, 'props.summary.overtime_amount'));
         $this->assertSame(1.5, (float) data_get($page, 'props.records.0.overtime_multiplier'));
         $this->assertSame('Ngay thuong', data_get($page, 'props.records.0.overtime_type_label'));
     }
@@ -850,13 +853,13 @@ class AttendanceModuleTest extends TestCase
         $page = $response->viewData('page');
         $this->assertSame(2.0, (float) data_get($page, 'props.summary.approved_work_units'));
         $this->assertSame(120, (int) data_get($page, 'props.summary.approved_overtime_minutes'));
-        $this->assertSame(437500.0, (float) data_get($page, 'props.summary.overtime_amount'));
+        $this->assertSame(962500.0, (float) data_get($page, 'props.summary.overtime_amount'));
         $this->assertSame(1.5, (float) data_get($page, 'props.records.0.overtime_multiplier'));
         $this->assertSame('Ngay thuong', data_get($page, 'props.records.0.overtime_type_label'));
-        $this->assertSame(187500.0, (float) data_get($page, 'props.records.0.overtime_amount'));
+        $this->assertSame(412500.0, (float) data_get($page, 'props.records.0.overtime_amount'));
         $this->assertSame(2.0, (float) data_get($page, 'props.records.1.overtime_multiplier'));
         $this->assertSame('Ngay nghi tuan', data_get($page, 'props.records.1.overtime_type_label'));
-        $this->assertSame(250000.0, (float) data_get($page, 'props.records.1.overtime_amount'));
+        $this->assertSame(550000.0, (float) data_get($page, 'props.records.1.overtime_amount'));
     }
 
     public function test_salary_overtime_amount_uses_shift_configured_hourly_rate_when_present(): void
@@ -906,6 +909,296 @@ class AttendanceModuleTest extends TestCase
         $page = $response->viewData('page');
         $this->assertSame(100000.0, (float) data_get($page, 'props.summary.overtime_amount'));
         $this->assertSame(100000.0, (float) data_get($page, 'props.records.0.overtime_amount'));
+    }
+
+    public function test_company_salary_detail_exposes_checkin_and_checkout_times(): void
+    {
+        $admin = $this->makeUserWithAuthorityProfile('admin', 'Admin Salary Company Detail');
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Salary Company Detail');
+        $employee->employeeProfile->update([
+            'base_salary' => 22000000,
+        ]);
+
+        AttendanceRecord::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-15',
+            'check_in_at' => '2026-04-15 08:05:00',
+            'check_out_at' => '2026-04-15 17:10:00',
+            'worked_minutes' => 480,
+            'attendance_status' => 'on_time',
+            'day_status' => 'present',
+            'approval_status' => 'approved',
+            'missing_check_in' => false,
+            'missing_check_out' => false,
+            'is_confirmed' => true,
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('salary.company', [
+            'month' => 4,
+            'year' => 2026,
+            'employee_profile_id' => $employee->employeeProfile->id,
+        ]));
+
+        $response->assertOk();
+        $page = $response->viewData('page');
+
+        $this->assertSame('08:05', data_get($page, 'props.selectedDetail.records.0.check_in_at'));
+        $this->assertSame('17:10', data_get($page, 'props.selectedDetail.records.0.check_out_at'));
+    }
+
+    public function test_locked_salary_period_uses_snapshot_after_live_data_changes(): void
+    {
+        $admin = $this->makeUserWithAuthorityProfile('admin', 'Admin Salary Lock');
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Salary Lock');
+        $employee->employeeProfile->update([
+            'base_salary' => 22000000,
+        ]);
+
+        $record = AttendanceRecord::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-15',
+            'check_in_at' => '2026-04-15 08:00:00',
+            'check_out_at' => '2026-04-15 17:00:00',
+            'worked_minutes' => 480,
+            'attendance_status' => 'on_time',
+            'day_status' => 'present',
+            'approval_status' => 'approved',
+            'missing_check_in' => false,
+            'missing_check_out' => false,
+            'is_confirmed' => true,
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('salary.company.lock'), [
+                'month' => 4,
+                'year' => 2026,
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('payroll_periods', [
+            'month' => 4,
+            'year' => 2026,
+            'status' => 'locked',
+        ]);
+        $this->assertDatabaseHas('salary_snapshots', [
+            'employee_profile_id' => $employee->employeeProfile->id,
+        ]);
+
+        $record->update([
+            'check_out_at' => null,
+            'missing_check_out' => true,
+            'worked_minutes' => 60,
+            'approval_status' => 'pending',
+            'is_confirmed' => false,
+        ]);
+
+        $response = $this->actingAs($employee)->get(route('salary.mine', [
+            'month' => 4,
+            'year' => 2026,
+        ]));
+
+        $response->assertOk();
+        $page = $response->viewData('page');
+
+        $this->assertSame('locked', data_get($page, 'props.periodStatus.status'));
+        $this->assertSame(1.0, (float) data_get($page, 'props.summary.approved_work_units'));
+        $this->assertSame('17:00', data_get($page, 'props.records.0.check_out_at'));
+
+        $period = PayrollPeriod::query()->where(['month' => 4, 'year' => 2026])->firstOrFail();
+        $snapshot = SalarySnapshot::query()->where('payroll_period_id', $period->id)->where('employee_profile_id', $employee->employeeProfile->id)->firstOrFail();
+        $this->assertSame('17:00', data_get($snapshot->payload, 'records.0.check_out_at'));
+    }
+
+    public function test_salary_statement_separates_allowances_and_manual_deductions(): void
+    {
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Salary Adjustment Breakdown');
+        $employee->employeeProfile->update([
+            'base_salary' => 22000000,
+        ]);
+
+        AttendanceRecord::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-15',
+            'check_in_at' => '2026-04-15 08:00:00',
+            'check_out_at' => '2026-04-15 17:00:00',
+            'worked_minutes' => 480,
+            'attendance_status' => 'on_time',
+            'day_status' => 'present',
+            'approval_status' => 'approved',
+            'missing_check_in' => false,
+            'missing_check_out' => false,
+            'is_confirmed' => true,
+        ]);
+
+        SalaryAdjustment::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'month' => 4,
+            'year' => 2026,
+            'type' => 'allowance',
+            'label' => 'Phu cap xang xe',
+            'amount' => 500000,
+        ]);
+
+        SalaryAdjustment::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'month' => 4,
+            'year' => 2026,
+            'type' => 'deduction',
+            'label' => 'Tam ung',
+            'amount' => 100000,
+        ]);
+
+        $response = $this->actingAs($employee)->get(route('salary.mine', [
+            'month' => 4,
+            'year' => 2026,
+        ]));
+
+        $response->assertOk();
+        $page = $response->viewData('page');
+
+        $this->assertSame(500000.0, (float) data_get($page, 'props.summary.allowance_amount'));
+        $this->assertSame(100000.0, (float) data_get($page, 'props.summary.manual_deduction_amount'));
+        $this->assertSame(
+            (float) data_get($page, 'props.summary.attendance_deduction_amount') + 100000.0,
+            (float) data_get($page, 'props.summary.deduction_amount')
+        );
+    }
+
+    public function test_current_month_salary_only_counts_expected_work_days_until_today(): void
+    {
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Current Month Window');
+        $employee->employeeProfile->update([
+            'base_salary' => 22000000,
+        ]);
+
+        AttendanceRecord::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-14',
+            'check_in_at' => '2026-04-14 08:00:00',
+            'check_out_at' => '2026-04-14 17:00:00',
+            'worked_minutes' => 480,
+            'attendance_status' => 'on_time',
+            'day_status' => 'present',
+            'approval_status' => 'approved',
+            'missing_check_in' => false,
+            'missing_check_out' => false,
+            'is_confirmed' => true,
+        ]);
+
+        $response = $this->actingAs($employee)->get(route('salary.mine', [
+            'month' => 4,
+            'year' => 2026,
+        ]));
+
+        $response->assertOk();
+        $page = $response->viewData('page');
+
+        $this->assertSame(10, (int) data_get($page, 'props.summary.expected_work_days'));
+        $this->assertSame(19800000.0, (float) data_get($page, 'props.summary.attendance_deduction_amount'));
+    }
+
+    public function test_current_month_salary_counts_saturday_when_shift_assignment_requires_it(): void
+    {
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Current Month Saturday');
+        $employee->employeeProfile->update([
+            'base_salary' => 22000000,
+        ]);
+
+        $shift = WorkShift::query()->create([
+            'shift_name' => 'Ca T2-T7',
+            'start_time' => '08:00:00',
+            'end_time' => '17:00:00',
+            'break_start_time' => '12:00:00',
+            'break_end_time' => '13:00:00',
+            'standard_minutes' => 480,
+            'half_day_minutes' => 240,
+            'handover_break_minutes' => 0,
+            'grace_minutes' => 10,
+            'late_grace_minutes' => 10,
+            'early_leave_grace_minutes' => 5,
+            'allows_overtime' => true,
+            'is_overnight' => false,
+            'is_active' => true,
+        ]);
+
+        EmployeeWorkShiftAssignment::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_shift_id' => $shift->id,
+            'effective_from' => '2026-04-01',
+            'effective_to' => '2026-04-30',
+            'weekdays' => [1, 2, 3, 4, 5, 6],
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($employee)->get(route('salary.mine', [
+            'month' => 4,
+            'year' => 2026,
+        ]));
+
+        $response->assertOk();
+        $page = $response->viewData('page');
+
+        $this->assertSame(12, (int) data_get($page, 'props.summary.expected_work_days'));
+    }
+
+    public function test_recalculate_locked_salary_period_refreshes_snapshot_breakdown_values(): void
+    {
+        $admin = $this->makeUserWithAuthorityProfile('admin', 'Admin Salary Recalculate');
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Salary Recalculate');
+        $employee->employeeProfile->update([
+            'base_salary' => 22000000,
+        ]);
+
+        AttendanceRecord::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-15',
+            'check_in_at' => '2026-04-15 08:00:00',
+            'check_out_at' => '2026-04-15 17:00:00',
+            'worked_minutes' => 480,
+            'attendance_status' => 'on_time',
+            'day_status' => 'present',
+            'approval_status' => 'approved',
+            'missing_check_in' => false,
+            'missing_check_out' => false,
+            'is_confirmed' => true,
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('salary.company.lock'), [
+                'month' => 4,
+                'year' => 2026,
+            ])
+            ->assertRedirect();
+
+        SalaryAdjustment::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'month' => 4,
+            'year' => 2026,
+            'type' => 'allowance',
+            'label' => 'Phu cap ca dem',
+            'amount' => 800000,
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('salary.company.recalculate'), [
+                'month' => 4,
+                'year' => 2026,
+            ])
+            ->assertRedirect();
+
+        $response = $this->actingAs($employee)->get(route('salary.mine', [
+            'month' => 4,
+            'year' => 2026,
+        ]));
+
+        $response->assertOk();
+        $page = $response->viewData('page');
+
+        $this->assertSame(800000.0, (float) data_get($page, 'props.summary.allowance_amount'));
+
+        $period = PayrollPeriod::query()->where(['month' => 4, 'year' => 2026])->firstOrFail();
+        $snapshot = SalarySnapshot::query()->where('payroll_period_id', $period->id)->where('employee_profile_id', $employee->employeeProfile->id)->firstOrFail();
+        $this->assertSame(800000.0, (float) data_get($snapshot->payload, 'summary.allowance_amount'));
     }
 
     public function test_salary_statement_exposes_shift_catalog_data_for_each_record(): void
@@ -1009,7 +1302,7 @@ class AttendanceModuleTest extends TestCase
         $this->assertSame(1.0, (float) data_get($page, 'props.summary.approved_work_units'));
         $this->assertSame((int) $record->overtime_minutes, (int) data_get($page, 'props.summary.approved_overtime_minutes'));
         $this->assertSame('approved', data_get($page, 'props.records.0.approval_status'));
-        $this->assertGreaterThan(0, (float) data_get($page, 'props.summary.net_amount'));
+        $this->assertGreaterThan(0, (float) data_get($page, 'props.summary.base_salary_amount'));
     }
 
     public function test_hr_can_export_reports_but_employee_cannot(): void
