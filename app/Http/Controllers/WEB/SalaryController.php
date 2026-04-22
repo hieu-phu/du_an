@@ -910,8 +910,8 @@ class SalaryController extends Controller
         $weekday = (int) $workDate->dayOfWeekIso;
 
         $matchedAssignment = $shiftAssignments->first(function (EmployeeWorkShiftAssignment $assignment) use ($workDate, $weekday) {
-            $effectiveFrom = optional($assignment->effective_from)?->copy()->startOfDay();
-            $effectiveTo = optional($assignment->effective_to)?->copy()->startOfDay();
+            $effectiveFrom = $assignment->effective_from?->copy()->startOfDay();
+            $effectiveTo = $assignment->effective_to?->copy()->startOfDay();
 
             if (!$effectiveFrom || $effectiveFrom->greaterThan($workDate)) {
                 return false;
@@ -1436,17 +1436,7 @@ class SalaryController extends Controller
 
     private function calculatePaidOvertimeMinutes(Carbon $rangeStart, Carbon $rangeEnd, Carbon $windowStart, Carbon $windowEnd, array $snapshot): int
     {
-        $minutes = $this->calculateOverlapMinutes($rangeStart, $rangeEnd, $windowStart, $windowEnd);
-        $handoverMinutes = max(0, (int) ($snapshot['handover_break_minutes'] ?? 0));
-
-        if ($minutes === 0 || $handoverMinutes === 0) {
-            return $minutes;
-        }
-
-        $handoverEnd = $windowStart->copy()->addMinutes($handoverMinutes);
-        $unpaidMinutes = $this->calculateOverlapMinutes($rangeStart, $rangeEnd, $windowStart, $handoverEnd);
-
-        return max(0, $minutes - $unpaidMinutes);
+        return $this->calculateOverlapMinutes($rangeStart, $rangeEnd, $windowStart, $windowEnd);
     }
 
     private function resolveTimePoint(Carbon $baseDate, string $time, bool $nextDay = false): Carbon

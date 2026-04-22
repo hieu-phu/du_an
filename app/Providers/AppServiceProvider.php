@@ -2,10 +2,12 @@
 
 namespace App\Providers;
 
+use App\Database\Schema\Grammars\TestingMySqlGrammar;
 use App\Models\PositionCapability as PositionCapabilityModel;
 use App\Support\AccessMatrix;
 use App\Support\MenuBuilder;
 use App\Support\PositionCapability;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
@@ -20,6 +22,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->configureTestingDatabaseGrammar();
+
         // Position capability gates.
         foreach ($this->availableCapabilities() as $capability) {
             Gate::define($capability, fn ($user) => $user->hasPositionCapability($capability));
@@ -137,5 +141,15 @@ class AppServiceProvider extends ServiceProvider
             ->all();
 
         return array_values(array_unique(array_merge($codes, $dbCodes)));
+    }
+
+    private function configureTestingDatabaseGrammar(): void
+    {
+        if (!$this->app->environment('testing') || config('database.default') !== 'mysql') {
+            return;
+        }
+
+        $connection = DB::connection();
+        $connection->setSchemaGrammar(new TestingMySqlGrammar($connection));
     }
 }

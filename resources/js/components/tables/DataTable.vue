@@ -12,8 +12,10 @@
             </th>
             <th v-for="col in columns" :key="col.key" class="px-4 py-3 whitespace-nowrap uppercase"
               :title="col.title || col.label"
-              :class="col.align === 'text-right' ? 'text-right' : col.align === 'text-center' ? 'text-center' : 'text-left'">
-              {{ col.label }}
+              :class="[col.class, col.align === 'text-right' ? 'text-right' : col.align === 'text-center' ? 'text-center' : 'text-left']">
+              <slot :name="`head-${col.key}`" :column="col">
+                {{ col.label }}
+              </slot>
             </th>
             <th v-if="hasVisibleActions" class="px-4 py-3 text-center whitespace-nowrap">
               THAO TÁC
@@ -63,10 +65,13 @@
         <!-- Data Rows -->
         <tbody v-else class="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700 text-sm">
           <tr v-for="(item, index) in tableData" :key="item.id || index"
-            class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 cursor-pointer">
+            :class="[
+              'hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 cursor-pointer',
+              resolveRowClass(item, index),
+            ]">
             <!-- Index -->
             <td v-if="showIndex" class="px-4 py-3 text-sm text-gray-800 dark:text-gray-200 text-center font-medium">
-              {{ indexOffset + index + 1 }}
+              {{ rowIndexOffset + index + 1 }}
             </td>
 
             <!-- Data columns -->
@@ -80,8 +85,8 @@
 
             <!-- Actions -->
             <td v-if="hasVisibleActionsForItem(item)"
-              class="px-4 py-3 text-sm text-gray-800 dark:text-gray-200 text-center">
-              <div class="flex justify-center gap-2">
+              class="px-4 py-3 text-sm text-gray-800 dark:text-gray-200 text-center whitespace-nowrap">
+              <div class="flex justify-center gap-2 whitespace-nowrap">
                 <template v-for="(action, idx) in actions" :key="idx">
                   <template v-if="!shouldHideAction(action, item)">
                     <component v-if="action.component" :is="action.component"
@@ -125,7 +130,7 @@
         </tbody>
 
         <!-- Summary Footer -->
-        <tfoot v-if="(summaries.length && !loading && tableData.length) || $slots.paginator"
+        <tfoot v-if="(summaries.length && !loading && tableData.length) || $slots.paginator || showBuiltInPagination"
           class="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700 text-sm">
           <tr v-if="summaries.length && !loading && tableData.length" class="bg-gray-100 dark:bg-gray-900">
             <!-- Index -->
@@ -155,19 +160,50 @@
             <td v-if="hasVisibleActions"></td>
           </tr>
 
-          <tr class="border-t border-gray-100 dark:border-gray-700">
+          <tr v-if="$slots.paginator || showBuiltInPagination" class="border-t border-gray-100 dark:border-gray-700">
             <td :colspan="totalColumns" class="px-4 py-3 bg-white dark:bg-gray-800">
               <div class="flex flex-col md:flex-row items-center justify-between gap-4">
                 <!-- Paginator info -->
                 <div class="text-sm text-gray-600 dark:text-gray-400">
                   <slot name="paginator-info">
-                    <!-- Default slot content -->
+                    <span v-if="showBuiltInPagination">
+                      Hien thi {{ pageStart }}-{{ pageEnd }} / {{ totalItems }} dong
+                    </span>
                   </slot>
                 </div>
 
                 <!-- Paginator controls -->
-                <div class="flex items-center gap-3">
+                <div class="flex flex-wrap items-center justify-center gap-3">
                   <slot name="paginator" />
+                  <template v-if="showBuiltInPagination">
+                    <select
+                      v-model.number="perPage"
+                      class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                    >
+                      <option v-for="option in normalizedPerPageOptions" :key="option" :value="option">
+                        {{ option }} / trang
+                      </option>
+                    </select>
+                    <button
+                      type="button"
+                      class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+                      :disabled="currentPage <= 1"
+                      @click="goToPage(currentPage - 1)"
+                    >
+                      Truoc
+                    </button>
+                    <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      Trang {{ currentPage }} / {{ totalPages }}
+                    </span>
+                    <button
+                      type="button"
+                      class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+                      :disabled="currentPage >= totalPages"
+                      @click="goToPage(currentPage + 1)"
+                    >
+                      Sau
+                    </button>
+                  </template>
                 </div>
               </div>
             </td>
@@ -179,7 +215,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import Skeleton from 'primevue/skeleton'
 import Tooltip from '@/components/ui/Tooltip.vue'
 
@@ -189,7 +225,11 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   showIndex: { type: Boolean, default: false },
   indexOffset: { type: Number, default: 0 },
+  paginate: { type: Boolean, default: false },
+  defaultPerPage: { type: Number, default: 10 },
+  perPageOptions: { type: Array, default: () => [10, 20, 50] },
   actions: { type: Array, default: () => [] },
+  rowClass: { type: [String, Function], default: '' },
   emptyMessage: { type: String, default: 'Không có dữ liệu' },
   titleSummaries: {
     type: String,
@@ -200,6 +240,9 @@ const props = defineProps({
     default: () => []
   }
 })
+
+const currentPage = ref(1)
+const perPage = ref(Number(props.defaultPerPage) || 10)
 
 const shouldHideAction = (action, item) => {
   if (typeof action.hidden === 'function') {
@@ -232,7 +275,59 @@ const hasVisibleActions = computed(() => {
   })
 })
 
-const tableData = computed(() => props.data)
+const normalizedPerPageOptions = computed(() => {
+  const options = props.perPageOptions
+    .map((option) => Number(option))
+    .filter((option) => Number.isFinite(option) && option > 0)
+
+  if (!options.includes(Number(props.defaultPerPage))) {
+    options.unshift(Number(props.defaultPerPage) || 10)
+  }
+
+  return [...new Set(options)].sort((a, b) => a - b)
+})
+
+const totalItems = computed(() => props.data.length)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalItems.value / perPage.value)))
+const showBuiltInPagination = computed(() => props.paginate && totalItems.value > 0)
+const pageStart = computed(() => totalItems.value ? ((currentPage.value - 1) * perPage.value) + 1 : 0)
+const pageEnd = computed(() => Math.min(totalItems.value, currentPage.value * perPage.value))
+const rowIndexOffset = computed(() => props.indexOffset + (props.paginate ? pageStart.value - 1 : 0))
+
+const tableData = computed(() => {
+  if (!props.paginate) {
+    return props.data
+  }
+
+  return props.data.slice(pageStart.value - 1, pageEnd.value)
+})
+
+const goToPage = (page) => {
+  currentPage.value = Math.min(Math.max(Number(page) || 1, 1), totalPages.value)
+}
+
+watch(
+  () => props.defaultPerPage,
+  (value) => {
+    const nextPerPage = Number(value) || 10
+    perPage.value = nextPerPage > 0 ? nextPerPage : 10
+  }
+)
+
+watch(
+  [totalItems, perPage],
+  () => {
+    if (!Number.isFinite(perPage.value) || perPage.value <= 0) {
+      perPage.value = normalizedPerPageOptions.value[0] || 10
+      return
+    }
+
+    if (currentPage.value > totalPages.value) {
+      currentPage.value = totalPages.value
+    }
+  },
+  { immediate: true }
+)
 
 const filteredButtonProps = (props) => {
   if (!props) return {}
@@ -244,6 +339,14 @@ const actionButtonClass = (action) => [
   'inline-flex items-center justify-center rounded-md p-2 text-gray-600 transition-colors hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400',
   action.buttonProps?.class,
 ]
+
+const resolveRowClass = (item, index) => {
+  if (typeof props.rowClass === 'function') {
+    return props.rowClass(item, index)
+  }
+
+  return props.rowClass
+}
 
 const totalColumns = computed(() => {
   let count = props.columns.length

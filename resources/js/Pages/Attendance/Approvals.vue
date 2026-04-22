@@ -60,9 +60,82 @@
         <h3 class="text-lg font-semibold text-gray-900">Bản ghi chấm công chờ duyệt</h3>
       </div>
 
+      <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div class="space-y-1">
+          <p class="text-sm text-gray-500">Ca lam va gio chuan lay tu phan ca/snapshot cua ngay cong.</p>
+          <p v-if="bulkBlockedRecordsOnPage.length" class="text-xs font-medium text-amber-700">
+            {{ bulkBlockedRecordsOnPage.length }} ban ghi tren trang nay khong the chon hang loat vi thieu check-out hoac khong du quyen.
+          </p>
+        </div>
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <label class="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700">
+            <input
+              type="checkbox"
+              class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              :checked="isCurrentPageSelected"
+              :disabled="!bulkApprovableRecordsOnPage.length"
+              @change="toggleCurrentPageSelection"
+            />
+            Chon trang hien tai
+          </label>
+          <button
+            type="button"
+            class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="!selectedRecordIds.length || bulkDecisionForm.processing"
+            @click="approveSelectedRecords"
+          >
+            Duyet hang loat ({{ selectedRecordIds.length }})
+          </button>
+        </div>
+      </div>
+
       <DataTable :columns="columns" :data="paginatedRecords" :actions="actions" :show-index="true" :index-offset="pageOffset('records')" empty-message="Không có bản ghi chờ duyệt.">
+        <template #head-selection>
+          <input
+            type="checkbox"
+            class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            :checked="isCurrentPageSelected"
+            :disabled="!bulkApprovableRecordsOnPage.length"
+            title="Chon tat ca ban ghi co the duyet tren trang nay"
+            @change="toggleCurrentPageSelection"
+          />
+        </template>
+        <template #cell-selection="{ item }">
+          <div class="flex min-w-[80px] flex-col items-center justify-center gap-1">
+            <input
+              type="checkbox"
+              class="h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              :checked="selectedRecordIds.includes(item.id)"
+              :disabled="!isRecordBulkApprovable(item)"
+              :title="bulkSelectionTitle(item)"
+              @change="toggleRecordSelection(item)"
+              @click.stop
+            />
+            <span
+              v-if="bulkSelectionBlockReason(item)"
+              class="max-w-[78px] rounded-full bg-amber-50 px-2 py-1 text-center text-[10px] font-semibold leading-3 text-amber-700"
+              :title="bulkSelectionBlockReason(item)"
+            >
+              {{ bulkSelectionShortReason(item) }}
+            </span>
+          </div>
+        </template>
         <template #cell-work_date="{ item }">
           {{ formatDate(item.work_date) }}
+        </template>
+        <template #cell-shift_info="{ item }">
+          <div class="min-w-[140px]">
+            <div class="font-semibold text-gray-900">{{ item.shift_name || 'Ca mac dinh' }}</div>
+            <div class="text-xs text-gray-500">{{ formatTimeRange(item.shift_start_time, item.shift_end_time) }}</div>
+          </div>
+        </template>
+        <template #cell-standard_minutes="{ item }">
+          <div class="text-center">
+            <div class="font-semibold text-gray-900">{{ formatMinutes(item.standard_minutes) }}</div>
+            <div v-if="item.break_minutes || item.handover_break_minutes" class="text-[11px] text-gray-500">
+              Nghi {{ formatMinutes(item.break_minutes) }}<span v-if="item.handover_break_minutes">, giao ca {{ formatMinutes(item.handover_break_minutes) }}</span>
+            </div>
+          </div>
         </template>
         <template #cell-check_in_at="{ item }">
           {{ formatDateTime(item.check_in_at) }}
@@ -92,13 +165,28 @@
           </div>
         </template>
         <template #cell-approval_status="{ item }">
-          <span :class="approvalStatusClass(item.approval_status)" class="rounded-full px-3 py-1 text-xs font-semibold">
-            {{ formatApprovalStatus(item.approval_status) }}
+          <span :class="approvalStatusClass(item.display_approval_status || item.approval_status)" class="rounded-full px-3 py-1 text-xs font-semibold">
+            {{ formatApprovalStatus(item.display_approval_status || item.approval_status) }}
           </span>
         </template>
         <template #cell-request_presence="{ item }">
-          <span :class="requestPresenceClass(item.request_presence)" class="rounded-full px-3 py-1 text-xs font-semibold">
-            {{ item.request_presence_label || 'Khong co don' }}
+          <button
+            v-if="hasRequestDetail(item)"
+            type="button"
+            :class="requestPresenceClass(item.request_presence)"
+            :title="item.request_reason || item.request_presence_label || 'Khong co don'"
+            class="inline-flex max-w-[170px] min-w-[118px] justify-center rounded-full px-3 py-1 text-xs font-semibold transition hover:opacity-80"
+            @click="openRequestDetailFromRecord(item)"
+          >
+            <span class="truncate">{{ item.request_presence_label || 'Khong co don' }}</span>
+          </button>
+          <span
+            v-else
+            :class="requestPresenceClass(item.request_presence)"
+            :title="item.request_reason || item.request_presence_label || 'Khong co don'"
+            class="inline-flex max-w-[170px] min-w-[118px] justify-center rounded-full px-3 py-1 text-xs font-semibold"
+          >
+            <span class="truncate">{{ item.request_presence_label || 'Khong co don' }}</span>
           </span>
         </template>
       </DataTable>
@@ -119,7 +207,56 @@
         <h3 class="text-lg font-semibold text-gray-900">{{ pendingRequestTitle }}</h3>
       </div>
 
-      <DataTable :columns="requestColumns" :data="paginatedRequestApprovals" :actions="requestActions" :show-index="true" :index-offset="pageOffset('requests')" :empty-message="pendingRequestEmptyMessage">
+      <div v-if="isLeaveApproval" class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div class="text-sm text-gray-500">
+          Chon nhieu don nghi phep cho duyet tren trang hien tai neu can.
+        </div>
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <label class="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700">
+            <input
+              type="checkbox"
+              class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              :checked="isCurrentRequestPageSelected"
+              :disabled="!bulkApprovableRequestsOnPage.length"
+              @change="toggleCurrentRequestPageSelection"
+            />
+            Chon trang hien tai
+          </label>
+          <button
+            type="button"
+            class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="!selectedApprovalRequestIds.length || requestBulkDecisionForm.processing"
+            @click="approveSelectedRequests"
+          >
+            Duyet hang loat ({{ selectedApprovalRequestIds.length }})
+          </button>
+        </div>
+      </div>
+
+      <DataTable :columns="displayRequestColumns" :data="paginatedRequestApprovals" :actions="requestActions" :show-index="true" :index-offset="pageOffset('requests')" :empty-message="pendingRequestEmptyMessage">
+        <template v-if="isLeaveApproval" #head-selection>
+          <input
+            type="checkbox"
+            class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            :checked="isCurrentRequestPageSelected"
+            :disabled="!bulkApprovableRequestsOnPage.length"
+            title="Chon tat ca don co the duyet tren trang nay"
+            @change="toggleCurrentRequestPageSelection"
+          />
+        </template>
+        <template v-if="isLeaveApproval" #cell-selection="{ item }">
+          <div class="flex min-w-[52px] items-center justify-center">
+            <input
+              type="checkbox"
+              class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              :checked="selectedApprovalRequestIds.includes(item.id)"
+              :disabled="!isRequestBulkApprovable(item)"
+              title="Chon de duyet hang loat"
+              @change="toggleRequestSelection(item)"
+              @click.stop
+            />
+          </div>
+        </template>
         <template #cell-request_date="{ item }">
           {{ formatDate(item.request_date) }}
         </template>
@@ -145,7 +282,7 @@
     </div>
 
     <div v-if="!isLeaveApproval" class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
-      <div class="mb-4">
+      <div class="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <h3 class="text-lg font-semibold text-gray-900">Lich su duyet cong</h3>
       </div>
 
@@ -153,8 +290,22 @@
         <template #cell-work_date="{ item }">
           {{ formatDate(item.work_date) }}
         </template>
+        <template #cell-shift_info="{ item }">
+          <div class="min-w-[140px]">
+            <div class="font-semibold text-gray-900">{{ item.shift_name || 'Ca mac dinh' }}</div>
+            <div class="text-xs text-gray-500">{{ formatTimeRange(item.shift_start_time, item.shift_end_time) }}</div>
+          </div>
+        </template>
         <template #cell-worked_minutes="{ item }">
           {{ formatMinutes(item.worked_minutes) }}
+        </template>
+        <template #cell-standard_minutes="{ item }">
+          <div class="text-center">
+            <div class="font-semibold text-gray-900">{{ formatMinutes(item.standard_minutes) }}</div>
+            <div v-if="item.break_minutes || item.handover_break_minutes" class="text-[11px] text-gray-500">
+              Nghi {{ formatMinutes(item.break_minutes) }}<span v-if="item.handover_break_minutes">, giao ca {{ formatMinutes(item.handover_break_minutes) }}</span>
+            </div>
+          </div>
         </template>
         <template #cell-late_minutes="{ item }">
           {{ formatMinutes(item.late_minutes) }}
@@ -175,8 +326,8 @@
           </div>
         </template>
         <template #cell-approval_status="{ item }">
-          <span :class="approvalStatusClass(item.approval_status)" class="rounded-full px-3 py-1 text-xs font-semibold">
-            {{ formatApprovalStatus(item.approval_status) }}
+          <span :class="approvalStatusClass(item.display_approval_status || item.approval_status)" class="rounded-full px-3 py-1 text-xs font-semibold">
+            {{ formatApprovalStatus(item.display_approval_status || item.approval_status) }}
           </span>
         </template>
         <template #cell-reviewed_at="{ item }">
@@ -249,6 +400,8 @@
           <div><span class="font-medium text-gray-900">Đến giờ:</span> {{ selectedRequest.to_time || '-' }}</div>
           <div><span class="font-medium text-gray-900">Loại nghỉ:</span> {{ selectedRequest.leave_type_name || selectedRequest.leave_type || '-' }}</div>
           <div><span class="font-medium text-gray-900">Trạng thái đề nghị:</span> {{ selectedRequest.requested_status || '-' }}</div>
+          <div v-if="selectedRequest.business_trip_location"><span class="font-medium text-gray-900">Địa điểm công tác:</span> {{ selectedRequest.business_trip_location }}</div>
+          <div v-if="selectedRequest.make_up_related_leave_date"><span class="font-medium text-gray-900">Ngày nghỉ liên kết:</span> {{ formatDate(selectedRequest.make_up_related_leave_date) }}</div>
           <div v-if="selectedRequest.request_type === 'leave'" class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
             <div class="font-medium text-amber-900">Minh chứng</div>
             <div v-if="selectedRequest.attachment_url" class="mt-1">
@@ -330,7 +483,17 @@ const decisionForm = useForm({
   note: '',
   resolved_check_out_time: '',
 })
+const bulkDecisionForm = useForm({
+  record_ids: [],
+  note: '',
+})
 const requestDecisionForm = useForm({ note: '' })
+const requestBulkDecisionForm = useForm({
+  approval_request_ids: [],
+  note: '',
+})
+const selectedRecordIds = ref([])
+const selectedApprovalRequestIds = ref([])
 const filterForm = reactive({
   month: Number(props.filters.month),
   year: Number(props.filters.year),
@@ -418,6 +581,19 @@ const paginatedRecords = computed(() => paginateItems(props.records, 'records'))
 const paginatedRequestApprovals = computed(() => paginateItems(props.request_approvals, 'requests'))
 const paginatedReviewedRecords = computed(() => paginateItems(props.reviewed_records, 'reviewedRecords'))
 const paginatedReviewedRequestApprovals = computed(() => paginateItems(props.reviewed_request_approvals, 'reviewedRequests'))
+const bulkApprovableRecordsOnPage = computed(() => paginatedRecords.value.filter((item) => isRecordBulkApprovable(item)))
+const bulkBlockedRecordsOnPage = computed(() => paginatedRecords.value.filter((item) => item.approval_status === 'pending' && !isRecordBulkApprovable(item)))
+const bulkApprovableRequestsOnPage = computed(() => paginatedRequestApprovals.value.filter((item) => isRequestBulkApprovable(item)))
+const isCurrentPageSelected = computed(() => {
+  const ids = bulkApprovableRecordsOnPage.value.map((item) => item.id)
+
+  return ids.length > 0 && ids.every((id) => selectedRecordIds.value.includes(id))
+})
+const isCurrentRequestPageSelected = computed(() => {
+  const ids = bulkApprovableRequestsOnPage.value.map((item) => item.id)
+
+  return ids.length > 0 && ids.every((id) => selectedApprovalRequestIds.value.includes(id))
+})
 
 function paginateItems(items, key) {
   const page = pagination[key] || 1
@@ -452,18 +628,21 @@ function totalPagesFor(key) {
 }
 
 const columns = [
-  { label: 'Nhân viên', key: 'employee_name' },
-  { label: 'Mã NV', key: 'employee_code' },
-  { label: 'Phòng ban', key: 'department_name' },
-  { label: 'Ngày công', key: 'work_date' },
-  { label: 'Check in', key: 'check_in_at' },
-  { label: 'Check out', key: 'check_out_at' },
-  { label: 'Giờ làm', key: 'worked_minutes', align: 'text-center' },
-  { label: 'Đi muộn', key: 'late_minutes', align: 'text-center' },
-  { label: 'Về sớm', key: 'early_leave_minutes', align: 'text-center' },
-  { label: 'Trạng thái ngày', key: 'day_status', align: 'text-center' },
-  { label: 'Don', key: 'request_presence', align: 'text-center' },
-  { label: 'Duyệt', key: 'approval_status', align: 'text-center' },
+  { label: '', key: 'selection', align: 'text-center', class: 'w-[92px] min-w-[92px]' },
+  { label: 'Nhân viên', key: 'employee_name', class: 'min-w-[120px]' },
+  { label: 'Mã NV', key: 'employee_code', class: 'min-w-[72px]' },
+  { label: 'Phòng ban', key: 'department_name', class: 'min-w-[120px]' },
+  { label: 'Ngày công', key: 'work_date', class: 'min-w-[104px] whitespace-nowrap' },
+  { label: 'Ca làm', key: 'shift_info', class: 'min-w-[170px]' },
+  { label: 'Giờ chuẩn', key: 'standard_minutes', align: 'text-center', class: 'min-w-[130px]' },
+  { label: 'Check in', key: 'check_in_at', class: 'min-w-[118px] whitespace-nowrap' },
+  { label: 'Check out', key: 'check_out_at', class: 'min-w-[96px] whitespace-nowrap' },
+  { label: 'Giờ làm', key: 'worked_minutes', align: 'text-center', class: 'min-w-[88px] whitespace-nowrap' },
+  { label: 'Đi muộn', key: 'late_minutes', align: 'text-center', class: 'min-w-[88px] whitespace-nowrap' },
+  { label: 'Về sớm', key: 'early_leave_minutes', align: 'text-center', class: 'min-w-[88px] whitespace-nowrap' },
+  { label: 'Trạng thái ngày', key: 'day_status', align: 'text-center', class: 'min-w-[150px]' },
+  { label: 'Don', key: 'request_presence', align: 'text-center', class: 'min-w-[136px]' },
+  { label: 'Duyệt', key: 'approval_status', align: 'text-center', class: 'min-w-[92px]' },
 ]
 
 const requestColumns = [
@@ -481,6 +660,8 @@ const reviewedRecordColumns = [
   { label: 'Nhan vien', key: 'employee_name' },
   { label: 'Ma NV', key: 'employee_code' },
   { label: 'Ngay cong', key: 'work_date' },
+  { label: 'Ca lam', key: 'shift_info' },
+  { label: 'Gio chuan', key: 'standard_minutes', align: 'text-center' },
   { label: 'Gio lam', key: 'worked_minutes', align: 'text-center' },
   { label: 'Di muon', key: 'late_minutes', align: 'text-center' },
   { label: 'Ve som', key: 'early_leave_minutes', align: 'text-center' },
@@ -502,6 +683,11 @@ const reviewedRequestColumns = [
   { label: 'Duyet luc', key: 'reviewed_at' },
   { label: 'Ghi chu', key: 'review_note' },
 ]
+
+const displayRequestColumns = computed(() => [
+  ...(isLeaveApproval.value ? [{ label: '', key: 'selection', align: 'text-center', class: 'w-[60px] min-w-[60px]' }] : []),
+  ...requestColumns,
+])
 
 const summaryCards = computed(() => {
   if (isLeaveApproval.value) {
@@ -554,7 +740,9 @@ const actions = [
       title: 'Duyệt ngày công',
       class: 'rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-800',
     },
-    hidden: (item) => item.approval_status !== 'pending' || (Number(item.employee_authority_level || 0) >= currentAuthorityLevel.value),
+    hidden: (item) => item.approval_status !== 'pending'
+      || item.display_approval_status === 'needs_verification'
+      || (Number(item.employee_authority_level || 0) >= currentAuthorityLevel.value),
     onClick: (item) => decide(item, 'approve'),
   },
   {
@@ -628,6 +816,22 @@ watch(
   }
 )
 
+watch(
+  () => props.records.map((item) => item.id).join(','),
+  () => {
+    const availableIds = new Set(props.records.map((item) => item.id))
+    selectedRecordIds.value = selectedRecordIds.value.filter((id) => availableIds.has(id))
+  }
+)
+
+watch(
+  () => props.request_approvals.map((item) => item.id).join(','),
+  () => {
+    const availableIds = new Set(props.request_approvals.map((item) => item.id))
+    selectedApprovalRequestIds.value = selectedApprovalRequestIds.value.filter((id) => availableIds.has(id))
+  }
+)
+
 function applyFilters() {
   router.get(route(isLeaveApproval.value ? 'leave.approvals' : 'attendance.approvals'), {
     month: filterForm.month,
@@ -677,6 +881,126 @@ function needsResolvedCheckOut(item) {
   return Boolean(item.check_in_at) && (!item.check_out_at || item.missing_check_out || item.day_status === 'missing_check_out')
 }
 
+function isRecordSelectable(item) {
+  return item.approval_status === 'pending'
+    && Number(item.employee_authority_level || 0) < currentAuthorityLevel.value
+}
+
+function isRecordBulkApprovable(item) {
+  return isRecordSelectable(item)
+    && !needsResolvedCheckOut(item)
+    && item.display_approval_status !== 'needs_verification'
+}
+
+function bulkSelectionTitle(item) {
+  return bulkSelectionBlockReason(item) || 'Chon de duyet hang loat'
+}
+
+function bulkSelectionBlockReason(item) {
+  if (!isRecordSelectable(item)) return 'Khong the chon do khong du quyen duyet'
+  if (item.display_approval_status === 'needs_verification') return 'Nhan vien can giai trinh truoc khi duyet'
+  if (needsResolvedCheckOut(item)) return 'Khong the chon vi thieu check-out'
+
+  return ''
+}
+
+function bulkSelectionShortReason(item) {
+  if (!isRecordSelectable(item)) return 'Khong du quyen'
+  if (needsResolvedCheckOut(item)) return 'Thieu check-out'
+
+  return ''
+}
+
+function toggleRecordSelection(item) {
+  if (!isRecordBulkApprovable(item)) return
+
+  if (selectedRecordIds.value.includes(item.id)) {
+    selectedRecordIds.value = selectedRecordIds.value.filter((id) => id !== item.id)
+    return
+  }
+
+  selectedRecordIds.value = [...selectedRecordIds.value, item.id]
+}
+
+function toggleCurrentPageSelection() {
+  const pageIds = bulkApprovableRecordsOnPage.value.map((item) => item.id)
+  if (!pageIds.length) return
+
+  if (pageIds.every((id) => selectedRecordIds.value.includes(id))) {
+    selectedRecordIds.value = selectedRecordIds.value.filter((id) => !pageIds.includes(id))
+    return
+  }
+
+  selectedRecordIds.value = Array.from(new Set([...selectedRecordIds.value, ...pageIds]))
+}
+
+function approveSelectedRecords() {
+  if (!selectedRecordIds.value.length) return
+
+  const note = window.prompt('Ghi chu duyet hang loat:', 'Duyet hang loat')
+  if (note === null) return
+  if (String(note).trim().length < 5) {
+    window.alert('Ghi chu toi thieu 5 ky tu.')
+    return
+  }
+
+  bulkDecisionForm.record_ids = [...selectedRecordIds.value]
+  bulkDecisionForm.note = String(note).trim()
+  bulkDecisionForm.post(route('attendance.confirm-bulk'), {
+    preserveScroll: true,
+    onSuccess: () => {
+      selectedRecordIds.value = []
+    },
+  })
+}
+
+function isRequestBulkApprovable(item) {
+  return item.status === 'pending'
+}
+
+function toggleRequestSelection(item) {
+  if (!isRequestBulkApprovable(item)) return
+
+  if (selectedApprovalRequestIds.value.includes(item.id)) {
+    selectedApprovalRequestIds.value = selectedApprovalRequestIds.value.filter((id) => id !== item.id)
+    return
+  }
+
+  selectedApprovalRequestIds.value = [...selectedApprovalRequestIds.value, item.id]
+}
+
+function toggleCurrentRequestPageSelection() {
+  const pageIds = bulkApprovableRequestsOnPage.value.map((item) => item.id)
+  if (!pageIds.length) return
+
+  if (pageIds.every((id) => selectedApprovalRequestIds.value.includes(id))) {
+    selectedApprovalRequestIds.value = selectedApprovalRequestIds.value.filter((id) => !pageIds.includes(id))
+    return
+  }
+
+  selectedApprovalRequestIds.value = Array.from(new Set([...selectedApprovalRequestIds.value, ...pageIds]))
+}
+
+function approveSelectedRequests() {
+  if (!selectedApprovalRequestIds.value.length) return
+
+  const note = window.prompt('Ghi chu duyet hang loat don nghi phep:', 'Duyet hang loat')
+  if (note === null) return
+  if (String(note).trim().length < 5) {
+    window.alert('Ghi chu toi thieu 5 ky tu.')
+    return
+  }
+
+  requestBulkDecisionForm.approval_request_ids = [...selectedApprovalRequestIds.value]
+  requestBulkDecisionForm.note = String(note).trim()
+  requestBulkDecisionForm.post(route('leave.request-approvals.approve-bulk'), {
+    preserveScroll: true,
+    onSuccess: () => {
+      selectedApprovalRequestIds.value = []
+    },
+  })
+}
+
 function suggestedCheckOutTime(item) {
   return item.shift_end_time || '17:30'
 }
@@ -699,6 +1023,16 @@ function openRequestDetail(item) {
   selectedRequest.value = item
 }
 
+function hasRequestDetail(item) {
+  return Boolean(item?.request_detail)
+}
+
+function openRequestDetailFromRecord(item) {
+  if (!item?.request_detail) return
+
+  openRequestDetail(item.request_detail)
+}
+
 function closeRequestDetail() {
   selectedRequest.value = null
 }
@@ -713,6 +1047,12 @@ function formatDateTime(value) {
   return new Date(value).toLocaleString('vi-VN')
 }
 
+function formatTimeRange(startTime, endTime) {
+  if (!startTime && !endTime) return '-'
+
+  return `${startTime || '--:--'} - ${endTime || '--:--'}`
+}
+
 function formatMinutes(value) {
   const minutes = Number(value) || 0
   if (minutes <= 0) return '0 phút'
@@ -723,17 +1063,23 @@ function formatMinutes(value) {
   return `${hours} giờ ${remainMinutes} phút`
 }
 
-function formatDayStatus(value) {
+function formatDayStatus(item) {
+  const value = typeof item === 'string' ? item : item?.day_status
+
+  if (value === 'unpaid_leave' && item?.violation_status === 'missing_attendance') {
+    return 'Vắng mặt'
+  }
+
   const labels = {
     present: 'Đi làm',
     late: 'Đi muộn',
     early_leave: 'Về sớm',
     leave: 'Nghỉ phép',
-    unpaid_leave: 'Nghỉ không phép',
+    unpaid_leave: 'Nghỉ không lương',
     business_trip: 'Công tác',
     missing_check_in: 'Thiếu check in',
     missing_check_out: 'Thiếu check out',
-    absent: 'Vắng',
+    absent: 'Vắng mặt',
   }
   return labels[value] || '-'
 }
@@ -758,7 +1104,7 @@ function dayStatusBadges(item) {
     })
   } else if (!isOnTimeCheckIn || item.day_status !== 'present') {
     badges.push({
-      label: formatDayStatus(item.day_status),
+      label: formatDayStatus(item),
       class: dayStatusClass(item.day_status),
     })
   }
@@ -770,6 +1116,10 @@ function dayStatusBadges(item) {
 }
 
 function formatApprovalStatus(value) {
+  if (value === 'needs_verification') {
+    return 'Cần xác minh'
+  }
+
   const labels = {
     pending: 'Chờ duyệt',
     approved: 'Đã duyệt',
@@ -788,7 +1138,7 @@ function dayStatusClass(value) {
     business_trip: 'bg-violet-50 text-violet-700',
     missing_check_in: 'bg-yellow-50 text-yellow-700',
     missing_check_out: 'bg-yellow-50 text-yellow-700',
-    absent: 'bg-rose-50 text-rose-700',
+    absent: 'bg-slate-100 text-slate-700',
   }
   return classes[value] || 'bg-slate-50 text-slate-700'
 }
@@ -796,6 +1146,7 @@ function dayStatusClass(value) {
 function approvalStatusClass(value) {
   const classes = {
     pending: 'bg-amber-50 text-amber-700',
+    needs_verification: 'bg-orange-50 text-orange-700',
     approved: 'bg-emerald-50 text-emerald-700',
     rejected: 'bg-rose-50 text-rose-700',
   }

@@ -23,7 +23,7 @@ class AttendanceAdjustmentController extends Controller
 
     public function approvals(Request $request): Response
     {
-        return Inertia::render('Attendance/AdjustmentApprovals', $this->attendanceService->getAdjustmentApprovalsData($request->all()));
+        return Inertia::render('Attendance/AdjustmentApprovals', $this->attendanceService->getAdjustmentApprovalsData($request->all(), $request->user()));
     }
 
     public function store(Request $request)

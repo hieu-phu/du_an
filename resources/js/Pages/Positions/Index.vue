@@ -9,12 +9,14 @@ const props = defineProps({
     positions: { type: Array, default: () => [] },
     filters: { type: Object, default: () => ({}) },
     capabilityOptions: { type: Array, default: () => [] },
+    canCreateCustomCapabilities: { type: Boolean, default: false },
     authorityLevels: { type: Array, default: () => [] },
     authorityLevelCatalog: { type: Array, default: () => [] },
 })
 const page = usePage()
 const positionCapabilities = computed(() => page.props.auth?.position_capabilities || {})
 const canManageAuthorityLevels = computed(() => positionCapabilities.value.manage_positions === true)
+const canCreateCustomCapabilities = computed(() => props.canCreateCustomCapabilities === true)
 const filters = reactive({
     search: props.filters?.search ?? '',
     status: props.filters?.status ?? '',
@@ -286,6 +288,11 @@ const submit = () => {
     return form.transform(() => payload).post(route('positions.store'), options)
 }
 const submitNewCapability = () => {
+    if (!canCreateCustomCapabilities.value) {
+        toast.error('Chức năng thêm quyền tùy chỉnh đã được tắt.')
+        return
+    }
+
     capabilityCreateForm.post(route('positions.capabilities.store'), {
         preserveScroll: true,
         onSuccess: () => {
@@ -644,7 +651,7 @@ const canTogglePosition = (position) => position?.can_toggle !== false
                         <!-- Tab: Capabilities -->
                         <div v-show="activeTab === 'capabilities'" class="space-y-6">
                             
-                            <div v-if="canManageAuthorityLevels" class="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+                            <div v-if="canManageAuthorityLevels && canCreateCustomCapabilities" class="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
                                 <div class="flex items-center justify-between">
                                     <div class="text-sm font-semibold text-indigo-800">Quản lý định nghĩa quyền tùy chỉnh</div>
                                     <button

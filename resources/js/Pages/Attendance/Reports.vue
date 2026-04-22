@@ -8,6 +8,7 @@
       <div v-for="card in summaryCards" :key="card.label" class="rounded-xl border border-gray-200 bg-white p-5 shadow-theme-sm">
         <div class="text-sm text-gray-500">{{ card.label }}</div>
         <div class="mt-2 text-2xl font-semibold text-gray-900">{{ card.value }}</div>
+        <div v-if="card.hint" class="mt-1 text-xs text-gray-500">{{ card.hint }}</div>
       </div>
     </div>
 
@@ -73,7 +74,14 @@
     </div>
 
     <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
-      <DataTable :columns="columns" :data="records" empty-message="Không có dữ liệu báo cáo.">
+      <DataTable
+        :columns="columns"
+        :data="records"
+        :row-class="attendanceRowClass"
+        paginate
+        :default-per-page="10"
+        empty-message="Không có dữ liệu báo cáo."
+      >
         <template #cell-work_date="{ item }">
           {{ formatDate(item.work_date) }}
         </template>
@@ -96,13 +104,18 @@
           {{ formatMinutes(item.overtime_minutes) }}
         </template>
         <template #cell-day_status="{ item }">
-          <span :class="dayStatusClass(item.day_status)" class="rounded-full px-3 py-1 text-xs font-semibold">
-            {{ formatDayStatus(item.day_status) }}
+          <span :class="dayStatusClass(item.day_status)" class="inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold">
+            {{ formatDayStatus(item) }}
+          </span>
+        </template>
+        <template #cell-violation_status="{ item }">
+          <span :class="violationStatusClass(item.violation_status)" class="inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold">
+            {{ formatViolationStatus(item.violation_status) }}
           </span>
         </template>
         <template #cell-approval_status="{ item }">
-          <span :class="approvalStatusClass(item.approval_status)" class="rounded-full px-3 py-1 text-xs font-semibold">
-            {{ formatApprovalStatus(item.approval_status) }}
+          <span :class="approvalStatusClass(item.display_approval_status || item.approval_status)" class="inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold">
+            {{ formatApprovalStatus(item.display_approval_status || item.approval_status) }}
           </span>
         </template>
       </DataTable>
@@ -112,7 +125,14 @@
         <h3 class="text-lg font-semibold text-gray-900">Chi tiết tăng ca</h3>
       </div>
 
-      <DataTable :columns="overtimeColumns" :data="overtime_details" empty-message="Không có dữ liệu tăng ca trong thời gian đã chọn.">
+      <DataTable
+        :columns="overtimeColumns"
+        :data="overtime_details"
+        :row-class="requestRowClass"
+        paginate
+        :default-per-page="10"
+        empty-message="Không có dữ liệu tăng ca trong thời gian đã chọn."
+      >
         <template #cell-work_date="{ item }">
           {{ formatDate(item.work_date) }}
         </template>
@@ -174,9 +194,9 @@ const columns = computed(() => {
     { label: 'Đi muộn', key: 'late_minutes', align: 'text-center' },
     { label: 'Về sớm', key: 'early_leave_minutes', align: 'text-center' },
     { label: 'Tăng ca', key: 'overtime_minutes', align: 'text-center' },
-    { label: 'Trạng thái ngày', key: 'day_status', align: 'text-center' },
-    { label: 'Duyệt', key: 'approval_status', align: 'text-center' },
-    { label: 'Công thức áp dụng', key: 'formula_detail' },
+    { label: 'Trạng thái ngày', key: 'day_status', align: 'text-center', class: 'min-w-[132px] whitespace-nowrap' },
+    { label: 'Vi phạm', key: 'violation_status', align: 'text-center', class: 'min-w-[132px] whitespace-nowrap' },
+    { label: 'Duyệt', key: 'approval_status', align: 'text-center', class: 'min-w-[118px] whitespace-nowrap' },
   ]
 
   if (!props.can_view_all) {
@@ -217,11 +237,27 @@ const overtimeColumns = computed(() => {
   ]
 })
 const summaryCards = computed(() => [
-  { label: 'Tổng bản ghi', value: props.summary.total_records ?? 0 },
-  { label: 'Đã duyệt', value: props.summary.confirmed_records ?? 0 },
-  { label: 'Đi muộn', value: props.summary.late_records ?? 0 },
-  { label: 'Tổng giờ làm', value: formatMinutes(props.summary.total_worked_minutes ?? 0) },
+  { label: 'Tổng bản ghi công', value: props.summary.total_records ?? 0 },
+  { label: 'Ngày làm', value: props.summary.present_records ?? 0 },
+  { label: 'Nghỉ phép', value: props.summary.leave_records ?? 0 },
+  { label: 'Nghỉ không lương', value: props.summary.unpaid_leave_records ?? 0 },
+  { label: 'Lịch nghỉ theo phân ca', value: props.summary.day_off_records ?? 0, hint: 'Không tính là bản ghi công' },
+  {
+    label: 'Công cần xác minh',
+    value: props.summary.needs_verification_records ?? props.summary.action_required_records ?? 0,
+    hint: verificationHint.value,
+  },
+  { label: 'Vi phạm', value: props.summary.violation_records ?? 0 },
+  { label: 'Giờ làm thực tế', value: formatMinutes(props.summary.total_actual_worked_minutes ?? props.summary.total_worked_minutes ?? 0) },
 ])
+
+const verificationHint = computed(() => {
+  const missingCheck = props.summary.needs_verification_missing_check_records ?? props.summary.missing_check_records ?? 0
+  const missingAttendance = props.summary.needs_verification_missing_attendance_records ?? props.summary.missing_attendance_records ?? 0
+  const timeViolation = props.summary.needs_verification_time_violation_records ?? 0
+
+  return `Thiếu check: ${missingCheck}, vắng: ${missingAttendance}, giờ công: ${timeViolation}`
+})
 
 const exportQuery = computed(() => ({
   month: filterForm.month,
@@ -271,17 +307,33 @@ function formatMinutes(value) {
   return `${hours} giờ ${remainMinutes} phút`
 }
 
-function formatDayStatus(value) {
+function formatDayStatus(item) {
+  const value = typeof item === 'string' ? item : item?.day_status
+
+  if (value === 'unpaid_leave' && item?.violation_status === 'missing_attendance') {
+    return 'Vắng mặt'
+  }
+
   const labels = {
     present: 'Đi làm',
+    leave: 'Nghỉ phép',
+    unpaid_leave: 'Nghỉ không lương',
+    holiday_paid: 'Lễ có lương',
+    day_off: 'Nghỉ theo phân ca',
+    business_trip: 'Công tác',
+    absent: 'Vắng mặt',
+  }
+  return labels[value] || '-'
+}
+
+function formatViolationStatus(value) {
+  const labels = {
     late: 'Đi muộn',
     early_leave: 'Về sớm',
-    leave: 'Nghỉ phép',
-    unpaid_leave: 'Nghỉ không phép',
-    business_trip: 'Công tác',
+    late_early: 'Đi muộn / về sớm',
     missing_check_in: 'Thiếu check in',
     missing_check_out: 'Thiếu check out',
-    absent: 'Vắng',
+    missing_attendance: 'Tự ý nghỉ / chưa có đơn',
   }
   return labels[value] || '-'
 }
@@ -289,8 +341,11 @@ function formatDayStatus(value) {
 function formatApprovalStatus(value) {
   const labels = {
     pending: 'Chờ duyệt',
+    needs_verification: 'Cần xác minh',
+    not_required: 'Không cần duyệt',
     approved: 'Đã duyệt',
     rejected: 'Từ chối',
+    cancelled: 'Đã hủy',
   }
   return labels[value] || '-'
 }
@@ -298,28 +353,60 @@ function formatApprovalStatus(value) {
 function dayStatusClass(value) {
   const classes = {
     present: 'bg-emerald-50 text-emerald-700',
-    late: 'bg-amber-50 text-amber-700',
-    early_leave: 'bg-orange-50 text-orange-700',
     leave: 'bg-sky-50 text-sky-700',
     unpaid_leave: 'bg-rose-50 text-rose-700',
+    holiday_paid: 'bg-cyan-50 text-cyan-700',
+    day_off: 'bg-slate-50 text-slate-600',
     business_trip: 'bg-violet-50 text-violet-700',
-    missing_check_in: 'bg-yellow-50 text-yellow-700',
-    missing_check_out: 'bg-yellow-50 text-yellow-700',
-    absent: 'bg-rose-50 text-rose-700',
+    absent: 'bg-slate-100 text-slate-700',
   }
   return classes[value] || 'bg-slate-50 text-slate-700'
+}
+
+function violationStatusClass(value) {
+  const classes = {
+    late: 'bg-amber-50 text-amber-700',
+    early_leave: 'bg-orange-50 text-orange-700',
+    late_early: 'bg-orange-50 text-orange-700',
+    missing_check_in: 'bg-yellow-50 text-yellow-700',
+    missing_check_out: 'bg-yellow-50 text-yellow-700',
+    missing_attendance: 'bg-slate-100 text-slate-700',
+  }
+  return classes[value] || 'bg-slate-50 text-slate-500'
 }
 
 function approvalStatusClass(value) {
   const classes = {
     pending: 'bg-amber-50 text-amber-700',
+    needs_verification: 'bg-orange-50 text-orange-700',
+    not_required: 'bg-slate-50 text-slate-600',
     approved: 'bg-emerald-50 text-emerald-700',
     rejected: 'bg-rose-50 text-rose-700',
+    cancelled: 'bg-slate-100 text-slate-600',
   }
   return classes[value] || 'bg-slate-50 text-slate-700'
 }
+
+function attendanceRowClass(item) {
+  const displayStatus = item?.display_approval_status || item?.approval_status
+
+  if (displayStatus === 'needs_verification') {
+    return 'bg-orange-50/70 hover:bg-orange-50'
+  }
+
+  if (displayStatus === 'pending') {
+    return 'bg-amber-50/60 hover:bg-amber-50'
+  }
+
+  return ''
+}
+
+function requestRowClass(item) {
+  if (item?.status === 'pending') {
+    return 'bg-amber-50/60 hover:bg-amber-50'
+  }
+
+  return ''
+}
 </script>
-
-
-
 

@@ -64,11 +64,6 @@ export default defineConfig({
                             return 'ui-libs';
                         }
 
-                        // Chart libraries
-                        if (id.includes('chart') || id.includes('echarts') || id.includes('apexcharts')) {
-                            return 'charts';
-                        }
-
                         // Date libraries
                         if (id.includes('moment') || id.includes('dayjs') || id.includes('date-fns')) {
                             return 'date-utils';
@@ -82,11 +77,6 @@ export default defineConfig({
                         // Rich text editors
                         if (id.includes('tinymce') || id.includes('quill') || id.includes('tiptap') || id.includes('ckeditor')) {
                             return 'editors';
-                        }
-
-                        // Lodash
-                        if (id.includes('lodash')) {
-                            return 'lodash';
                         }
 
                         // Các vendor còn lại

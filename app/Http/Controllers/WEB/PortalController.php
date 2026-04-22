@@ -28,6 +28,8 @@ use Intervention\Image\Exceptions\DriverException;
 
 class PortalController extends Controller
 {
+    private const SYSTEM_OWNER_EMAIL = 'gtvbehieu@gmail.com';
+
     public function __construct(
         protected AttendanceRepository $attendanceRepository
     ) {}
@@ -47,8 +49,10 @@ class PortalController extends Controller
 
         $stats = [
             [
-                'title' => 'Nhan su',
-                'value' => (string) User::query()->where('is_employee', 1)->count(),
+                'title' => $this->isSystemOwner($user) ? 'Nhan su' : 'Nhan su duoi quyen',
+                'value' => (string) ($this->isSystemOwner($user)
+                    ? User::query()->where('is_employee', 1)->count()
+                    : $this->visibleEmployeeProfilesQuery($user)->count()),
             ],
             [
                 'title' => 'Phong ban',
@@ -133,7 +137,7 @@ class PortalController extends Controller
 
         // Dành cho Quản lý / Admin
         if (AccessMatrix::canManageAllAttendance($user)) {
-            $pendingApprovals = $this->attendanceRepository->getPendingApprovalsCount();
+            $pendingApprovals = $this->pendingApprovalCountForViewer($user);
             if ($pendingApprovals > 0) {
                 $warnings[] = [
                     'type' => 'primary',
@@ -156,7 +160,10 @@ class PortalController extends Controller
                 'check_in_at' => $todayRecord->check_in_at,
                 'check_out_at' => $todayRecord->check_out_at,
                 'status' => $todayRecord->attendance_status,
-                'status_label' => $this->attendanceStatusLabel($todayRecord->attendance_status),
+                'day_status' => $todayRecord->day_status,
+                'status_label' => $todayRecord->day_status === 'unpaid_leave'
+                    ? 'Nghá»‰ khÃ´ng phÃ©p'
+                    : $this->attendanceStatusLabel($todayRecord->attendance_status),
             ] : null,
         ]);
     }
@@ -174,9 +181,12 @@ class PortalController extends Controller
     private function buildDashboardSummary(User $user, ?int $profileId): array
     {
         $projectBaseQuery = $this->projectBaseQueryForUser($user, $profileId);
+        $employeeCount = $this->isSystemOwner($user)
+            ? User::query()->where('is_employee', 1)->count()
+            : $this->visibleEmployeeProfilesQuery($user)->count();
 
         return [
-            'total_employees' => User::query()->where('is_employee', 1)->count(),
+            'total_employees' => $employeeCount,
             'total_projects' => (clone $projectBaseQuery)->count(),
             'project_status_counts' => $this->buildProjectStatusCounts($projectBaseQuery),
             'active_project_progress' => $this->buildActiveProjectProgress($projectBaseQuery),
@@ -280,17 +290,18 @@ class PortalController extends Controller
             ->whereMonth('work_date', $month)
             ->whereYear('work_date', $year);
 
-        $scope = 'company';
-        if (!AccessMatrix::canManageAllAttendance($user) && $profileId) {
-            $query->where('employee_profile_id', $profileId);
-            $scope = 'personal';
+        $scope = $this->isSystemOwner($user) ? 'company' : 'subordinates';
+        if (!$this->isSystemOwner($user)) {
+            $this->applyAttendanceHierarchyScope($query, $user);
         }
 
         $report = (clone $query)
             ->selectRaw('COUNT(*) as total_records')
             ->selectRaw("SUM(CASE WHEN attendance_status IN ('on_time', 'present') THEN 1 ELSE 0 END) as on_time_records")
             ->selectRaw("SUM(CASE WHEN attendance_status = 'late' OR COALESCE(late_minutes, 0) > 0 THEN 1 ELSE 0 END) as late_records")
-            ->selectRaw("SUM(CASE WHEN attendance_status = 'absent' THEN 1 ELSE 0 END) as absent_records")
+            ->selectRaw("SUM(CASE WHEN day_status = 'leave' THEN 1 ELSE 0 END) as leave_records")
+            ->selectRaw("SUM(CASE WHEN day_status = 'unpaid_leave' THEN 1 ELSE 0 END) as unpaid_leave_records")
+            ->selectRaw("SUM(CASE WHEN day_status = 'absent' THEN 1 ELSE 0 END) as absent_records")
             ->selectRaw("SUM(CASE WHEN day_status = 'early_leave' OR COALESCE(early_leave_minutes, 0) > 0 THEN 1 ELSE 0 END) as early_leave_records")
             ->selectRaw("SUM(CASE WHEN approval_status = 'approved' THEN 1 ELSE 0 END) as approved_records")
             ->selectRaw('SUM(COALESCE(worked_minutes, 0)) as total_worked_minutes')
@@ -303,6 +314,8 @@ class PortalController extends Controller
             'total_records' => (int) ($report?->total_records ?? 0),
             'on_time_records' => (int) ($report?->on_time_records ?? 0),
             'late_records' => (int) ($report?->late_records ?? 0),
+            'leave_records' => (int) ($report?->leave_records ?? 0),
+            'unpaid_leave_records' => (int) ($report?->unpaid_leave_records ?? 0),
             'absent_records' => (int) ($report?->absent_records ?? 0),
             'early_leave_records' => (int) ($report?->early_leave_records ?? 0),
             'approved_records' => (int) ($report?->approved_records ?? 0),
@@ -324,6 +337,80 @@ class PortalController extends Controller
     private function hasGlobalProjectAccess(User $user): bool
     {
         return AccessMatrix::canViewAllProjects($user);
+    }
+
+    private function pendingApprovalCountForViewer(User $user): int
+    {
+        $now = now('Asia/Ho_Chi_Minh');
+        $query = AttendanceRecord::query()
+            ->where('approval_status', 'pending')
+            ->where('is_confirmed', false)
+            ->whereMonth('work_date', (int) $now->month)
+            ->whereYear('work_date', (int) $now->year)
+            ->where(function (Builder $builder) {
+                $builder
+                    ->where('late_minutes', '>', 0)
+                    ->orWhere('early_leave_minutes', '>', 0)
+                    ->orWhere('day_status', 'late')
+                    ->orWhere('day_status', 'early_leave');
+            });
+
+        if (!$this->isSystemOwner($user)) {
+            $this->applyAttendanceHierarchyScope($query, $user);
+        }
+
+        return $query->count();
+    }
+
+    private function visibleEmployeeProfilesQuery(User $user): Builder
+    {
+        $query = EmployeeProfile::query()
+            ->whereIn('employment_status', ['active', 'probation']);
+
+        if (!$this->isSystemOwner($user)) {
+            $this->applyEmployeeHierarchyScope($query, $user);
+        }
+
+        return $query;
+    }
+
+    private function applyAttendanceHierarchyScope(Builder $query, User $viewer): void
+    {
+        $viewerLevel = (int) ($viewer->employeeProfile?->position?->authority_level ?? 0);
+        $viewerProfileId = (int) ($viewer->employeeProfile?->id ?? 0);
+
+        if ($viewerLevel <= 0) {
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        if ($viewerProfileId > 0) {
+            $query->where('employee_profile_id', '!=', $viewerProfileId);
+        }
+
+        $query->whereHas('employeeProfile.position', fn (Builder $positionQuery) => $positionQuery->where('authority_level', '<', $viewerLevel));
+    }
+
+    private function applyEmployeeHierarchyScope(Builder $query, User $viewer): void
+    {
+        $viewerLevel = (int) ($viewer->employeeProfile?->position?->authority_level ?? 0);
+        $viewerProfileId = (int) ($viewer->employeeProfile?->id ?? 0);
+
+        if ($viewerLevel <= 0) {
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        if ($viewerProfileId > 0) {
+            $query->whereKeyNot($viewerProfileId);
+        }
+
+        $query->whereHas('position', fn (Builder $positionQuery) => $positionQuery->where('authority_level', '<', $viewerLevel));
+    }
+
+    private function isSystemOwner(?User $user): bool
+    {
+        return strcasecmp((string) ($user?->email ?? ''), self::SYSTEM_OWNER_EMAIL) === 0;
     }
 
     public function myProfile(Request $request): Response

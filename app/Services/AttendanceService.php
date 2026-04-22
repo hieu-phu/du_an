@@ -277,6 +277,36 @@ class AttendanceService extends BaseService
         });
     }
 
+    public function confirmAttendanceBulk(array $recordIds, User $approver, ?string $note = null): array
+    {
+        $approvedCount = 0;
+        $failedCount = 0;
+        $failures = [];
+
+        foreach ($recordIds as $recordId) {
+            try {
+                $record = AttendanceRecord::query()->find($recordId);
+                if (!$record) {
+                    throw new \RuntimeException("Không tìm thấy bản ghi #{$recordId}");
+                }
+                $this->confirmAttendance($record, $approver, $note);
+                $approvedCount++;
+            } catch (\Throwable $exception) {
+                $failedCount++;
+                $failures[] = [
+                    'id' => $recordId,
+                    'message' => $exception->getMessage(),
+                ];
+            }
+        }
+
+        return [
+            'approved' => $approvedCount,
+            'failed' => $failedCount,
+            'failures' => $failures,
+        ];
+    }
+
     public function rejectAttendance(AttendanceRecord $record, User $approver, ?string $note = null): AttendanceRecord
     {
         return $this->handleTransaction(function () use ($record, $approver, $note) {
@@ -591,6 +621,8 @@ class AttendanceService extends BaseService
                 'leave_duration_type' => $normalizedAttendance['leave_duration_type'],
                 'leave_hours' => $normalizedAttendance['leave_hours'],
                 'requested_status' => $normalizedAttendance['requested_status'],
+                'business_trip_location' => $normalizedAttendance['business_trip_location'] ?? null,
+                'make_up_related_leave_date' => $normalizedAttendance['make_up_related_leave_date'] ?? null,
                 'attachment_path' => $normalizedAttendance['attachment_path'],
                 'reason' => $reason,
             ]);
@@ -1002,6 +1034,106 @@ class AttendanceService extends BaseService
 
             return $approvalRequest->fresh(['requester', 'reviewer', 'target']);
         });
+    }
+
+    public function reviewApprovalRequestsBulk(array $approvalRequestIds, User $reviewer, string $decision, ?string $note = null): array
+    {
+        $processedCount = 0;
+        $failedCount = 0;
+        $failures = [];
+
+        foreach ($approvalRequestIds as $requestId) {
+            try {
+                $request = ApprovalRequest::query()->find($requestId);
+                if (!$request) {
+                    throw new \RuntimeException("Không tìm thấy đơn #{$requestId}");
+                }
+                $this->reviewApprovalRequest($request, $reviewer, $decision, $note);
+                $processedCount++;
+            } catch (\Throwable $exception) {
+                $failedCount++;
+                $failures[] = [
+                    'id' => $requestId,
+                    'message' => $exception->getMessage(),
+                ];
+            }
+        }
+
+        return [
+            'processed' => $processedCount,
+            'failed' => $failedCount,
+            'failures' => $failures,
+        ];
+    }
+
+    public function handleConfirmAttendance(AttendanceRecord $record, User $approver, ?string $note = null, ?string $resolvedCheckOutTime = null): AttendanceRecord
+    {
+        return $this->confirmAttendance($record, $approver, $note, $resolvedCheckOutTime);
+    }
+
+    public function handleConfirmAttendanceBulk(array $recordIds, User $approver, ?string $note = null): array
+    {
+        return $this->confirmAttendanceBulk($recordIds, $approver, $note);
+    }
+
+    public function handleRejectAttendance(AttendanceRecord $record, User $approver, ?string $note = null): AttendanceRecord
+    {
+        return $this->rejectAttendance($record, $approver, $note);
+    }
+
+    public function buildApprovalsData(array $filters = [], ?User $viewer = null): array
+    {
+        return $this->getApprovalsData($filters, $viewer);
+    }
+
+    public function buildMyAdjustmentData(User $user): array
+    {
+        return $this->getMyAdjustmentData($user);
+    }
+
+    public function buildAdjustmentApprovalsData(array $filters = [], ?User $viewer = null): array
+    {
+        return $this->getAdjustmentApprovalsData($filters);
+    }
+
+    public function handleSubmitAttendanceRequest(User $user, array $payload): AttendanceRequest|OvertimeRequest
+    {
+        return $this->submitAttendanceRequest($user, $payload);
+    }
+
+    public function handleSubmitAttendanceAdjustmentRequest(User $user, array $payload): AttendanceAdjustment
+    {
+        return $this->submitAttendanceAdjustmentRequest($user, $payload);
+    }
+
+    public function handleReviewAttendanceAdjustmentRequest(AttendanceAdjustment $adjustment, User $reviewer, string $decision, ?string $note = null): AttendanceAdjustment
+    {
+        return $this->reviewAttendanceAdjustmentRequest($adjustment, $reviewer, $decision, $note);
+    }
+
+    public function handleReviewApprovalRequest(ApprovalRequest $approvalRequest, User $reviewer, string $decision, ?string $note = null): ApprovalRequest
+    {
+        return $this->reviewApprovalRequest($approvalRequest, $reviewer, $decision, $note);
+    }
+
+    public function handleReviewApprovalRequestsBulk(array $approvalRequestIds, User $reviewer, string $decision, ?string $note = null): array
+    {
+        return $this->reviewApprovalRequestsBulk($approvalRequestIds, $reviewer, $decision, $note);
+    }
+
+    public function buildReportData(User $user, array $filters = []): array
+    {
+        return $this->getReportData($user, $filters);
+    }
+
+    public function buildExportExcelHtml(User $user, array $filters = []): array
+    {
+        return $this->exportExcelHtml($user, $filters);
+    }
+
+    public function buildExportPdfHtml(User $user, array $filters = []): array
+    {
+        return $this->exportPdfHtml($user, $filters);
     }
     public function exportExcelHtml(User $user, array $filters = []): array
     {
@@ -1682,7 +1814,8 @@ class AttendanceService extends BaseService
                 $request->leave_type === 'unpaid' ? 'unpaid_leave' : 'leave'
             ),
             'business_trip' => sprintf(
-                'business_trip => worked:%d->%d, late=0, early=0, status=on_time, day=business_trip',
+                'business_trip(%s) => worked:%d->%d, late=0, early=0, status=on_time, day=business_trip',
+                $request->business_trip_location ?? 'N/A',
                 $before['worked_minutes'],
                 $after['worked_minutes']
             ),
@@ -1704,7 +1837,8 @@ class AttendanceService extends BaseService
                 $after['attendance_status']
             ),
             'make_up' => sprintf(
-                'make_up => worked:%d->%d, late:%d->%d, early:%d->%d',
+                'make_up(for:%s) => worked:%d->%d, late:%d->%d, early:%d->%d',
+                optional($request->make_up_related_leave_date)->format('d/m/Y') ?? 'N/A',
                 $before['worked_minutes'],
                 $after['worked_minutes'],
                 $before['late_minutes'],
@@ -2159,6 +2293,8 @@ class AttendanceService extends BaseService
                 'to_date' => optional($request->to_date)->format('Y-m-d'),
                 'from_time' => $request->from_time,
                 'to_time' => $request->to_time,
+                'business_trip_location' => $request->business_trip_location,
+                'make_up_related_leave_date' => optional($request->make_up_related_leave_date)->format('Y-m-d'),
                 'leave_type' => $request->leave_type,
                 'leave_type_name' => $request->leaveType?->name,
                 'leave_type_requires_attachment' => (bool) $request->leaveType?->requires_attachment,
@@ -2365,6 +2501,8 @@ class AttendanceService extends BaseService
             'to_date' => $target instanceof AttendanceRequest ? optional($target->to_date)->format('Y-m-d') : null,
             'from_time' => $target instanceof AttendanceRequest ? $target->from_time : null,
             'to_time' => $target instanceof AttendanceRequest ? $target->to_time : null,
+            'business_trip_location' => $target instanceof AttendanceRequest ? $target->business_trip_location : null,
+            'make_up_related_leave_date' => $target instanceof AttendanceRequest ? optional($target->make_up_related_leave_date)->format('Y-m-d') : null,
             'overtime_start_at' => $target instanceof OvertimeRequest ? optional($target->start_at)->format('Y-m-d H:i:s') : null,
             'overtime_end_at' => $target instanceof OvertimeRequest ? optional($target->end_at)->format('Y-m-d H:i:s') : null,
             'requested_minutes' => $target instanceof OvertimeRequest ? (int) $target->requested_minutes : null,
@@ -2814,7 +2952,11 @@ class AttendanceService extends BaseService
             }
         }
         $leaveType = $selectedLeaveType ? ($selectedLeaveType->is_paid ? 'paid' : 'unpaid') : null;
-        $requestedStatus = $requestType === 'late_early' ? (string) ($payload['requested_status'] ?? '') : null;
+        $requestedStatus = (string) ($payload['requested_status'] ?? '');
+        $businessTripLocation = trim((string) ($payload['business_trip_location'] ?? ''));
+        $makeUpRelatedLeaveDate = filled($payload['make_up_related_leave_date'] ?? null)
+            ? Carbon::parse((string) $payload['make_up_related_leave_date'], self::TIMEZONE)->toDateString()
+            : null;
 
         if ($fromDate && $toDate && $fromDate > $toDate) {
             throw ValidationException::withMessages([
@@ -2863,12 +3005,25 @@ class AttendanceService extends BaseService
                 ]);
             }
             $makeUpStartAt = Carbon::parse($makeUpDate . ' ' . $fromTime, self::TIMEZONE);
-            $shiftEnd = $this->resolveShiftEndForProfile($profile, $makeUpStartAt);
-            if ($makeUpStartAt->lessThanOrEqualTo($shiftEnd)) {
+            $makeUpEndAt = Carbon::parse($makeUpDate . ' ' . $toTime, self::TIMEZONE);
+
+            if ($this->overlapsWithShiftWorkingHours($profile, $makeUpStartAt, $makeUpEndAt)) {
                 throw ValidationException::withMessages([
-                    'from_time' => 'Lam bu phai bat dau sau khi ket thuc gio hanh chinh.',
+                    'from_time' => 'Lam bu khong duoc trung voi gio lam viec chinh thuc.',
                 ]);
             }
+
+            if (!$makeUpRelatedLeaveDate) {
+                throw ValidationException::withMessages([
+                    'make_up_related_leave_date' => 'Lam bu yeu cau ngay nghi lien ket.',
+                ]);
+            }
+        }
+
+        if ($requestType === 'business_trip' && ($payload['business_trip_location'] ?? '') === '') {
+            throw ValidationException::withMessages([
+                'business_trip_location' => 'Cong tac yeu cau dia diem ap dung.',
+            ]);
         }
 
         $affectedDates = $this->deriveSubmissionDates($requestDate, $fromDate, $toDate);
@@ -3010,6 +3165,8 @@ class AttendanceService extends BaseService
             'leave_duration_type' => $leaveDurationType,
             'leave_hours' => $leaveHours,
             'requested_status' => $requestedStatus ?: null,
+            'business_trip_location' => $businessTripLocation ?: null,
+            'make_up_related_leave_date' => $makeUpRelatedLeaveDate ?: null,
             'attachment_path' => filled($payload['attachment_path'] ?? null) ? (string) $payload['attachment_path'] : null,
         ];
     }
@@ -3393,9 +3550,14 @@ class AttendanceService extends BaseService
             }
 
             $startAt = Carbon::parse($workDate . ' ' . $fromTime, self::TIMEZONE);
-            $shiftEnd = $this->resolveShiftEndForProfile($request->employeeProfile, $startAt);
-            if ($startAt->lessThanOrEqualTo($shiftEnd)) {
-                throw new \RuntimeException('Lam bu phai bat dau sau khi ket thuc gio hanh chinh.');
+            $endAt = Carbon::parse($workDate . ' ' . $toTime, self::TIMEZONE);
+
+            if ($this->overlapsWithShiftWorkingHours($request->employeeProfile, $startAt, $endAt)) {
+                throw new \RuntimeException('Lam bu khong duoc trung voi gio lam viec chinh thuc.');
+            }
+
+            if (!$request->make_up_related_leave_date) {
+                throw new \RuntimeException('Lam bu yeu cau ngay nghi lien ket.');
             }
         }
     }
@@ -3950,6 +4112,37 @@ class AttendanceService extends BaseService
         if ($isLocked) {
             throw new \RuntimeException('Bang cong thang nay da bi khoa, khong the chinh sua.');
         }
+    }
+
+    private function overlapsWithShiftWorkingHours(EmployeeProfile $profile, Carbon $startAt, Carbon $endAt): bool
+    {
+        $workShift = $this->resolveWorkShift($profile, $startAt->copy());
+        if (!$workShift) {
+            return false;
+        }
+
+        [$shiftStart, $shiftEnd] = $this->shiftBoundaries($startAt->copy(), $workShift);
+
+        // Standard shift overlap
+        if ($startAt->lt($shiftEnd) && $endAt->gt($shiftStart)) {
+            // Check break overlap
+            $shiftConfig = $this->shiftConfigFromWorkShift($workShift);
+            $breakStart = $shiftConfig['break_start_time'] ?? null;
+            $breakEnd = $shiftConfig['break_end_time'] ?? null;
+
+            if (filled($breakStart) && filled($breakEnd)) {
+                $breakStartAt = $this->resolveShiftTimePoint($startAt, (string) $breakStart);
+                $breakEndAt = $this->resolveShiftTimePoint($startAt, (string) $breakEnd, $this->minutesOfDay((string) $breakEnd) <= $this->minutesOfDay((string) $breakStart));
+
+                // If the interval is entirely within the break, it's NOT overlapping with "working hours"
+                if ($startAt->gte($breakStartAt) && $endAt->lte($breakEndAt)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        return false;
     }
 }
 

@@ -109,6 +109,31 @@ class AttendanceController extends Controller
         return redirect()->back()->with('success', 'Đã xác nhận ngày công.');
     }
 
+    public function confirmBulk(Request $request)
+    {
+        $validated = $request->validate([
+            'record_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'record_ids.*' => ['integer', 'distinct', 'exists:attendance_records,id'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $result = $this->attendanceService->confirmAttendanceBulk(
+            $validated['record_ids'],
+            $request->user(),
+            $request->string('note')->toString() ?: null
+        );
+
+        if ($result['failed'] > 0) {
+            $firstFailure = $result['failures'][0]['message'] ?? 'Mot so ban ghi khong the duyet.';
+
+            return redirect()->back()
+                ->with('success', "Da duyet {$result['approved']} ban ghi.")
+                ->withErrors(['error' => "{$result['failed']} ban ghi chua duoc duyet: {$firstFailure}"]);
+        }
+
+        return redirect()->back()->with('success', "Da duyet {$result['approved']} ban ghi cham cong.");
+    }
+
     public function reject(Request $request, AttendanceRecord $attendanceRecord)
     {
         $request->validate([
@@ -138,6 +163,8 @@ class AttendanceController extends Controller
             'from_time' => ['nullable', 'date_format:H:i'],
             'to_time' => ['nullable', 'date_format:H:i'],
             'requested_status' => ['nullable', 'string', 'max:50'],
+            'business_trip_location' => ['nullable', 'string', 'max:255'],
+            'make_up_related_leave_date' => ['nullable', 'date'],
             'leave_type_id' => ['nullable', 'integer', 'exists:leave_types,id'],
             'leave_type' => ['nullable', 'string', 'max:20'],
             'leave_duration_type' => ['nullable', 'string', 'in:full_day,half_day,hourly'],
@@ -243,6 +270,32 @@ class AttendanceController extends Controller
         }
 
         return redirect()->back()->with('success', 'Đã duyệt đơn chấm công.');
+    }
+
+    public function approveRequestsBulk(Request $request)
+    {
+        $validated = $request->validate([
+            'approval_request_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'approval_request_ids.*' => ['integer', 'distinct', 'exists:approval_requests,id'],
+            'note' => ['required', 'string', 'min:5', 'max:1000'],
+        ]);
+
+        $result = $this->attendanceService->reviewApprovalRequestsBulk(
+            $validated['approval_request_ids'],
+            $request->user(),
+            'approved',
+            $request->string('note')->toString() ?: null
+        );
+
+        if ($result['failed'] > 0) {
+            $firstFailure = $result['failures'][0]['message'] ?? 'Mot so don khong the duyet.';
+
+            return redirect()->back()
+                ->with('success', "Da duyet {$result['processed']} don.")
+                ->withErrors(['error' => "{$result['failed']} don chua duoc duyet: {$firstFailure}"]);
+        }
+
+        return redirect()->back()->with('success', "Da duyet {$result['processed']} don.");
     }
 
     public function rejectRequest(Request $request, ApprovalRequest $approvalRequest)

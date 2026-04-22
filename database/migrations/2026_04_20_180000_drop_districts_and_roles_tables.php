@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -51,7 +52,9 @@ return new class extends Migration
         if (!Schema::hasColumn('wards', 'district_id')) {
             Schema::table('wards', function (Blueprint $table) {
                 $table->foreignId('district_id')->nullable()->after('province_id')->constrained('districts')->nullOnDelete();
-                $table->index(['district_id', 'name']);
+                if (!$this->hasIndex('wards', 'wards_district_id_name_index')) {
+                    $table->index(['district_id', 'name']);
+                }
             });
         }
 
@@ -99,5 +102,17 @@ return new class extends Migration
                 $table->primary(['permission_id', 'role_id'], 'role_has_permissions_permission_id_role_id_primary');
             });
         }
+    }
+
+    private function hasIndex(string $table, string $indexName): bool
+    {
+        $database = DB::connection()->getDatabaseName();
+
+        $result = DB::selectOne(
+            'SELECT COUNT(*) AS aggregate FROM information_schema.statistics WHERE table_schema = ? AND table_name = ? AND index_name = ?',
+            [$database, $table, $indexName]
+        );
+
+        return (int) ($result->aggregate ?? 0) > 0;
     }
 };

@@ -288,10 +288,10 @@ const categories = [
     { value: 'all', label: 'Tất cả', color: 'blue' },
     { value: 'user', label: 'Nhân sự', color: 'purple' },
     { value: 'system', label: 'Hệ thống', color: 'orange' },
-    { value: 'purchase_order', label: 'Đơn mua', color: 'green' },
-    { value: 'sale_order', label: 'Đơn bán', color: 'red' },
-    { value: 'import_warehouse', label: 'Nhập kho', color: 'teal' },
-    { value: 'export_warehouse', label: 'Xuất kho', color: 'cyan' },
+    { value: 'approval', label: 'Phê duyệt', color: 'green' },
+    { value: 'attendance', label: 'Chấm công', color: 'teal' },
+    { value: 'department', label: 'Phòng ban', color: 'cyan' },
+    { value: 'feedback', label: 'Phản hồi', color: 'red' },
 ];
 
 // Thêm helper function để lấy class màu

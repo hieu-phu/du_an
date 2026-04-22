@@ -47,7 +47,7 @@
           </div>
           <div class="flex items-center gap-2">
             <span class="text-gray-500">Trang thai:</span>
-            <span :class="['rounded-full px-2 py-0.5 text-xs font-semibold', getStatusClass(todayAttendance.status)]">
+            <span :class="['rounded-full px-2 py-0.5 text-xs font-semibold', getStatusClass(todayAttendance.day_status || todayAttendance.status)]">
               {{ todayAttendance.status_label || 'Chua cham cong' }}
             </span>
           </div>
@@ -98,7 +98,7 @@
     <div class="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
       <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
         <h3 class="text-lg font-semibold text-gray-900">Tong hop du an</h3>
-        <div class="mt-4 grid grid-cols-2 gap-3">
+        <div class="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-3">
           <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
             <div class="text-xs text-gray-500">Tong nhan su</div>
             <div class="mt-1 text-xl font-semibold text-gray-900">{{ dashboardSummary.total_employees || 0 }}</div>
@@ -128,7 +128,7 @@
         <h3 class="text-lg font-semibold text-gray-900">
           Bao cao cham cong thang {{ attendanceMonthReport.month || '-' }}/{{ attendanceMonthReport.year || '-' }}
         </h3>
-        <div class="mt-4 grid grid-cols-2 gap-3">
+        <div class="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
           <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
             <div class="text-xs text-gray-500">Tong ban ghi</div>
             <div class="mt-1 text-xl font-semibold text-gray-900">{{ attendanceMonthReport.total_records || 0 }}</div>
@@ -146,8 +146,16 @@
             <div class="mt-1 text-xl font-semibold text-orange-700">{{ attendanceMonthReport.early_leave_records || 0 }}</div>
           </div>
           <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
+            <div class="text-xs text-gray-500">Nghi phep</div>
+            <div class="mt-1 text-xl font-semibold text-sky-700">{{ attendanceMonthReport.leave_records || 0 }}</div>
+          </div>
+          <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
+            <div class="text-xs text-gray-500">Nghi khong phep</div>
+            <div class="mt-1 text-xl font-semibold text-rose-700">{{ attendanceMonthReport.unpaid_leave_records || 0 }}</div>
+          </div>
+          <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
             <div class="text-xs text-gray-500">Vang mat</div>
-            <div class="mt-1 text-xl font-semibold text-rose-700">{{ attendanceMonthReport.absent_records || 0 }}</div>
+            <div class="mt-1 text-xl font-semibold text-slate-700">{{ attendanceMonthReport.absent_records || 0 }}</div>
           </div>
           <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
             <div class="text-xs text-gray-500">Tong gio lam</div>
@@ -322,6 +330,8 @@ function getStatusClass(status) {
     case 'half_day':
       return 'bg-amber-100 text-amber-700'
     case 'absent':
+      return 'bg-slate-100 text-slate-700'
+    case 'unpaid_leave':
     case 'leave':
       return 'bg-red-100 text-red-700'
     case 'pending':

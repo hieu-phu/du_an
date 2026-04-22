@@ -183,6 +183,9 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
         Route::get('/attendance/approvals', [AttendanceController::class, 'approvals'])
             ->name('attendance.approvals');
 
+        Route::post('/attendance/confirm-bulk', [AttendanceController::class, 'confirmBulk'])
+            ->name('attendance.confirm-bulk');
+
         Route::post('/attendance/{attendanceRecord}/confirm', [AttendanceController::class, 'confirm'])
             ->name('attendance.confirm');
 
@@ -206,6 +209,8 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
     Route::middleware(['position.capability:' . PositionCapability::APPROVE_LEAVE])->group(function () {
         Route::get('/leave/approvals', [AttendanceController::class, 'leaveApprovals'])
             ->name('leave.approvals');
+        Route::post('/leave/request-approvals/approve-bulk', [AttendanceController::class, 'approveRequestsBulk'])
+            ->name('leave.request-approvals.approve-bulk');
         Route::post('/leave/request-approvals/{approvalRequest}/approve', [AttendanceController::class, 'approveRequest'])
             ->name('leave.request-approvals.approve');
         Route::post('/leave/request-approvals/{approvalRequest}/reject', [AttendanceController::class, 'rejectRequest'])

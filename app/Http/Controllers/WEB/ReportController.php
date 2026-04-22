@@ -20,6 +20,8 @@ use Dompdf\Options;
 
 class ReportController extends Controller
 {
+    private const SYSTEM_OWNER_EMAIL = 'gtvbehieu@gmail.com';
+
     public function index(Request $request): Response
     {
         $payload = $this->buildReportPayload($request->user(), $request->all());
@@ -86,7 +88,7 @@ class ReportController extends Controller
         $projectStatus = !empty($input['project_status']) ? (string) $input['project_status'] : null;
 
         $profileId = $user->employeeProfile?->id;
-        $isEmployee = !AccessMatrix::canManageAllAttendance($user);
+        $canViewCompanyData = $this->isSystemOwner($user);
         $canViewProjectReports = AccessMatrix::canViewAllProjects($user);
 
         $employeeByDepartment = $this->buildEmployeeByDepartment($user, $departmentId);
@@ -112,29 +114,24 @@ class ReportController extends Controller
             'projectByStatus' => $projectByStatus,
             'projectProgress' => $projectProgress,
             'attendanceMonthly' => $attendanceMonthly,
-            'scopeLabel' => $isEmployee ? 'Du lieu ca nhan' : 'Du lieu toan bo',
-            'canViewAll' => !$isEmployee,
+            'scopeLabel' => $canViewCompanyData ? 'Du lieu toan bo' : 'Du lieu cap duoi',
+            'canViewAll' => $canViewCompanyData,
             'canViewProjectReports' => $canViewProjectReports,
         ];
     }
 
     private function buildEmployeeByDepartment(User $user, ?int $departmentId): array
     {
-        if (!AccessMatrix::canManageAllAttendance($user)) {
-            $profile = $user->employeeProfile;
-            if (!$profile) {
-                return [];
-            }
+        $query = EmployeeProfile::query()
+            ->with('department:id,name')
+            ->when($departmentId, fn (Builder $builder) => $builder->where('department_id', $departmentId))
+            ->whereIn('employment_status', ['active', 'probation']);
 
-            return [[
-                'department_name' => $profile->department?->name ?? '-',
-                'employee_count' => 1,
-            ]];
+        if (!$this->isSystemOwner($user)) {
+            $this->applyEmployeeHierarchyScope($query, $user);
         }
 
-        return EmployeeProfile::query()
-            ->with('department:id,name')
-            ->when($departmentId, fn (Builder $q) => $q->where('department_id', $departmentId))
+        return $query
             ->get()
             ->groupBy('department_id')
             ->map(function ($profiles) {
@@ -226,9 +223,11 @@ class ReportController extends Controller
             ->whereMonth('work_date', $month)
             ->whereYear('work_date', $year);
 
-        if (!AccessMatrix::canManageAllAttendance($user) && $profileId) {
-            $query->where('employee_profile_id', $profileId);
-        } elseif ($departmentId) {
+        if (!$this->isSystemOwner($user)) {
+            $this->applyAttendanceHierarchyScope($query, $user);
+        }
+
+        if ($departmentId) {
             $query->whereHas('employeeProfile', fn (Builder $q) => $q->where('department_id', $departmentId));
         }
 
@@ -238,7 +237,9 @@ class ReportController extends Controller
             'total_records' => $records->count(),
             'on_time_records' => $records->whereIn('attendance_status', ['on_time', 'present'])->count(),
             'late_records' => $records->filter(fn (AttendanceRecord $r) => $r->attendance_status === 'late' || (int) ($r->late_minutes ?? 0) > 0)->count(),
-            'absent_records' => $records->where('attendance_status', 'absent')->count(),
+            'leave_records' => $records->where('day_status', 'leave')->count(),
+            'unpaid_leave_records' => $records->where('day_status', 'unpaid_leave')->count(),
+            'absent_records' => $records->where('day_status', 'absent')->count(),
             'early_leave_records' => $records->filter(fn (AttendanceRecord $r) => ($r->day_status === 'early_leave') || (int) ($r->early_leave_minutes ?? 0) > 0)->count(),
             'worked_minutes' => (int) $records->sum(fn (AttendanceRecord $r) => (int) ($r->worked_minutes ?? 0)),
         ];
@@ -266,5 +267,44 @@ class ReportController extends Controller
             'completed' => 'Hoan thanh',
             default => '-',
         };
+    }
+
+    private function applyAttendanceHierarchyScope(Builder $query, User $viewer): void
+    {
+        $viewerLevel = (int) ($viewer->employeeProfile?->position?->authority_level ?? 0);
+        $viewerProfileId = (int) ($viewer->employeeProfile?->id ?? 0);
+
+        if ($viewerLevel <= 0) {
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        if ($viewerProfileId > 0) {
+            $query->where('employee_profile_id', '!=', $viewerProfileId);
+        }
+
+        $query->whereHas('employeeProfile.position', fn (Builder $positionQuery) => $positionQuery->where('authority_level', '<', $viewerLevel));
+    }
+
+    private function applyEmployeeHierarchyScope(Builder $query, User $viewer): void
+    {
+        $viewerLevel = (int) ($viewer->employeeProfile?->position?->authority_level ?? 0);
+        $viewerProfileId = (int) ($viewer->employeeProfile?->id ?? 0);
+
+        if ($viewerLevel <= 0) {
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        if ($viewerProfileId > 0) {
+            $query->whereKeyNot($viewerProfileId);
+        }
+
+        $query->whereHas('position', fn (Builder $positionQuery) => $positionQuery->where('authority_level', '<', $viewerLevel));
+    }
+
+    private function isSystemOwner(?User $user): bool
+    {
+        return strcasecmp((string) ($user?->email ?? ''), self::SYSTEM_OWNER_EMAIL) === 0;
     }
 }

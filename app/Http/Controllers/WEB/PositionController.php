@@ -18,6 +18,7 @@ use Inertia\Inertia;
 
 class PositionController extends Controller
 {
+    private const SYSTEM_OWNER_EMAIL = 'gtvbehieu@gmail.com';
     public function __construct(
         protected PositionService $positionService
     ) {}
@@ -46,6 +47,7 @@ class PositionController extends Controller
             'positions' => $positions,
             'filters' => $request->only(['search', 'status']),
             'capabilityOptions' => $this->capabilityOptions(),
+            'canCreateCustomCapabilities' => false,
             'authorityLevels' => $this->authorityLevelOptions(),
             'authorityLevelCatalog' => $this->authorityLevelCatalog(),
         ]);
@@ -72,7 +74,7 @@ class PositionController extends Controller
             'authority_level.in' => 'Mức quyền hạn không hợp lệ.',
         ]);
         $actorLevel = $this->resolveActorAuthorityLevel($request->user());
-        if ((int) ($validated['authority_level'] ?? 0) >= $actorLevel) {
+        if (!$this->isSystemOwner($request->user()) && (int) ($validated['authority_level'] ?? 0) >= $actorLevel) {
             throw ValidationException::withMessages([
                 'authority_level' => 'Bạn chỉ được tạo chức vụ có mức quyền hạn thấp hơn cấp bậc hiện tại của bạn.',
             ]);
@@ -119,7 +121,7 @@ class PositionController extends Controller
         ]);
 
         $actorLevel = $this->resolveActorAuthorityLevel($request->user());
-        if ((int) ($validated['authority_level'] ?? 0) >= $actorLevel) {
+        if (!$this->isSystemOwner($request->user()) && (int) ($validated['authority_level'] ?? 0) >= $actorLevel) {
             throw ValidationException::withMessages([
                 'authority_level' => 'Bạn chỉ được cập nhật chức vụ với mức quyền hạn thấp hơn cấp bậc hiện tại của bạn.',
             ]);
@@ -169,6 +171,8 @@ class PositionController extends Controller
 
     public function storeCapability(Request $request)
     {
+        abort(403, 'Chuc nang them quyen tuy chinh da duoc tat.');
+
         if (!Schema::hasTable('position_capabilities')) {
             return back()->withErrors(['error' => 'Bảng danh mục quyền chưa sẵn sàng. Vui lòng chạy migrate.']);
         }
@@ -373,6 +377,10 @@ class PositionController extends Controller
             abort(403);
         }
 
+        if ($this->isSystemOwner($actor)) {
+            return;
+        }
+
         $actor->loadMissing('employeeProfile.position');
         $actorPositionId = (int) ($actor->employeeProfile?->position_id ?? 0);
 
@@ -395,6 +403,11 @@ class PositionController extends Controller
     private function resolveActorAuthorityLevel(User $actor): int
     {
         $actor->loadMissing('employeeProfile.position');
+
+        if ($this->isSystemOwner($actor)) {
+            return $this->resolveMaxAuthorityLevel();
+        }
+
         $positionLevel = (int) ($actor->employeeProfile?->position?->authority_level ?? 0);
 
         if ($positionLevel > 0) {
@@ -421,5 +434,11 @@ class PositionController extends Controller
         }
 
         return 10;
+    }
+
+    private function isSystemOwner(?User $actor): bool
+    {
+        return $actor !== null
+            && strcasecmp((string) $actor->email, self::SYSTEM_OWNER_EMAIL) === 0;
     }
 }

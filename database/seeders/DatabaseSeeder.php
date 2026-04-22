@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
+    private const SYSTEM_OWNER_EMAIL = 'gtvbehieu@gmail.com';
+
     public function run(): void
     {
         if (!DB::table('provinces')->exists()) {
@@ -39,7 +41,7 @@ class DatabaseSeeder extends Seeder
     private function seedSystemFullAccessUser(): User
     {
         $user = User::query()->updateOrCreate(
-            ['email' => 'gtvbehieu@gmail.com'],
+            ['email' => self::SYSTEM_OWNER_EMAIL],
             [
                 'name' => 'GTV Be Hieu',
                 'username' => 'gtvbehieu',
@@ -50,12 +52,13 @@ class DatabaseSeeder extends Seeder
         );
 
         $allCapabilityCodes = $this->allPositionCapabilityCodes();
+        $highestAuthorityLevel = $this->resolveHighestAuthorityLevel();
 
         $position = Position::query()->updateOrCreate(
             ['name' => 'System Full Access'],
             [
                 'description' => 'Chuc vu toan quyen cho tai khoan van hanh he thong.',
-                'authority_level' => 10,
+                'authority_level' => $highestAuthorityLevel,
                 'capabilities' => $allCapabilityCodes,
                 'is_active' => true,
             ]
@@ -117,6 +120,21 @@ class DatabaseSeeder extends Seeder
             ->all();
 
         return array_values(array_unique(array_merge(PositionCapability::all(), $codes)));
+    }
+
+    private function resolveHighestAuthorityLevel(): int
+    {
+        if (DB::getSchemaBuilder()->hasTable('authority_levels')) {
+            $max = (int) (DB::table('authority_levels')
+                ->where('is_active', true)
+                ->max('rank') ?? 0);
+
+            if ($max > 0) {
+                return $max;
+            }
+        }
+
+        return 10;
     }
 
     private function seedHrManager(): User

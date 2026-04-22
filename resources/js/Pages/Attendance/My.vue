@@ -8,6 +8,7 @@
       <div v-for="card in summaryCards" :key="card.label" class="rounded-xl border border-gray-200 bg-white p-5 shadow-theme-sm">
         <div class="text-sm text-gray-500">{{ card.label }}</div>
         <div class="mt-2 text-2xl font-semibold text-gray-900">{{ card.value }}</div>
+        <div v-if="card.hint" class="mt-1 text-xs text-gray-500">{{ card.hint }}</div>
       </div>
     </div>
 
@@ -70,22 +71,26 @@
           :label="singleDateLabel"
           placeholder="Chon ngay"
           :error="requestForm.errors.request_date"
-          :config="datePickerConfig"
-        />
+          :config="singleDatePickerConfig"
+        >
+          <template v-if="singleDateHint" #helper>{{ singleDateHint }}</template>
+        </InputDate>
 
         <InputDate
           v-if="showDateRange"
           v-model="requestForm.from_date"
-          label="Tu ngay"
+          :label="fromDateLabel"
           placeholder="Chon tu ngay"
           :error="requestForm.errors.from_date"
           :config="datePickerConfig"
-        />
+        >
+          <template v-if="dateRangeHint" #helper>{{ dateRangeHint }}</template>
+        </InputDate>
 
         <InputDate
           v-if="showDateRange"
           v-model="requestForm.to_date"
-          label="Den ngay"
+          :label="toDateLabel"
           placeholder="Chon den ngay"
           :error="requestForm.errors.to_date"
           :config="datePickerConfig"
@@ -129,12 +134,23 @@
         </div>
 
         <div v-if="requestForm.request_type === 'late_early'">
-          <label class="mb-2 block text-sm font-medium text-gray-700">Loai de nghi</label>
+          <label class="mb-2 block text-sm font-medium text-gray-700">Loai vi pham</label>
           <select v-model="requestForm.requested_status" class="w-full rounded-lg border border-gray-300 px-3 py-2">
             <option value="late">Xin di muon</option>
             <option value="early_leave">Xin ve som</option>
           </select>
           <p v-if="requestForm.errors.requested_status" class="mt-1 text-sm text-red-500">{{ requestForm.errors.requested_status }}</p>
+        </div>
+
+        <div v-if="requestForm.request_type === 'business_trip'">
+          <label class="mb-2 block text-sm font-medium text-gray-700">Dia diem cong tac</label>
+          <input
+            v-model="requestForm.business_trip_location"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2"
+            type="text"
+            placeholder="Nhap dia diem cong tac"
+          >
+          <p v-if="requestForm.errors.business_trip_location" class="mt-1 text-sm text-red-500">{{ requestForm.errors.business_trip_location }}</p>
         </div>
 
         <InputDate
@@ -154,6 +170,17 @@
           :error="requestForm.errors.to_time"
           :config="timePickerConfig"
         />
+
+        <InputDate
+          v-if="requestForm.request_type === 'make_up'"
+          v-model="requestForm.make_up_related_leave_date"
+          label="Ngay nghi lien ket"
+          placeholder="Chon ngay nghi lien ket"
+          :error="requestForm.errors.make_up_related_leave_date"
+          :config="datePickerConfig"
+        >
+          <template #helper>Chon ngay nghi se duoc lam bu neu co.</template>
+        </InputDate>
 
         <InputDate
           v-if="requestForm.request_type === 'overtime'"
@@ -190,8 +217,8 @@
       </div>
 
       <div class="mt-4">
-        <label class="mb-2 block text-sm font-medium text-gray-700">Ly do</label>
-        <textarea v-model="requestForm.reason" rows="3" class="w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="Nhap ly do chi tiet"></textarea>
+        <label class="mb-2 block text-sm font-medium text-gray-700">{{ reasonLabel }}</label>
+        <textarea v-model="requestForm.reason" rows="3" class="w-full rounded-lg border border-gray-300 px-3 py-2" :placeholder="reasonPlaceholder"></textarea>
         <p v-if="requestForm.errors.reason" class="mt-1 text-sm text-red-500">{{ requestForm.errors.reason }}</p>
       </div>
 
@@ -212,7 +239,14 @@
         <h3 class="text-lg font-semibold text-gray-900">Bang cong ca nhan</h3>
       </div>
 
-      <DataTable :columns="columns" :data="records" empty-message="Chua co du lieu cham cong.">
+      <DataTable
+        :columns="columns"
+        :data="records"
+        :row-class="attendanceRowClass"
+        paginate
+        :default-per-page="10"
+        empty-message="Chua co du lieu cham cong."
+      >
         <template #cell-work_date="{ item }">
           {{ formatDate(item.work_date) }}
         </template>
@@ -241,17 +275,27 @@
         </template>
         <template #cell-day_status="{ item }">
           <span :class="dayStatusClass(item.day_status)" class="rounded-full px-3 py-1 text-xs font-semibold">
-            {{ formatDayStatus(item.day_status) }}
+            {{ formatDayStatus(item) }}
           </span>
         </template>
         <template #cell-approval_status="{ item }">
-          <span :class="approvalStatusClass(item.approval_status)" class="rounded-full px-3 py-1 text-xs font-semibold">
-            {{ formatApprovalStatus(item.approval_status) }}
+          <span :class="approvalStatusClass(item.display_approval_status || item.approval_status)" class="rounded-full px-3 py-1 text-xs font-semibold">
+            {{ formatApprovalStatus(item.display_approval_status || item.approval_status) }}
           </span>
         </template>
         <template #cell-request_presence_label="{ item }">
-          <span :class="requestPresenceClass(item)" class="rounded-full px-3 py-1 text-xs font-semibold">
-            {{ item.request_presence_label || 'Khong co don' }}
+          <button
+            v-if="item.request_detail"
+            type="button"
+            :class="requestPresenceClass(item)"
+            :title="requestLinkTitle(item)"
+            class="inline-flex max-w-[190px] rounded-full px-3 py-1 text-xs font-semibold transition hover:ring-2 hover:ring-blue-200"
+            @click="openLinkedRequestDetail(item)"
+          >
+            <span class="truncate">{{ item.request_presence_label || 'Xem don' }}</span>
+          </button>
+          <span v-else class="inline-flex max-w-[170px] rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+            <span class="truncate">Khong co don</span>
           </span>
         </template>
       </DataTable>
@@ -263,7 +307,16 @@
         <p class="mt-1 text-sm text-gray-500">Theo doi cac don ban da gui va trang thai duyet hien tai.</p>
       </div>
 
-      <DataTable :columns="requestColumns" :data="recent_requests" :actions="requestActions" empty-message="Ban chua gui don cham cong nao.">
+      <DataTable
+        :columns="requestColumns"
+        :data="recent_requests"
+        :actions="requestActions"
+        :row-class="requestRowClass"
+        paginate
+        :default-per-page="5"
+        :per-page-options="[5, 10, 20]"
+        empty-message="Ban chua gui don cham cong nao."
+      >
         <template #cell-request_type_label="{ item }">
           {{ item.request_type_label || requestTypeLabel(item.request_type) }}
         </template>
@@ -305,6 +358,12 @@
             <div><span class="font-medium text-gray-900">Den gio:</span> {{ selectedSubmittedRequest.to_time || '-' }}</div>
             <div><span class="font-medium text-gray-900">Loai nghi:</span> {{ selectedSubmittedRequest.leave_type_name || selectedSubmittedRequest.leave_type || '-' }}</div>
             <div><span class="font-medium text-gray-900">Thoi luong:</span> {{ leaveDurationLabel(selectedSubmittedRequest) }}</div>
+            <div v-if="selectedSubmittedRequest.business_trip_location">
+              <span class="font-medium text-gray-900">Dia diem cong tac:</span> {{ selectedSubmittedRequest.business_trip_location }}
+            </div>
+            <div v-if="selectedSubmittedRequest.make_up_related_leave_date">
+              <span class="font-medium text-gray-900">Ngay nghi lien ket:</span> {{ formatDate(selectedSubmittedRequest.make_up_related_leave_date) }}
+            </div>
             <div v-if="selectedSubmittedRequest.leave_days !== null && selectedSubmittedRequest.leave_days !== undefined">
               <span class="font-medium text-gray-900">So ngay nghi:</span> {{ formatWorkUnits(selectedSubmittedRequest.leave_days) }} ngay
             </div>
@@ -401,6 +460,8 @@ const requestForm = useForm({
   requested_status: 'late',
   start_at: '',
   end_at: '',
+  business_trip_location: '',
+  make_up_related_leave_date: '',
   reason: '',
 })
 
@@ -441,10 +502,22 @@ const requestActions = [
 
 const summaryCards = computed(() => [
   { label: 'Ngay cong hop le', value: formatWorkUnits(props.summary.approved_work_units ?? props.summary.total_work_units ?? 0) },
-  { label: 'Ngay can xu ly', value: props.summary.action_required_records ?? props.summary.pending_records ?? 0 },
-  { label: 'Don cho duyet', value: props.summary.pending_request_records ?? 0 },
-  { label: 'Gio lam da duyet', value: formatMinutes(props.summary.approved_worked_minutes ?? props.summary.total_worked_minutes ?? 0) },
+  {
+    label: 'Cong can bo sung / xac minh',
+    value: props.summary.action_required_records ?? props.summary.pending_records ?? 0,
+    hint: verificationHint.value,
+  },
+  { label: 'Don cua toi cho duyet', value: props.summary.pending_request_records ?? 0 },
+  { label: 'Gio lam thuc te da duyet', value: formatMinutes(props.summary.approved_actual_worked_minutes ?? props.summary.approved_worked_minutes ?? 0) },
 ])
+
+const verificationHint = computed(() => {
+  const missingCheck = props.summary.needs_verification_missing_check_records ?? props.summary.missing_check_records ?? 0
+  const missingAttendance = props.summary.needs_verification_missing_attendance_records ?? props.summary.missing_attendance_records ?? 0
+  const timeViolation = props.summary.needs_verification_time_violation_records ?? 0
+
+  return `Thieu check: ${missingCheck}, vang: ${missingAttendance}, gio cong: ${timeViolation}`
+})
 
 const currentPeriodLabel = computed(() => {
   const date = parsePeriodValue(filterForm.period)
@@ -468,17 +541,46 @@ const overtimeWindowLabel = computed(() => {
 })
 const showSingleDate = computed(() => ['forgot_check', 'late_early', 'make_up'].includes(requestForm.request_type))
 const showDateRange = computed(() => ['leave', 'business_trip'].includes(requestForm.request_type))
-const showTimeRange = computed(() => ['forgot_check', 'late_early', 'make_up'].includes(requestForm.request_type))
-const singleDateLabel = computed(() => requestForm.request_type === 'forgot_check' ? 'Ngay quen cham cong' : 'Ngay ap dung')
+const showTimeRange = computed(() => ['forgot_check', 'late_early', 'business_trip', 'make_up'].includes(requestForm.request_type))
+const singleDateLabel = computed(() => {
+  if (requestForm.request_type === 'forgot_check') return 'Ngay quen cham cong'
+  if (requestForm.request_type === 'late_early') return 'Ngay vi pham'
+  if (requestForm.request_type === 'make_up') return 'Ngay lam bu'
+  return 'Ngay ap dung'
+})
+const fromDateLabel = computed(() => requestForm.request_type === 'business_trip' ? 'Ngay bat dau cong tac' : 'Ngay bat dau nghi')
+const toDateLabel = computed(() => requestForm.request_type === 'business_trip' ? 'Ngay ket thuc cong tac' : 'Ngay ket thuc nghi')
 const fromTimeLabel = computed(() => {
   if (requestForm.request_type === 'make_up') return 'Bat dau lam bu'
   if (requestForm.request_type === 'forgot_check') return 'Gio check-in neu quen'
+  if (requestForm.request_type === 'business_trip') return 'Bat dau cong tac'
+  if (requestForm.request_type === 'late_early') return requestForm.requested_status === 'early_leave' ? 'Bat dau ve som' : 'Bat dau di muon'
   return 'Tu gio'
 })
 const toTimeLabel = computed(() => {
   if (requestForm.request_type === 'make_up') return 'Ket thuc lam bu'
   if (requestForm.request_type === 'forgot_check') return 'Gio check-out neu quen'
+  if (requestForm.request_type === 'business_trip') return 'Ket thuc cong tac'
+  if (requestForm.request_type === 'late_early') return requestForm.requested_status === 'early_leave' ? 'Ket thuc ve som' : 'Ket thuc di muon'
   return 'Den gio'
+})
+const singleDateHint = computed(() => {
+  if (requestForm.request_type === 'forgot_check') return 'Chi ap dung cho ngay da xay ra'
+  return ''
+})
+const dateRangeHint = computed(() => {
+  if (requestForm.request_type === 'leave') return 'Co the dang ky cho hom nay hoac ngay toi'
+  return ''
+})
+const reasonLabel = computed(() => {
+  if (requestForm.request_type === 'business_trip') return 'Noi dung cong tac'
+  if (requestForm.request_type === 'overtime') return 'Ly do tang ca'
+  return 'Ly do'
+})
+const reasonPlaceholder = computed(() => {
+  if (requestForm.request_type === 'business_trip') return 'Nhap noi dung cong tac'
+  if (requestForm.request_type === 'overtime') return 'Nhap ly do dang ky tang ca'
+  return 'Nhap ly do chi tiet'
 })
 
 const datePickerConfig = {
@@ -487,6 +589,22 @@ const datePickerConfig = {
   altInput: true,
   altFormat: 'd/m/Y',
 }
+
+const todayDate = new Date().toISOString().slice(0, 10)
+
+const singleDatePickerConfig = computed(() => {
+  if (requestForm.request_type === 'forgot_check') {
+    return {
+      ...datePickerConfig,
+      maxDate: todayDate,
+    }
+  }
+
+  return {
+    ...datePickerConfig,
+    minDate: todayDate,
+  }
+})
 
 const periodPickerConfig = {
   allowInput: false,
@@ -542,6 +660,8 @@ watch(() => requestForm.request_type, (type) => {
   }
   requestForm.start_at = ''
   requestForm.end_at = ''
+  requestForm.business_trip_location = ''
+  requestForm.make_up_related_leave_date = ''
 
   if (type !== 'leave') {
     requestForm.leave_type = 'paid'
@@ -656,8 +776,23 @@ function openSubmittedRequestDetail(item) {
   selectedSubmittedRequest.value = item
 }
 
+function openLinkedRequestDetail(item) {
+  if (!item?.request_detail) return
+  selectedSubmittedRequest.value = item.request_detail
+}
+
 function closeSubmittedRequestDetail() {
   selectedSubmittedRequest.value = null
+}
+
+function requestLinkTitle(item) {
+  const parts = [
+    item?.request_detail?.request_type_label || item?.request_presence_label,
+    item?.request_status_label,
+    item?.request_reason,
+  ].filter(Boolean)
+
+  return parts.join(' - ') || 'Xem don lien quan'
 }
 
 function formatDate(value) {
@@ -707,6 +842,14 @@ function shouldShowViolationMinutes(item) {
 function formatAttendanceStatus(item) {
   const resolvedUnit = Number(item?.work_unit)
 
+  if (item?.day_status === 'day_off') {
+    return 'Nghi theo phan ca'
+  }
+
+  if (item?.day_status === 'holiday_paid') {
+    return 'Le co luong'
+  }
+
   if (hasMissingCheck(item)) {
     return 'Chua tinh cong'
   }
@@ -735,26 +878,40 @@ function formatAttendanceStatus(item) {
   return labels[item?.attendance_status] || '-'
 }
 
-function formatDayStatus(value) {
+function formatDayStatus(item) {
+  const value = typeof item === 'string' ? item : item?.day_status
+
+  if (value === 'unpaid_leave' && item?.violation_status === 'missing_attendance') {
+    return 'Vang mat'
+  }
+
   const labels = {
     present: 'Di lam',
     late: 'Di muon',
     early_leave: 'Ve som',
     leave: 'Nghi phep',
-    unpaid_leave: 'Nghi khong phep',
+    unpaid_leave: 'Nghi khong luong',
+    holiday_paid: 'Le co luong',
+    day_off: 'Nghi theo phan ca',
     business_trip: 'Cong tac',
     missing_check_in: 'Thieu check in',
     missing_check_out: 'Thieu check out',
-    absent: 'Vang',
+    absent: 'Vang mat',
   }
   return labels[value] || '-'
 }
 
 function formatApprovalStatus(value) {
+  if (value === 'needs_verification') {
+    return 'Can xac minh'
+  }
+
   const labels = {
     pending: 'Cho duyet',
+    not_required: 'Khong can duyet',
     approved: 'Da duyet',
     rejected: 'Tu choi',
+    cancelled: 'Da huy',
   }
   return labels[value] || '-'
 }
@@ -796,10 +953,12 @@ function dayStatusClass(value) {
     early_leave: 'bg-orange-50 text-orange-700',
     leave: 'bg-sky-50 text-sky-700',
     unpaid_leave: 'bg-rose-50 text-rose-700',
+    holiday_paid: 'bg-cyan-50 text-cyan-700',
+    day_off: 'bg-slate-50 text-slate-600',
     business_trip: 'bg-violet-50 text-violet-700',
     missing_check_in: 'bg-yellow-50 text-yellow-700',
     missing_check_out: 'bg-yellow-50 text-yellow-700',
-    absent: 'bg-rose-50 text-rose-700',
+    absent: 'bg-slate-100 text-slate-700',
   }
   return classes[value] || 'bg-slate-50 text-slate-700'
 }
@@ -807,8 +966,11 @@ function dayStatusClass(value) {
 function approvalStatusClass(value) {
   const classes = {
     pending: 'bg-amber-50 text-amber-700',
+    needs_verification: 'bg-orange-50 text-orange-700',
+    not_required: 'bg-slate-50 text-slate-600',
     approved: 'bg-emerald-50 text-emerald-700',
     rejected: 'bg-rose-50 text-rose-700',
+    cancelled: 'bg-slate-100 text-slate-600',
   }
   return classes[value] || 'bg-slate-50 text-slate-700'
 }
@@ -817,6 +979,33 @@ function requestPresenceClass(item) {
   if (item?.request_status === 'approved') return 'bg-emerald-50 text-emerald-700'
   if (item?.request_status === 'pending') return 'bg-amber-50 text-amber-700'
   if (item?.request_status === 'rejected') return 'bg-rose-50 text-rose-700'
+  if (item?.request_status === 'cancelled') return 'bg-slate-100 text-slate-600'
   return 'bg-slate-50 text-slate-700'
+}
+
+function attendanceRowClass(item) {
+  const displayStatus = item?.display_approval_status || item?.approval_status
+
+  if (displayStatus === 'needs_verification') {
+    return 'bg-orange-50/70 hover:bg-orange-50'
+  }
+
+  if (displayStatus === 'pending') {
+    return 'bg-amber-50/60 hover:bg-amber-50'
+  }
+
+  if (item?.request_status === 'pending') {
+    return 'bg-blue-50/50 hover:bg-blue-50'
+  }
+
+  return ''
+}
+
+function requestRowClass(item) {
+  if (item?.status === 'pending') {
+    return 'bg-amber-50/60 hover:bg-amber-50'
+  }
+
+  return ''
 }
 </script>

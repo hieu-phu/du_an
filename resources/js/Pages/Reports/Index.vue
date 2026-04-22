@@ -101,12 +101,14 @@
 
     <div class="mt-4 rounded-xl border border-gray-200 bg-white p-4">
       <h3 class="mb-3 text-base font-semibold text-gray-900">Bao cao cham cong thang</h3>
-      <div class="grid grid-cols-2 gap-3 md:grid-cols-6">
+      <div class="grid grid-cols-2 gap-3 md:grid-cols-8">
         <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Tong ban ghi</div><div class="mt-1 text-lg font-semibold">{{ attendanceMonthly.total_records || 0 }}</div></div>
         <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Dung gio</div><div class="mt-1 text-lg font-semibold text-emerald-700">{{ attendanceMonthly.on_time_records || 0 }}</div></div>
         <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Di muon</div><div class="mt-1 text-lg font-semibold text-amber-700">{{ attendanceMonthly.late_records || 0 }}</div></div>
         <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Ve som</div><div class="mt-1 text-lg font-semibold text-orange-700">{{ attendanceMonthly.early_leave_records || 0 }}</div></div>
-        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Vang mat</div><div class="mt-1 text-lg font-semibold text-rose-700">{{ attendanceMonthly.absent_records || 0 }}</div></div>
+        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Nghi phep</div><div class="mt-1 text-lg font-semibold text-sky-700">{{ attendanceMonthly.leave_records || 0 }}</div></div>
+        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Nghi khong phep</div><div class="mt-1 text-lg font-semibold text-rose-700">{{ attendanceMonthly.unpaid_leave_records || 0 }}</div></div>
+        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Vang mat</div><div class="mt-1 text-lg font-semibold text-slate-700">{{ attendanceMonthly.absent_records || 0 }}</div></div>
         <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Tong gio lam</div><div class="mt-1 text-sm font-semibold">{{ workedHoursLabel }}</div></div>
       </div>
     </div>

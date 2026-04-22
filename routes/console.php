@@ -22,6 +22,16 @@ Artisan::command('attendance:mark-absent {date?}', function (?string $date = nul
     $this->info("Marked {$markedCount} attendance record(s) as absent.");
 })->purpose('Auto mark absent employees who did not check in for a workday');
 
+Artisan::command('attendance:close-unexplained-absences {--days=2} {--as-of=}', function () {
+    $days = max(1, (int) $this->option('days'));
+    $asOf = $this->option('as-of')
+        ? Carbon::parse((string) $this->option('as-of'), 'Asia/Ho_Chi_Minh')
+        : null;
+    $closedCount = app(AttendanceService::class)->closeUnexplainedAbsences($days, $asOf);
+
+    $this->info("Closed {$closedCount} unexplained absence record(s) after {$days} day(s).");
+})->purpose('Auto reject unexplained absences that have no active attendance request after a timeout');
+
 Artisan::command('positions:sync-capabilities-pivot {--dry-run}', function () {
     $dryRun = (bool) $this->option('dry-run');
 
@@ -78,5 +88,15 @@ Artisan::command('feedbacks:escalate-stale {--hours=}', function () {
 
     $this->info("Escalated {$count} stale feedback message(s) older than {$hours} hour(s).");
 })->purpose('Escalate unreplied feedback messages to the next superior level after a timeout');
+
+Schedule::command('attendance:mark-absent ' . Carbon::now('Asia/Ho_Chi_Minh')->subDays(2)->toDateString())
+    ->dailyAt('09:00')
+    ->timezone('Asia/Ho_Chi_Minh')
+    ->withoutOverlapping();
+
+Schedule::command('attendance:close-unexplained-absences --days=2')
+    ->dailyAt('09:10')
+    ->timezone('Asia/Ho_Chi_Minh')
+    ->withoutOverlapping();
 
 Schedule::command('feedbacks:escalate-stale')->hourly();

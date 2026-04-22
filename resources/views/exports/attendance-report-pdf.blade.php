@@ -21,18 +21,25 @@
             'late' => 'Đi muộn',
             'early_leave' => 'Về sớm',
             'leave' => 'Nghỉ phép',
-            'unpaid_leave' => 'Nghỉ không phép',
+            'unpaid_leave' => 'Nghỉ không lương',
+            'holiday_paid' => 'Lễ có lương',
+            'day_off' => 'Nghỉ theo phân ca',
             'business_trip' => 'Công tác',
             'missing_check_in' => 'Thiếu check in',
             'missing_check_out' => 'Thiếu check out',
-            'absent' => 'Vắng',
+            'absent' => 'Vắng mặt',
             default => '-',
         };
     };
 
     $approvalStatusLabel = function ($value): string {
+        if ($value === 'needs_verification') {
+            return 'Cần xác minh';
+        }
+
         return match ($value) {
             'pending' => 'Chờ duyệt',
+            'not_required' => 'Không cần duyệt',
             'approved' => 'Đã duyệt',
             'rejected' => 'Từ chối',
             default => '-',
@@ -97,7 +104,7 @@
                     <td>{{ $formatMinutes($record['early_leave_minutes'] ?? 0) }}</td>
                     <td>{{ $formatMinutes($record['overtime_minutes'] ?? 0) }}</td>
                     <td>{{ $dayStatusLabel($record['day_status'] ?? null) }}</td>
-                    <td>{{ $approvalStatusLabel($record['approval_status'] ?? null) }}</td>
+                    <td>{{ $approvalStatusLabel($record['display_approval_status'] ?? $record['approval_status'] ?? null) }}</td>
                 </tr>
             @empty
                 <tr>

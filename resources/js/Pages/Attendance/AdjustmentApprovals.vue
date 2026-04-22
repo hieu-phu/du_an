@@ -62,7 +62,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in adjustments" :key="item.id" class="border-t">
+            <tr v-for="item in visibleAdjustments" :key="item.id" class="border-t">
               <td class="p-2">{{ item.employee_name }} ({{ item.employee_code }})</td>
               <td class="p-2">{{ formatDate(item.work_date) }}</td>
               <td class="p-2">{{ formatAdjustmentChange(item.old_check_in_at, item.new_check_in_at) }}</td>
@@ -93,7 +93,7 @@
                 </div>
               </td>
             </tr>
-            <tr v-if="!adjustments.length">
+            <tr v-if="!visibleAdjustments.length">
               <td class="p-4 text-center text-gray-500" colspan="7">Khong co yeu cau dieu chinh cong can duyet.</td>
             </tr>
           </tbody>
@@ -120,7 +120,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in reviewed_adjustments" :key="item.id" class="border-t">
+            <tr v-for="item in visibleReviewedAdjustments" :key="item.id" class="border-t">
               <td class="p-2">{{ item.employee_name }} ({{ item.employee_code }})</td>
               <td class="p-2">{{ formatDate(item.work_date) }}</td>
               <td class="p-2">{{ formatAdjustmentChange(item.old_check_in_at, item.new_check_in_at) }}</td>
@@ -138,7 +138,7 @@
               <td class="p-2">{{ item.review_note || '-' }}</td>
               <td class="p-2">{{ formatDateTime(item.reviewed_at) }}</td>
             </tr>
-            <tr v-if="!reviewed_adjustments.length">
+            <tr v-if="!visibleReviewedAdjustments.length">
               <td class="p-4 text-center text-gray-500" colspan="9">Chua co lich su duyet dieu chinh cong.</td>
             </tr>
           </tbody>
@@ -150,7 +150,7 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { Head, router } from '@inertiajs/vue3'
+import { Head, router, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import InputDate from '@/components/forms/InputDate.vue'
@@ -163,6 +163,7 @@ const props = defineProps({
   reviewed_adjustments: { type: Array, default: () => [] },
 })
 
+const page = usePage()
 const processingId = ref(null)
 
 const filterForm = reactive({
@@ -173,6 +174,10 @@ const filterForm = reactive({
 })
 
 let lastAppliedFilterKey = `${filterForm.year}-${filterForm.month}-${filterForm.employee_profile_id ?? 'all'}`
+const currentUserId = computed(() => Number(page.props.auth?.user?.id || 0))
+const currentAuthorityLevel = computed(() => Number(page.props.auth?.user?.authority_level || 0))
+const visibleAdjustments = computed(() => (props.adjustments || []).filter(canReviewAdjustment))
+const visibleReviewedAdjustments = computed(() => (props.reviewed_adjustments || []).filter(canReviewAdjustment))
 
 const currentPeriodLabel = computed(() => {
   const date = parsePeriodValue(filterForm.period)
@@ -300,6 +305,16 @@ function formatAdjustmentChange(oldValue, newValue) {
   }
 
   return `${oldText} -> ${formatDateTime(newValue)}`
+}
+
+function canReviewAdjustment(item) {
+  const targetLevel = Number(item?.employee_authority_level || 0)
+  const targetUserId = Number(item?.employee_user_id || 0)
+
+  if (!currentAuthorityLevel.value) return false
+  if (targetUserId > 0 && targetUserId === currentUserId.value) return false
+
+  return targetLevel < currentAuthorityLevel.value
 }
 
 function finalAdjustmentCheckIn(item) {
