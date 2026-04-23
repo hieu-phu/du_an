@@ -179,10 +179,10 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
             ->name('projects.implementation-details.destroy');
     });
 
-    Route::middleware(['position.capability:' . PositionCapability::APPROVE_ATTENDANCE])->group(function () {
-        Route::get('/attendance/approvals', [AttendanceController::class, 'approvals'])
-            ->name('attendance.approvals');
+    Route::get('/attendance/approvals', [AttendanceController::class, 'approvals'])
+        ->name('attendance.approvals');
 
+    Route::middleware(['position.capability:' . PositionCapability::APPROVE_ATTENDANCE])->group(function () {
         Route::post('/attendance/confirm-bulk', [AttendanceController::class, 'confirmBulk'])
             ->name('attendance.confirm-bulk');
 

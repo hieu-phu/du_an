@@ -308,6 +308,10 @@ function formatMinutes(value) {
 }
 
 function formatDayStatus(item) {
+  if (item?.day_status_label) {
+    return item.day_status_label
+  }
+
   const value = typeof item === 'string' ? item : item?.day_status
 
   if (value === 'unpaid_leave' && item?.violation_status === 'missing_attendance') {

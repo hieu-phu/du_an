@@ -300,11 +300,10 @@ class AttendanceCatalogController extends Controller
             }
         }
 
-        $handoverMinutes = max(0, (int) ($validated['handover_break_minutes'] ?? 0));
-        $netMinutes = $workMinutes - $breakMinutes - $handoverMinutes;
+        $netMinutes = $workMinutes - $breakMinutes;
         if ($netMinutes <= 0) {
             throw ValidationException::withMessages([
-                'break_end_time' => 'Tong thoi gian nghi giua ca va nghi giao ca khong duoc bang hoac lon hon tong thoi gian ca lam.',
+                'break_end_time' => 'Tong thoi gian nghi giua ca khong duoc bang hoac lon hon tong thoi gian ca lam.',
             ]);
         }
 

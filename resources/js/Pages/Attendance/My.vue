@@ -46,6 +46,44 @@
       </div>
     </div>
 
+    <div v-if="!isAttendancePeriodClosed" class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
+      <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h3 class="text-lg font-semibold text-gray-900">Goi y xu ly nhanh</h3>
+          <p class="mt-1 text-sm text-gray-500">He thong tu nhan dien ngay can xu ly va dien san form cho ban.</p>
+        </div>
+        <div class="text-xs font-medium text-gray-500">Ban cung co the bam "Tao don" ngay trong bang cong ben duoi.</div>
+      </div>
+
+      <div v-if="smartRecommendations.length" class="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-3">
+        <div
+          v-for="item in smartRecommendations"
+          :key="`${item.requestType}-${item.record.id || item.record.work_date}`"
+          class="rounded-2xl border border-gray-200 bg-gray-50 p-4"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-sm font-semibold text-gray-900">{{ item.title }}</div>
+              <div class="mt-1 text-xs text-gray-500">{{ item.dateLabel }}</div>
+            </div>
+            <span class="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700">{{ requestTypeLabel(item.requestType) }}</span>
+          </div>
+          <p class="mt-3 text-sm text-gray-600">{{ item.description }}</p>
+          <button
+            type="button"
+            class="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+            @click="applySmartRequest(item.record, item.requestType)"
+          >
+            Tao don tu dong
+          </button>
+        </div>
+      </div>
+
+      <div v-else class="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        Khong co ngay nao can xu ly gap trong ky hien tai.
+      </div>
+    </div>
+
     <div class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="mb-4">
         <h3 class="text-lg font-semibold text-gray-900">Gui don lien quan cham cong</h3>
@@ -53,6 +91,22 @@
 
       <div v-if="formError" class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
         {{ formError }}
+      </div>
+
+      <div v-if="selectedSmartContext && !isAttendancePeriodClosed" class="mb-4 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div class="font-semibold">{{ selectedSmartContext.title }}</div>
+            <div class="mt-1">{{ selectedSmartContext.description }}</div>
+          </div>
+          <button
+            type="button"
+            class="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+            @click="clearSmartContext"
+          >
+            Bo chon goi y
+          </button>
+        </div>
       </div>
 
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -174,13 +228,43 @@
         <InputDate
           v-if="requestForm.request_type === 'make_up'"
           v-model="requestForm.make_up_related_leave_date"
-          label="Ngay nghi lien ket"
-          placeholder="Chon ngay nghi lien ket"
+          label="Ngay nghi can bu"
+          placeholder="Chon ngay nghi can bu"
           :error="requestForm.errors.make_up_related_leave_date"
-          :config="datePickerConfig"
+          :config="makeUpRelatedDatePickerConfig"
         >
-          <template #helper>Chon ngay nghi se duoc lam bu neu co.</template>
+          <template #helper>
+            Chi cho chon ngay co trang thai nghi phep, nghi khong luong hoac thieu cong. So gio lam bu khong duoc vuot phan cong thieu cua ngay nay.
+          </template>
         </InputDate>
+
+        <div v-if="requestForm.request_type === 'make_up' && selectedMakeUpQuota" class="md:col-span-2 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div class="font-semibold">So gio thieu cua ngay can bu</div>
+          <div class="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+            <div>
+              <span class="text-amber-700">Tong thieu:</span>
+              <strong class="ml-1">{{ formatMinutes(selectedMakeUpQuota.missing_minutes) }}</strong>
+            </div>
+            <div>
+              <span class="text-amber-700">Da duoc dang ky lam bu:</span>
+              <strong class="ml-1">{{ formatMinutes(selectedMakeUpQuota.allocated_minutes) }}</strong>
+            </div>
+            <div>
+              <span class="text-amber-700">Con lai:</span>
+              <strong class="ml-1">{{ formatMinutes(selectedMakeUpQuota.remaining_minutes) }}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="requestForm.request_type === 'make_up'" class="md:col-span-2 rounded-lg border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
+          <div class="font-semibold">Quy tac lam bu</div>
+          <p class="mt-2">
+            Lam bu dung de bu cong thieu cua mot ngay nghi da chon. Don nay khong duoc tinh la tang ca va khong phat sinh tien OT.
+          </p>
+          <p class="mt-1">
+            He thong se chan neu so gio lam bu vuot qua phan cong thieu con lai cua ngay nghi can bu.
+          </p>
+        </div>
 
         <InputDate
           v-if="requestForm.request_type === 'overtime'"
@@ -207,6 +291,9 @@
               <strong class="ml-1">{{ formatMinutes(overtimeCatalog.requested_minutes) }}</strong>
             </div>
           </div>
+          <p class="mt-2">
+            Tang ca la thoi gian lam viec ngoai khung hanh chinh duoc cau hinh OT. Tang ca khong dung de bu cho ngay nghi thieu cong.
+          </p>
           <p v-if="!overtimeCatalog.start_time || !overtimeCatalog.end_time" class="mt-2 text-red-600">
             Ca lam hien tai chua cau hinh khung tang ca. Vui long lien he HR cap nhat danh muc cham cong.
           </p>
@@ -242,6 +329,7 @@
       <DataTable
         :columns="columns"
         :data="records"
+        :actions="recordActions"
         :row-class="attendanceRowClass"
         paginate
         :default-per-page="10"
@@ -362,7 +450,7 @@
               <span class="font-medium text-gray-900">Dia diem cong tac:</span> {{ selectedSubmittedRequest.business_trip_location }}
             </div>
             <div v-if="selectedSubmittedRequest.make_up_related_leave_date">
-              <span class="font-medium text-gray-900">Ngay nghi lien ket:</span> {{ formatDate(selectedSubmittedRequest.make_up_related_leave_date) }}
+              <span class="font-medium text-gray-900">Ngay nghi can bu:</span> {{ formatDate(selectedSubmittedRequest.make_up_related_leave_date) }}
             </div>
             <div v-if="selectedSubmittedRequest.leave_days !== null && selectedSubmittedRequest.leave_days !== undefined">
               <span class="font-medium text-gray-900">So ngay nghi:</span> {{ formatWorkUnits(selectedSubmittedRequest.leave_days) }} ngay
@@ -414,7 +502,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
@@ -431,11 +519,16 @@ const props = defineProps({
   overtime_catalog: { type: Object, default: () => ({}) },
   leave_types: { type: Array, default: () => [] },
   leave_balances: { type: Array, default: () => [] },
+  make_up_quota_catalog: { type: Array, default: () => [] },
+  month_lock: { type: Object, default: () => ({ is_locked: false }) },
+  payroll_period: { type: Object, default: () => ({ is_locked: false }) },
 })
 
 const page = usePage()
 const attachmentInput = ref(null)
 const selectedSubmittedRequest = ref(null)
+const selectedSmartContext = ref(null)
+const isApplyingSmartRequest = ref(false)
 
 const filterForm = reactive({
   month: Number(props.filters.month),
@@ -500,6 +593,18 @@ const requestActions = [
   },
 ]
 
+const recordActions = [
+  {
+    label: 'Tao don',
+    buttonProps: {
+      title: 'Tao don tu dong cho dong cong nay',
+      class: 'border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-800',
+    },
+    hidden: (item) => !suggestedRequestTypeForRecord(item),
+    onClick: (item) => applySmartRequest(item, suggestedRequestTypeForRecord(item)),
+  },
+]
+
 const summaryCards = computed(() => [
   { label: 'Ngay cong hop le', value: formatWorkUnits(props.summary.approved_work_units ?? props.summary.total_work_units ?? 0) },
   {
@@ -531,10 +636,53 @@ const currentPeriodLabel = computed(() => {
 
 const formError = computed(() => requestForm.errors.error || page.props.errors?.error || '')
 const overtimeCatalog = computed(() => props.overtime_catalog || {})
+const isAttendancePeriodClosed = computed(() => Boolean(props.month_lock?.is_locked || props.payroll_period?.is_locked))
 const selectedLeaveType = computed(() => (props.leave_types || []).find((type) => Number(type.id) === Number(requestForm.leave_type_id)) || null)
 const selectedLeaveBalance = computed(() => (props.leave_balances || []).find((balance) => Number(balance.leave_type_id) === Number(requestForm.leave_type_id)) || null)
 const selectedLeaveAvailableDays = computed(() => selectedLeaveBalance.value?.available_days ?? selectedLeaveType.value?.annual_quota ?? 0)
 const showLeaveAttachmentField = computed(() => requestForm.request_type === 'leave' && Boolean(selectedLeaveType.value?.requires_attachment))
+const makeUpEligibleDates = computed(() => {
+  const dates = (props.make_up_quota_catalog || [])
+    .map((item) => item.date)
+    .filter(Boolean)
+
+  return [...new Set(dates)]
+})
+const makeUpQuotaMap = computed(() => Object.fromEntries((props.make_up_quota_catalog || []).map((item) => [item.date, item])))
+const selectedMakeUpQuota = computed(() => {
+  const date = requestForm.make_up_related_leave_date
+  if (!date) return null
+  return makeUpQuotaMap.value[date] || null
+})
+const makeUpRelatedDatePickerConfig = computed(() => ({
+  ...datePickerConfig,
+  enable: makeUpEligibleDates.value.length > 0 ? makeUpEligibleDates.value : [() => false],
+}))
+const smartRecommendations = computed(() => {
+  if (isAttendancePeriodClosed.value) return []
+
+  const usedKeys = new Set()
+
+  return (props.records || [])
+    .map((record) => {
+      const requestType = suggestedRequestTypeForRecord(record)
+      if (!requestType) return null
+
+      const key = `${requestType}-${record.work_date}`
+      if (usedKeys.has(key)) return null
+      usedKeys.add(key)
+
+      return {
+        record,
+        requestType,
+        title: smartRecommendationTitle(record, requestType),
+        description: smartRecommendationDescription(record, requestType),
+        dateLabel: formatDate(record.work_date),
+      }
+    })
+    .filter(Boolean)
+    .slice(0, 3)
+})
 const overtimeWindowLabel = computed(() => {
   if (!overtimeCatalog.value.start_time || !overtimeCatalog.value.end_time) return 'Chua cau hinh'
   return `${overtimeCatalog.value.start_time} - ${overtimeCatalog.value.end_time}`
@@ -674,12 +822,22 @@ watch(() => requestForm.request_type, (type) => {
   if (type === 'overtime') {
     requestForm.request_date = overtimeCatalog.value.work_date || new Date().toISOString().slice(0, 10)
   }
+
+  if (!isApplyingSmartRequest.value) {
+    selectedSmartContext.value = null
+  }
 })
 
 watch(() => requestForm.leave_type_id, () => {
   requestForm.attachment = null
   if (attachmentInput.value) {
     attachmentInput.value.value = ''
+  }
+})
+
+watch(isAttendancePeriodClosed, (closed) => {
+  if (closed) {
+    selectedSmartContext.value = null
   }
 })
 
@@ -764,7 +922,10 @@ function submitAttendanceRequest() {
 
   requestForm.post(route('attendance.requests.store'), {
     preserveScroll: true,
-    onSuccess: () => requestForm.reset(),
+    onSuccess: () => {
+      requestForm.reset()
+      selectedSmartContext.value = null
+    },
   })
 }
 
@@ -783,6 +944,55 @@ function openLinkedRequestDetail(item) {
 
 function closeSubmittedRequestDetail() {
   selectedSubmittedRequest.value = null
+}
+
+async function applySmartRequest(record, requestType) {
+  if (!record || !requestType || isAttendancePeriodClosed.value) return
+
+  isApplyingSmartRequest.value = true
+  requestForm.request_type = requestType
+  requestForm.clearErrors()
+  selectedSmartContext.value = {
+    title: smartRecommendationTitle(record, requestType),
+    description: smartRecommendationDescription(record, requestType),
+  }
+
+  await nextTick()
+
+  if (requestType === 'forgot_check') {
+    requestForm.request_date = record.work_date || ''
+    requestForm.reason = buildDefaultReason(record, requestType)
+  }
+
+  if (requestType === 'late_early') {
+    requestForm.request_date = record.work_date || ''
+    requestForm.requested_status = preferredLateEarlyStatus(record)
+    requestForm.reason = buildDefaultReason(record, requestType)
+  }
+
+  if (requestType === 'make_up') {
+    requestForm.request_date = todayDate
+    requestForm.make_up_related_leave_date = record.work_date || ''
+    requestForm.reason = buildDefaultReason(record, requestType)
+  }
+
+  if (requestType === 'overtime') {
+    requestForm.request_date = overtimeCatalog.value.work_date || todayDate
+    requestForm.reason = buildDefaultReason(record, requestType)
+  }
+
+  if (requestType === 'leave') {
+    requestForm.from_date = record.work_date || ''
+    requestForm.to_date = record.work_date || ''
+    requestForm.reason = buildDefaultReason(record, requestType)
+  }
+
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+  isApplyingSmartRequest.value = false
+}
+
+function clearSmartContext() {
+  selectedSmartContext.value = null
 }
 
 function requestLinkTitle(item) {
@@ -813,6 +1023,117 @@ function formatMinutes(value) {
   if (hours <= 0) return `${remainMinutes} phut`
   if (remainMinutes === 0) return `${hours} gio`
   return `${hours} gio ${remainMinutes} phut`
+}
+
+function suggestedRequestTypeForRecord(item) {
+  if (isAttendancePeriodClosed.value || !item || hasExistingResolvedRequest(item)) return null
+
+  if (hasMissingCheck(item)) {
+    return 'forgot_check'
+  }
+
+  if (['late', 'early_leave', 'late_early'].includes(item?.violation_status)) {
+    return 'late_early'
+  }
+
+  if (makeUpEligibleDates.value.includes(item?.work_date) && Number(item?.work_unit ?? 0) < 1) {
+    return 'make_up'
+  }
+
+  return null
+}
+
+function hasExistingResolvedRequest(item) {
+  return item?.request_type === suggestedRequestTypeForRecordByIssue(item) && ['pending', 'approved'].includes(item?.request_status)
+}
+
+function suggestedRequestTypeForRecordByIssue(item) {
+  if (hasMissingCheck(item)) return 'forgot_check'
+  if (['late', 'early_leave', 'late_early'].includes(item?.violation_status)) return 'late_early'
+  if (makeUpEligibleDates.value.includes(item?.work_date) && Number(item?.work_unit ?? 0) < 1) return 'make_up'
+  return null
+}
+
+function preferredLateEarlyStatus(item) {
+  if (item?.violation_status === 'early_leave') return 'early_leave'
+  if (item?.violation_status === 'late_early') {
+    return Number(item?.early_leave_minutes ?? 0) > Number(item?.late_minutes ?? 0) ? 'early_leave' : 'late'
+  }
+  return 'late'
+}
+
+function smartRecommendationTitle(item, requestType) {
+  if (requestType === 'forgot_check') {
+    return hasMissingCheck(item) ? 'Ngay nay dang thieu check, nen tao don quen cham cong' : 'Tao don quen cham cong'
+  }
+
+  if (requestType === 'late_early') {
+    return item?.violation_status === 'early_leave' ? 'Ngay nay bi ve som, nen tao don giai trinh' : 'Ngay nay co vi pham gio, nen tao don giai trinh'
+  }
+
+  if (requestType === 'make_up') {
+    return 'Ngay nay dang thieu cong, co the dung lam bu'
+  }
+
+  return 'Co goi y de xu ly nhanh'
+}
+
+function smartRecommendationDescription(item, requestType) {
+  if (requestType === 'forgot_check') {
+    return item?.missing_check_in ? 'He thong phat hien thieu check-in. Bam de mo form quen cham cong cho ngay nay.' : 'He thong phat hien thieu check-out. Bam de mo form quen cham cong cho ngay nay.'
+  }
+
+  if (requestType === 'late_early') {
+    if (item?.violation_status === 'early_leave') {
+      return `Ve som ${formatMinutes(item?.early_leave_minutes)}. Form se duoc dien san theo ngay vi pham.`
+    }
+
+    if (item?.violation_status === 'late_early') {
+      return `Di muon ${formatMinutes(item?.late_minutes)} va ve som ${formatMinutes(item?.early_leave_minutes)}. Form se dien san theo vi pham chinh.`
+    }
+
+    return `Di muon ${formatMinutes(item?.late_minutes)}. Form se duoc dien san theo ngay vi pham.`
+  }
+
+  if (requestType === 'make_up') {
+    const quota = makeUpQuotaMap.value[item?.work_date]
+    const remainingLabel = quota ? formatMinutes(quota.remaining_minutes) : null
+    return `Ngay nay moi dat ${formatWorkUnits(item?.work_unit)} cong.${remainingLabel ? ` Con thieu ${remainingLabel}.` : ''} Form se gan san ngay can bu de ban dang ky lam bu nhanh.`
+  }
+
+  return 'He thong de xuat don phu hop nhat voi ngay cong nay.'
+}
+
+function buildDefaultReason(item, requestType) {
+  const dateText = formatDate(item?.work_date)
+
+  if (requestType === 'forgot_check') {
+    return item?.missing_check_in
+      ? `Bo sung check-in cho ngay ${dateText}.`
+      : `Bo sung check-out cho ngay ${dateText}.`
+  }
+
+  if (requestType === 'late_early') {
+    if (preferredLateEarlyStatus(item) === 'early_leave') {
+      return `Giai trinh ve som ngay ${dateText}.`
+    }
+
+    return `Giai trinh di muon ngay ${dateText}.`
+  }
+
+  if (requestType === 'make_up') {
+    return `Dang ky lam bu cho ngay ${dateText}.`
+  }
+
+  if (requestType === 'overtime') {
+    return `Dang ky tang ca cho ngay ${dateText}.`
+  }
+
+  if (requestType === 'leave') {
+    return `Dang ky nghi cho ngay ${dateText}.`
+  }
+
+  return ''
 }
 
 function formatWorkUnits(value) {

@@ -3,10 +3,12 @@
 namespace Tests\Feature\Authorization;
 
 use App\Models\EmployeeProfile;
+use App\Models\Notification;
 use App\Models\Position;
 use App\Models\Project;
 use App\Models\ProjectRole;
 use App\Models\User;
+use App\Support\MenuBuilder;
 use App\Support\PositionCapability as Capability;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -63,6 +65,78 @@ class AuthorityAccessTest extends TestCase
         $this->actingAs($manager)->get('/salary/company/export/excel')->assertOk();
         $this->actingAs($manager)->post('/salary/company/recalculate')->assertRedirect();
         $this->actingAs($manager)->post('/salary/company/adjustments')->assertRedirect();
+    }
+
+    public function test_leave_approval_is_merged_into_attendance_approval_menu_and_route(): void
+    {
+        $leaveApprover = $this->makeUserWithCapabilities([Capability::APPROVE_LEAVE]);
+
+        $menuNames = collect(MenuBuilder::build($leaveApprover))
+            ->flatMap(fn (array $group) => $group['items'])
+            ->pluck('name')
+            ->all();
+
+        $this->assertContains('Duyet cong', $menuNames);
+        $this->assertNotContains('Duyet nghi phep', $menuNames);
+
+        $response = $this->actingAs($leaveApprover)->get(route('attendance.approvals'));
+
+        $response->assertOk();
+        $response->assertViewHas('page');
+        $this->assertSame('leave', data_get($response->viewData('page'), 'props.approval_mode'));
+
+        $this->actingAs($leaveApprover)
+            ->get(route('leave.approvals'))
+            ->assertRedirect(route('attendance.approvals'));
+    }
+
+    public function test_sidebar_groups_show_unread_notification_counts(): void
+    {
+        $admin = $this->makeUserWithAuthorityProfile('admin');
+
+        Notification::query()->create([
+            'user_id' => $admin->id,
+            'title' => 'Cham cong 1',
+            'message' => 'Thong bao cham cong chua doc',
+            'category' => 'attendance',
+            'subdomain' => 'main',
+        ]);
+
+        Notification::query()->create([
+            'user_id' => $admin->id,
+            'title' => 'Cham cong 2',
+            'message' => 'Thong bao nghi phep chua doc',
+            'category' => 'leave',
+            'subdomain' => 'main',
+        ]);
+
+        Notification::query()->create([
+            'user_id' => $admin->id,
+            'title' => 'Phan hoi',
+            'message' => 'Thong bao phan hoi chua doc',
+            'category' => 'feedback',
+            'subdomain' => 'main',
+        ]);
+
+        Notification::query()->create([
+            'user_id' => $admin->id,
+            'title' => 'Da doc',
+            'message' => 'Thong bao da doc khong tinh',
+            'category' => 'attendance',
+            'subdomain' => 'main',
+            'read_at' => now(),
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertViewHas('page');
+
+        $menuGroups = collect(data_get($response->viewData('page'), 'props.auth.menuItems', []));
+
+        $this->assertSame(1, (int) data_get($menuGroups->firstWhere('title', 'Dashboard'), 'notification_count'));
+        $this->assertSame(2, (int) data_get($menuGroups->firstWhere('title', 'Cham cong'), 'notification_count'));
+        $this->assertSame(3, (int) data_get($response->viewData('page'), 'props.auth.notification_counts.all'));
     }
 
     public function test_hr_cannot_update_admin_account_by_url(): void

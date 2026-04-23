@@ -6,7 +6,7 @@ use App\Models\User;
 
 class MenuBuilder
 {
-    public static function build(?User $user): array
+    public static function build(?User $user, array $notificationCounts = []): array
     {
         if (!$user) {
             return [];
@@ -21,19 +21,19 @@ class MenuBuilder
                 'title' => 'Dashboard',
                 'items' => array_values(array_filter([
                     $can(PositionCapability::VIEW_DASHBOARD)
-                        ? self::item('Dashboard', '/dashboard', 'GridIcon', true)
+                        ? self::item('Dashboard', '/dashboard', 'GridIcon', true, ['general', 'system'])
                         : null,
                     $can(PositionCapability::VIEW_OWN_PROFILE)
                         ? self::item('Ho so ca nhan', '/my-profile', 'UserCircleIcon')
                         : null,
                     $can(PositionCapability::VIEW_FEEDBACKS)
-                        ? self::item('Phan hoi noi bo', '/feedbacks', 'Message2Line')
+                        ? self::item('Phan hoi noi bo', '/feedbacks', 'Message2Line', false, [], ['/feedbacks'])
                         : null,
                     $can(PositionCapability::VIEW_OWN_SALARY)
-                        ? self::item('Bang luong ca nhan', '/my-salary', 'MoneyIcon')
+                        ? self::item('Bang luong ca nhan', '/my-salary', 'MoneyIcon', false, [], ['/my-salary'])
                         : null,
                     $can(PositionCapability::VIEW_ALL_SALARY)
-                        ? self::item('Bang luong cong ty', '/salary/company', 'MoneyIcon2')
+                        ? self::item('Bang luong cong ty', '/salary/company', 'MoneyIcon2', false, [], ['/salary/company'])
                         : null,
                 ])),
             ],
@@ -41,13 +41,20 @@ class MenuBuilder
                 'title' => 'Co cau to chuc',
                 'items' => array_values(array_filter([
                     $can(PositionCapability::MANAGE_EMPLOYEES)
-                        ? self::item('Nhan su', '/users/employees', 'UserGroupIcon')
+                        ? self::item('Nhan su', '/users/employees', 'UserGroupIcon', false, [], [
+                            '/users/employees',
+                            '/users/employee-requests',
+                            '/users/approvals',
+                        ])
                         : null,
                     $can(PositionCapability::MANAGE_DEPARTMENTS)
-                        ? self::item('Phong ban', '/departments', 'BuildingIcon')
+                        ? self::item('Phong ban', '/departments', 'BuildingIcon', false, [], [
+                            '/departments',
+                            '/departments/approvals',
+                        ])
                         : null,
                     $can(PositionCapability::MANAGE_POSITIONS)
-                        ? self::item('Chuc vu', '/positions', 'BriefcaseIcon')
+                        ? self::item('Chuc vu', '/positions', 'BriefcaseIcon', false, ['organization'])
                         : null,
                 ])),
             ],
@@ -55,25 +62,19 @@ class MenuBuilder
                 'title' => 'Cham cong',
                 'items' => array_values(array_filter([
                     $can(PositionCapability::VIEW_OWN_ATTENDANCE)
-                        ? self::item('Cong cua toi', '/my-attendance', 'ClockIcon')
+                        ? self::item('Cong cua toi', '/my-attendance', 'ClockIcon', false, [], ['/my-attendance'])
                         : null,
-                    $can(PositionCapability::REQUEST_ATTENDANCE_ADJUSTMENT)
-                        ? self::item('Dieu chinh cong', '/attendance/adjustments', 'EditIcon')
+                    ($can(PositionCapability::APPROVE_ATTENDANCE) || $can(PositionCapability::APPROVE_LEAVE))
+                        ? self::item('Duyet cong', '/attendance/approvals', 'CheckCircleIcon', false, [], ['/attendance/approvals'])
                         : null,
-                    $can(PositionCapability::APPROVE_ATTENDANCE)
-                        ? self::item('Duyet cong', '/attendance/approvals', 'CheckCircleIcon')
-                        : null,
-                    $can(PositionCapability::APPROVE_LEAVE)
-                        ? self::item('Duyet nghi phep', '/leave/approvals', 'CheckCircleIcon')
-                        : null,
-                    $can(PositionCapability::APPROVE_ATTENDANCE)
-                        ? self::item('Duyet dieu chinh cong', '/attendance/adjustments/approvals', 'ListCheckIcon')
-                        : null,
+                    // $can(PositionCapability::APPROVE_ATTENDANCE)
+                    //     ? self::item('Duyet dieu chinh cong', '/attendance/adjustments/approvals', 'ListCheckIcon', false, [], ['/attendance/adjustments/approvals'])
+                    //     : null,
                     $can(PositionCapability::APPROVE_ATTENDANCE)
                         ? self::item('Danh muc cham cong', '/attendance/catalogs', 'Calendar2Line')
                         : null,
                     $can(PositionCapability::MANAGE_LEAVE_POLICY)
-                        ? self::item('Quan ly nghi phep', '/leave-management', 'Calendar2Line')
+                        ? self::item('Quan ly nghi phep', '/leave-management', 'Calendar2Line', false, [], ['/leave-management'])
                         : null,
                 ])),
             ],
@@ -81,10 +82,10 @@ class MenuBuilder
                 'title' => 'Du an',
                 'items' => array_values(array_filter([
                     $canViewAllProjects
-                        ? self::item('Danh sach du an', '/projects', 'BoxIcon')
+                        ? self::item('Danh sach du an', '/projects', 'BoxIcon', false, [], ['/projects'])
                         : null,
                     !$canViewAllProjects && $can(PositionCapability::VIEW_OWN_PROJECTS)
-                        ? self::item('Du an cua toi', '/my-projects', 'BoxIcon')
+                        ? self::item('Du an cua toi', '/my-projects', 'BoxIcon', false, [], ['/my-projects'])
                         : null,
                 ])),
             ],
@@ -92,28 +93,40 @@ class MenuBuilder
                 'title' => 'Bao cao',
                 'items' => array_values(array_filter([
                     ($can(PositionCapability::VIEW_REPORTS) || $can(PositionCapability::EXPORT_REPORTS))
-                        ? self::item('Bao cao tong hop', '/reports', 'PieChartIcon')
+                        ? self::item('Bao cao tong hop', '/reports', 'PieChartIcon', false, [], ['/reports'])
                         : null,
                     $can(PositionCapability::VIEW_ALL_ATTENDANCE)
-                        ? self::item('Bao cao cham cong', '/attendance/reports', 'BarChartIcon')
+                        ? self::item('Bao cao cham cong', '/attendance/reports', 'BarChartIcon', false, [], ['/attendance/reports'])
                         : null,
                     $can(PositionCapability::VIEW_ACTIVITY_LOGS)
-                        ? self::item('Truy vet hoat dong', '/activity-logs', 'ListCheckIcon')
+                        ? self::item('Truy vet hoat dong', '/activity-logs', 'ListCheckIcon', false, [], ['/activity-logs'])
                         : null,
                 ])),
             ],
         ];
 
-        return array_values(array_filter($groups, fn (array $group) => !empty($group['items'])));
+        return collect($groups)
+            ->filter(fn (array $group) => !empty($group['items']))
+            ->values()
+            ->all();
     }
 
-    private static function item(string $name, string $path, string $icon, bool $exact = false): array
+    private static function item(
+        string $name,
+        string $path,
+        string $icon,
+        bool $exact = false,
+        array $notificationCategories = [],
+        array $notificationPaths = [],
+    ): array
     {
         return [
             'name' => $name,
             'path' => $path,
             'icon' => $icon,
             'exact' => $exact,
+            'notification_categories' => $notificationCategories,
+            'notification_paths' => $notificationPaths,
         ];
     }
 }

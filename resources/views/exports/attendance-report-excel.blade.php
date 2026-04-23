@@ -101,7 +101,7 @@
                     <td>{{ $formatMinutes($record['late_minutes'] ?? 0) }}</td>
                     <td>{{ $formatMinutes($record['early_leave_minutes'] ?? 0) }}</td>
                     <td>{{ $formatMinutes($record['overtime_minutes'] ?? 0) }}</td>
-                    <td>{{ $dayStatusLabel($record['day_status'] ?? null) }}</td>
+                    <td>{{ $record['day_status_label'] ?? $dayStatusLabel($record['day_status'] ?? null) }}</td>
                     <td>{{ $approvalStatusLabel($record['display_approval_status'] ?? $record['approval_status'] ?? null) }}</td>
                 </tr>
             @empty

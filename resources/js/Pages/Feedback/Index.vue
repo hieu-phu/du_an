@@ -109,11 +109,24 @@
           <h3 class="text-lg font-bold text-slate-900">Phản hồi đang gửi</h3>
         </div>
         <div class="space-y-4">
-          <div v-for="item in activeSent" :key="`sent-${item.id}`" class="group relative rounded-2xl border border-slate-200 bg-white p-5 transition-all hover:border-blue-200 hover:shadow-md">
+          <div
+            v-for="item in activeSent"
+            :key="`sent-${item.id}`"
+            :ref="(el) => setFeedbackCardRef(item.id, el)"
+            :class="[
+              'group relative rounded-2xl border bg-white p-5 transition-all hover:shadow-md',
+              isHighlightedFeedback(item.id)
+                ? 'border-amber-300 ring-2 ring-amber-200/80 shadow-lg shadow-amber-100'
+                : 'border-slate-200 hover:border-blue-200',
+            ]"
+          >
             <div class="flex items-start justify-between gap-3">
               <div class="flex-1" @click="openDetail(item)">
                 <div class="flex flex-wrap items-center gap-2 cursor-pointer">
                   <div class="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{{ item.subject }}</div>
+                  <span v-if="isHighlightedFeedback(item.id)" class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold text-amber-700">
+                    Mới từ thông báo
+                  </span>
                   <span :class="feedbackFlowTone(item.action_state)" class="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold">
                     {{ item.action_state_label }}
                   </span>
@@ -158,11 +171,27 @@
           <h3 class="text-lg font-bold text-slate-900">Hộp thư cần xử lý</h3>
         </div>
         <div class="space-y-4">
-          <div v-for="item in activeInbox" :key="`inbox-${item.id}`" class="group relative rounded-2xl border border-slate-200 bg-white p-5 transition-all hover:border-amber-200 hover:shadow-md">
+          <div
+            v-for="item in activeInbox"
+            :key="`inbox-${item.id}`"
+            :ref="(el) => setFeedbackCardRef(item.id, el)"
+            :class="[
+              'group relative rounded-2xl border bg-white p-5 transition-all hover:shadow-md',
+              isHighlightedFeedback(item.id)
+                ? 'border-amber-300 ring-2 ring-amber-200/80 shadow-lg shadow-amber-100'
+                : 'border-slate-200 hover:border-amber-200',
+            ]"
+          >
             <div class="flex items-start justify-between gap-3">
               <div class="flex-1" @click="openDetail(item)">
                 <div class="flex flex-wrap items-center gap-2 cursor-pointer">
                   <div class="font-bold text-slate-900 group-hover:text-amber-600 transition-colors">{{ item.subject }}</div>
+                  <span v-if="item.status !== 'read'" class="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-1 text-[10px] font-bold text-rose-700">
+                    Chưa đọc
+                  </span>
+                  <span v-if="isHighlightedFeedback(item.id)" class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold text-amber-700">
+                    Mới từ thông báo
+                  </span>
                   <span :class="feedbackFlowTone(item.action_state)" class="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold">
                     {{ item.action_state_label }}
                   </span>
@@ -330,7 +359,7 @@
             </div>
 
             <!-- Original Message -->
-            <div class="mb-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div :class="['mb-8 overflow-hidden rounded-2xl border bg-white shadow-sm transition-all', isFocusedOriginalMessage(detailTarget.id) ? 'border-amber-300 ring-2 ring-amber-200/80 shadow-lg shadow-amber-100' : 'border-slate-200']">
               <div class="bg-slate-50 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-100">Nội dung gốc</div>
               <div class="p-6 text-base leading-relaxed text-slate-800 whitespace-pre-wrap font-medium font-serif">
                 {{ detailTarget.message }}
@@ -350,7 +379,7 @@
                 <template v-for="event in combinedThread(detailTarget)" :key="event.unique_id">
                   <!-- Case: Reply -->
                   <div v-if="event.type === 'reply'" :class="event.replied_by === detailTarget.sender_id ? 'pr-12' : 'pl-12'">
-                    <div :class="event.replied_by === detailTarget.sender_id ? 'bg-indigo-50 border-indigo-100' : 'bg-white border-slate-200'" class="rounded-2xl border p-5 shadow-sm">
+                    <div :class="[event.replied_by === detailTarget.sender_id ? 'bg-indigo-50 border-indigo-100' : 'bg-white border-slate-200', isFocusedThreadEvent(event.unique_id) ? 'ring-2 ring-amber-200/80 shadow-lg shadow-amber-100' : '']" class="rounded-2xl border p-5 shadow-sm transition-all">
                       <div class="mb-2 flex items-center justify-between gap-2">
                         <span class="text-xs font-black text-slate-900 uppercase tracking-wider">{{ event.replier?.name || '-' }}</span>
                         <span class="text-[10px] font-bold text-slate-400">{{ formatDateTime(event.created_at) }}</span>
@@ -361,7 +390,7 @@
 
                   <!-- Case: Escalation -->
                   <div v-else-if="event.type === 'escalation'" class="flex justify-center px-8">
-                    <div class="w-full rounded-2xl border border-amber-100 bg-amber-50/50 p-4 shadow-sm text-center">
+                    <div :class="['w-full rounded-2xl border border-amber-100 bg-amber-50/50 p-4 shadow-sm text-center transition-all', isFocusedThreadEvent(event.unique_id) ? 'ring-2 ring-amber-200/80 shadow-lg shadow-amber-100' : '']">
                       <div class="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-2">Leo thang tự động - Lần {{ event.escalation_count }}</div>
                       <div class="flex items-center justify-center gap-3 text-xs font-bold text-amber-900">
                         <span class="px-3 py-1 rounded-full bg-white border border-amber-200">{{ formatPosition(event.from_position) }}</span>
@@ -460,7 +489,8 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import axios from 'axios'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { router, useForm } from '@inertiajs/vue3'
 import { toast } from 'vue3-toastify'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
@@ -498,18 +528,87 @@ const replyForm = useForm({
 })
 
 const detailTarget = ref(null)
+const sentItems = ref([])
+const inboxItems = ref([])
+const highlightedFeedbackId = ref(null)
+const focusedOriginalMessageId = ref(null)
+const focusedThreadEventKey = ref(null)
+const feedbackCardElements = new Map()
 
-const activeSent = computed(() => props.sent.filter(item => item.action_state !== 'resolved' && item.action_state !== 'closed'))
-const activeInbox = computed(() => props.inbox.filter(item => item.action_state !== 'resolved' && item.action_state !== 'closed'))
+const cloneFeedbackItem = (item) => ({
+  ...item,
+  reply_history: Array.isArray(item?.reply_history) ? [...item.reply_history] : [],
+  escalation_history: Array.isArray(item?.escalation_history) ? [...item.escalation_history] : [],
+})
+
+const syncCollectionsFromProps = () => {
+  sentItems.value = (props.sent || []).map(cloneFeedbackItem)
+  inboxItems.value = (props.inbox || []).map(cloneFeedbackItem)
+
+  if (detailTarget.value?.id) {
+    detailTarget.value = findFeedbackById(detailTarget.value.id) || null
+  }
+}
+
+const allFeedbackItems = computed(() => [...sentItems.value, ...inboxItems.value])
+
+const findFeedbackById = (feedbackId) => allFeedbackItems.value.find((item) => Number(item.id) === Number(feedbackId))
+
+watch(() => props.sent, syncCollectionsFromProps, { immediate: true })
+watch(() => props.inbox, syncCollectionsFromProps, { immediate: true })
+
+const updateFeedbackCollections = (updatedItem) => {
+  if (!updatedItem?.id) {
+    return
+  }
+
+  const normalized = cloneFeedbackItem(updatedItem)
+  sentItems.value = sentItems.value.map((item) => Number(item.id) === Number(normalized.id) ? normalized : item)
+  inboxItems.value = inboxItems.value.map((item) => Number(item.id) === Number(normalized.id) ? normalized : item)
+
+  if (detailTarget.value?.id === normalized.id) {
+    detailTarget.value = normalized
+  }
+}
+
+const isInboxFeedback = (feedbackId) => inboxItems.value.some((item) => Number(item.id) === Number(feedbackId))
+
+const setFeedbackCardRef = (feedbackId, el) => {
+  if (el) {
+    feedbackCardElements.set(Number(feedbackId), el)
+    return
+  }
+
+  feedbackCardElements.delete(Number(feedbackId))
+}
+
+const scrollToFeedbackCard = async (feedbackId) => {
+  await nextTick()
+  const element = feedbackCardElements.get(Number(feedbackId))
+
+  if (element?.scrollIntoView) {
+    element.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    })
+  }
+}
+
+const isHighlightedFeedback = (feedbackId) => Number(highlightedFeedbackId.value) === Number(feedbackId)
+const isFocusedOriginalMessage = (feedbackId) => Number(focusedOriginalMessageId.value) === Number(feedbackId)
+const isFocusedThreadEvent = (eventKey) => focusedThreadEventKey.value === eventKey
+
+const activeSent = computed(() => sentItems.value.filter(item => item.action_state !== 'resolved' && item.action_state !== 'closed'))
+const activeInbox = computed(() => inboxItems.value.filter(item => item.action_state !== 'resolved' && item.action_state !== 'closed'))
 
 const feedbackHistory = computed(() => {
-  const sentHistory = props.sent.filter(item => item.action_state === 'resolved' || item.action_state === 'closed').map(item => ({ ...item, is_sender: true }))
-  const inboxHistory = props.inbox.filter(item => item.action_state === 'resolved' || item.action_state === 'closed').map(item => ({ ...item, is_sender: false }))
+  const sentHistory = sentItems.value.filter(item => item.action_state === 'resolved' || item.action_state === 'closed').map(item => ({ ...item, is_sender: true }))
+  const inboxHistory = inboxItems.value.filter(item => item.action_state === 'resolved' || item.action_state === 'closed').map(item => ({ ...item, is_sender: false }))
   
   return [...sentHistory, ...inboxHistory].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 })
 
-const showInboxSection = Boolean(props.canReply && props.inbox.length > 0)
+const showInboxSection = computed(() => Boolean(props.canReply && inboxItems.value.length > 0))
 
 const submitFeedback = () => {
   form.post(route('feedbacks.store'), {
@@ -522,25 +621,98 @@ const submitFeedback = () => {
   })
 }
 
-const markRead = (item) => {
-  router.post(route('feedbacks.read', item.id), {}, {
-    preserveScroll: true,
-  })
+const dispatchNotificationCountUpdate = (counts) => {
+  window.dispatchEvent(new CustomEvent('notification-counts-updated', {
+    detail: counts || {},
+  }))
+}
+
+const markRead = async (item, options = {}) => {
+  const currentItem = findFeedbackById(item?.id) || item
+
+  if (!currentItem) {
+    return currentItem
+  }
+
+  if (currentItem.status === 'read' && !options.forceSyncNotifications) {
+    return currentItem
+  }
+
+  try {
+    const response = await axios.post(route('feedbacks.read', currentItem.id), {}, {
+      headers: {
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+    })
+
+    if (response.data?.feedback) {
+      updateFeedbackCollections(response.data.feedback)
+    } else {
+      updateFeedbackCollections({
+        ...currentItem,
+        status: 'read',
+        status_label: 'Da doc',
+        read_at: new Date().toISOString(),
+      })
+    }
+
+    if (response.data?.notification_counts) {
+      dispatchNotificationCountUpdate(response.data.notification_counts)
+    }
+
+    if (!options.silentToast) {
+      toast.success('Đã đánh dấu đã đọc.')
+    }
+
+    return findFeedbackById(currentItem.id) || currentItem
+  } catch (error) {
+    if (!options.silentToast) {
+      toast.error('Không thể đánh dấu đã đọc.')
+    }
+
+    return currentItem
+  }
 }
 
 const openReply = (item) => {
   openDetail(item)
 }
 
-const openDetail = (item) => {
-  detailTarget.value = item
+const openDetail = async (item, options = {}) => {
+  let targetItem = findFeedbackById(item?.id) || item
+
+  const shouldMarkRead = Boolean(options.forceMarkRead)
+    || (targetItem?.status !== 'read' && options.markRead !== false && isInboxFeedback(targetItem?.id))
+
+  if (shouldMarkRead) {
+    targetItem = await markRead(targetItem, {
+      silentToast: true,
+      forceSyncNotifications: options.forceMarkRead,
+    })
+  }
+
+  detailTarget.value = targetItem
   replyForm.reset()
   replyForm.status = 'read'
   replyForm.conversation_status = 'resolved'
+
+  if (options.highlightFeedback) {
+    highlightedFeedbackId.value = targetItem?.id ?? null
+  }
+
+  if (options.focusNewestContent) {
+    markFocusedContent(targetItem)
+  } else {
+    focusedOriginalMessageId.value = null
+    focusedThreadEventKey.value = null
+  }
 }
 
 const closeDetail = () => {
   detailTarget.value = null
+  focusedOriginalMessageId.value = null
+  focusedThreadEventKey.value = null
   replyForm.reset()
 }
 
@@ -635,6 +807,44 @@ const feedbackResponseTone = (state) => {
     : 'bg-rose-50 text-rose-700'
 }
 
+const markFocusedContent = (item) => {
+  const thread = combinedThread(item)
+  const latestEvent = thread.at(-1) || null
+
+  focusedThreadEventKey.value = latestEvent?.unique_id || null
+  focusedOriginalMessageId.value = latestEvent ? null : Number(item?.id || 0)
+}
+
+const resolveFeedbackFocusFromQuery = async () => {
+  const params = new URLSearchParams(window.location.search)
+  const feedbackId = Number(params.get('feedback_message_id') || 0)
+
+  if (!feedbackId) {
+    return
+  }
+
+  const targetItem = findFeedbackById(feedbackId)
+
+  if (!targetItem) {
+    return
+  }
+
+  highlightedFeedbackId.value = feedbackId
+  await scrollToFeedbackCard(feedbackId)
+  await openDetail(targetItem, {
+    forceMarkRead: true,
+    focusNewestContent: params.get('from_notification') === '1',
+    highlightFeedback: true,
+  })
+
+  params.delete('feedback_message_id')
+  params.delete('from_notification')
+
+  const query = params.toString()
+  const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}`
+  window.history.replaceState({}, '', nextUrl)
+}
+
 const combinedThread = (item) => {
   const thread = []
   
@@ -648,6 +858,10 @@ const combinedThread = (item) => {
   
   return thread.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
 }
+
+onMounted(() => {
+  resolveFeedbackFocusFromQuery()
+})
 </script>
 
 <style scoped>

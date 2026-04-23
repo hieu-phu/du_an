@@ -204,6 +204,10 @@ class SalaryController extends Controller
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        if ($this->lockedPayrollPeriod((int) $validated['month'], (int) $validated['year'])) {
+            return redirect()->back()->with('warning', 'Ky luong da khoa. Vui long mo khoa ky luong truoc khi them phu cap hoac khau tru.');
+        }
+
         SalaryAdjustment::query()->create([
             'employee_profile_id' => $validated['employee_profile_id'],
             'month' => $validated['month'],
@@ -216,10 +220,6 @@ class SalaryController extends Controller
             'updated_by' => $request->user()->id,
         ]);
 
-        if ($this->lockedPayrollPeriod((int) $validated['month'], (int) $validated['year'])) {
-            $this->refreshSnapshots($request, (int) $validated['month'], (int) $validated['year'], true);
-        }
-
         return redirect()->back()->with('success', 'Da luu khoan dieu chinh luong.');
     }
 
@@ -229,11 +229,12 @@ class SalaryController extends Controller
 
         $month = (int) $salaryAdjustment->month;
         $year = (int) $salaryAdjustment->year;
-        $salaryAdjustment->delete();
 
         if ($this->lockedPayrollPeriod($month, $year)) {
-            $this->refreshSnapshots($request, $month, $year, true);
+            return redirect()->back()->with('warning', 'Ky luong da khoa. Vui long mo khoa ky luong truoc khi xoa phu cap hoac khau tru.');
         }
+
+        $salaryAdjustment->delete();
 
         return redirect()->back()->with('success', 'Da xoa khoan dieu chinh luong.');
     }
@@ -1215,8 +1216,7 @@ class SalaryController extends Controller
         }
 
         $minutes = max(0, (int) $record->check_in_at->diffInMinutes($record->check_out_at, false));
-        $breakMinutes = $this->resolveBreakOverlapMinutes($record, $snapshot)
-            + $this->resolveHandoverBreakOverlapMinutes($record, $snapshot);
+        $breakMinutes = $this->resolveBreakOverlapMinutes($record, $snapshot);
         return max(0, $minutes - $breakMinutes);
     }
 

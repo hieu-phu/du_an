@@ -14,6 +14,7 @@ use App\Models\ProjectMember;
 use App\Models\User;
 use App\Support\AccessMatrix;
 use App\Repositories\AttendanceRepository;
+use App\Services\AttendanceService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -31,20 +32,26 @@ class PortalController extends Controller
     private const SYSTEM_OWNER_EMAIL = 'gtvbehieu@gmail.com';
 
     public function __construct(
-        protected AttendanceRepository $attendanceRepository
+        protected AttendanceRepository $attendanceRepository,
+        protected AttendanceService $attendanceService
     ) {}
 
     public function dashboard(Request $request): Response
     {
         $user = $request->user();
         $profileId = $user?->employeeProfile?->id;
-        $todayRecord = null;
+        $now = now('Asia/Ho_Chi_Minh');
+        $personalAttendanceData = null;
+        $todayAttendance = null;
 
-        if ($profileId) {
-            $todayRecord = AttendanceRecord::query()
-                ->where('employee_profile_id', $profileId)
-                ->whereDate('work_date', now('Asia/Ho_Chi_Minh')->toDateString())
-                ->first();
+        if ($user && $profileId) {
+            $personalAttendanceData = $this->attendanceService->getMyAttendanceData(
+                $user,
+                (int) $now->month,
+                (int) $now->year
+            );
+            $todayAttendance = collect($personalAttendanceData['records'] ?? [])
+                ->firstWhere('work_date', $now->toDateString());
         }
 
         $stats = [
@@ -85,15 +92,11 @@ class PortalController extends Controller
                 ],
                 [
                     'title' => 'Cong thang nay',
-                    'value' => (string) AttendanceRecord::query()
-                        ->where('employee_profile_id', $profileId)
-                        ->whereMonth('work_date', now('Asia/Ho_Chi_Minh')->month)
-                        ->whereYear('work_date', now('Asia/Ho_Chi_Minh')->year)
-                        ->count(),
+                    'value' => $this->formatDashboardWorkUnit((float) data_get($personalAttendanceData, 'summary.total_work_units', 0)),
                 ],
                 [
                     'title' => 'Trạng thái hôm nay',
-                    'value' => $this->attendanceStatusLabel($todayRecord?->attendance_status),
+                    'value' => (string) ($todayAttendance['day_status_label'] ?? 'Chua cham cong'),
                 ],
             ];
         }
@@ -149,36 +152,16 @@ class PortalController extends Controller
             }
         }
 
-        $dashboardSummary = $this->buildDashboardSummary($user, $profileId);
+        $dashboardSummary = $this->buildDashboardSummary($user, $profileId, $personalAttendanceData);
 
         return Inertia::render('DashBoard', [
             'stats' => $stats,
             'warnings' => $warnings,
             'dashboardSummary' => $dashboardSummary,
-            'todayAttendance' => $todayRecord ? [
-                'work_date' => $todayRecord->work_date,
-                'check_in_at' => $todayRecord->check_in_at,
-                'check_out_at' => $todayRecord->check_out_at,
-                'status' => $todayRecord->attendance_status,
-                'day_status' => $todayRecord->day_status,
-                'status_label' => $todayRecord->day_status === 'unpaid_leave'
-                    ? 'Nghá»‰ khÃ´ng phÃ©p'
-                    : $this->attendanceStatusLabel($todayRecord->attendance_status),
-            ] : null,
+            'todayAttendance' => $todayAttendance ? $this->transformDashboardTodayAttendance($todayAttendance) : null,
         ]);
     }
-
-    private function attendanceStatusLabel(?string $status): string
-    {
-        return match ($status) {
-            'on_time', 'present' => 'Đúng giờ',
-            'late', 'half_day' => 'Trễ',
-            'absent', 'leave', 'pending' => 'Vắng',
-            default => 'Chưa chấm công',
-        };
-    }
-
-    private function buildDashboardSummary(User $user, ?int $profileId): array
+    private function buildDashboardSummary(User $user, ?int $profileId, ?array $personalAttendanceData = null): array
     {
         $projectBaseQuery = $this->projectBaseQueryForUser($user, $profileId);
         $employeeCount = $this->isSystemOwner($user)
@@ -190,7 +173,7 @@ class PortalController extends Controller
             'total_projects' => (clone $projectBaseQuery)->count(),
             'project_status_counts' => $this->buildProjectStatusCounts($projectBaseQuery),
             'active_project_progress' => $this->buildActiveProjectProgress($projectBaseQuery),
-            'attendance_month_report' => $this->buildAttendanceMonthReport($user, $profileId),
+            'attendance_month_report' => $this->buildAttendanceMonthReport($user, $profileId, $personalAttendanceData),
         ];
     }
 
@@ -280,11 +263,30 @@ class PortalController extends Controller
         })->values()->all();
     }
 
-    private function buildAttendanceMonthReport(User $user, ?int $profileId): array
+    private function buildAttendanceMonthReport(User $user, ?int $profileId, ?array $personalAttendanceData = null): array
     {
         $now = Carbon::now('Asia/Ho_Chi_Minh');
         $month = (int) $now->month;
         $year = (int) $now->year;
+
+        if (!AccessMatrix::canManageAllAttendance($user)) {
+            $summary = $personalAttendanceData['summary'] ?? [];
+
+            return [
+                'scope' => 'personal',
+                'month' => $month,
+                'year' => $year,
+                'total_records' => (int) ($summary['total_records'] ?? 0),
+                'on_time_records' => (int) ($summary['on_time_records'] ?? 0),
+                'late_records' => (int) ($summary['late_records'] ?? 0),
+                'leave_records' => (int) ($summary['leave_records'] ?? 0),
+                'unpaid_leave_records' => (int) ($summary['unpaid_leave_records'] ?? 0),
+                'absent_records' => (int) ($summary['absent_records'] ?? 0),
+                'early_leave_records' => (int) ($summary['early_leave_records'] ?? 0),
+                'approved_records' => (int) ($summary['approved_records'] ?? 0),
+                'total_worked_minutes' => (int) ($summary['total_worked_minutes'] ?? 0),
+            ];
+        }
 
         $query = AttendanceRecord::query()
             ->whereMonth('work_date', $month)
@@ -323,6 +325,29 @@ class PortalController extends Controller
         ];
     }
 
+    private function transformDashboardTodayAttendance(array $record): array
+    {
+        return [
+            'work_date' => $record['work_date'] ?? null,
+            'check_in_at' => $record['check_in_at'] ?? null,
+            'check_out_at' => $record['check_out_at'] ?? null,
+            'status' => $record['attendance_status'] ?? null,
+            'day_status' => $record['day_status'] ?? null,
+            'approval_status' => $record['approval_status'] ?? null,
+            'leave_duration_type' => $record['leave_duration_type'] ?? null,
+            'leave_hours' => $record['leave_hours'] ?? null,
+            'leave_days' => $record['leave_days'] ?? null,
+            'status_label' => $record['day_status_label'] ?? $record['status_label'] ?? 'Chua cham cong',
+        ];
+    }
+
+    private function formatDashboardWorkUnit(float $value): string
+    {
+        $rounded = round($value, 2);
+
+        return rtrim(rtrim(number_format($rounded, 2, '.', ''), '0'), '.') ?: '0';
+    }
+
     private function projectStatusLabel(?string $status): string
     {
         return match ((string) $status) {
@@ -342,24 +367,13 @@ class PortalController extends Controller
     private function pendingApprovalCountForViewer(User $user): int
     {
         $now = now('Asia/Ho_Chi_Minh');
-        $query = AttendanceRecord::query()
-            ->where('approval_status', 'pending')
-            ->where('is_confirmed', false)
-            ->whereMonth('work_date', (int) $now->month)
-            ->whereYear('work_date', (int) $now->year)
-            ->where(function (Builder $builder) {
-                $builder
-                    ->where('late_minutes', '>', 0)
-                    ->orWhere('early_leave_minutes', '>', 0)
-                    ->orWhere('day_status', 'late')
-                    ->orWhere('day_status', 'early_leave');
-            });
+        $approvalData = $this->attendanceService->getApprovalsData([
+            'month' => (int) $now->month,
+            'year' => (int) $now->year,
+        ], $user);
 
-        if (!$this->isSystemOwner($user)) {
-            $this->applyAttendanceHierarchyScope($query, $user);
-        }
-
-        return $query->count();
+        return (int) data_get($approvalData, 'approval_summary.pending_records', 0)
+            + count($approvalData['request_approvals'] ?? []);
     }
 
     private function visibleEmployeeProfilesQuery(User $user): Builder

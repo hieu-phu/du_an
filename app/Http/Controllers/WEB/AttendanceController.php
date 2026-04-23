@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\ApprovalRequest;
 use App\Models\AttendanceRecord;
 use App\Services\AttendanceService;
+use App\Support\PositionCapability;
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -30,15 +32,22 @@ class AttendanceController extends Controller
 
     public function approvals(Request $request): Response
     {
-        return Inertia::render('Attendance/Approvals', $this->attendanceService->getApprovalsData($request->all(), $request->user()));
+        $canApproveAttendance = $request->user()->hasPositionCapability(PositionCapability::APPROVE_ATTENDANCE);
+        $canApproveLeave = $request->user()->hasPositionCapability(PositionCapability::APPROVE_LEAVE);
+
+        abort_unless($canApproveAttendance || $canApproveLeave, 403);
+
+        $filters = $request->all();
+        if (!$canApproveAttendance && $canApproveLeave) {
+            $filters['only_leave'] = true;
+        }
+
+        return Inertia::render('Attendance/Approvals', $this->attendanceService->getApprovalsData($filters, $request->user()));
     }
 
-    public function leaveApprovals(Request $request): Response
+    public function leaveApprovals(Request $request): RedirectResponse
     {
-        return Inertia::render('Attendance/Approvals', $this->attendanceService->getApprovalsData([
-            ...$request->all(),
-            'only_leave' => true,
-        ], $request->user()));
+        return redirect()->route('attendance.approvals', $request->query());
     }
 
     public function reports(Request $request): Response

@@ -7,6 +7,7 @@ use App\Models\EmailLog;
 use App\Models\FeedbackEscalation;
 use App\Models\FeedbackMessage;
 use App\Models\FeedbackReply;
+use App\Models\Notification;
 use App\Models\Position;
 use App\Models\User;
 use App\Services\FeedbackEscalationService;
@@ -285,6 +286,26 @@ class FeedbackController extends Controller
             'read_at' => $feedbackMessage->read_at ?: now(),
         ]);
 
+        $this->markRelatedNotificationsAsRead($user, $feedbackMessage);
+
+        if ($request->expectsJson()) {
+            $feedbackMessage->loadMissing([
+                'sender:id,name,email',
+                'receiver:id,name,email',
+                'receiverPosition:id,name',
+                'replier:id,name,email',
+                'replies.replier:id,name,email',
+                'escalations.fromPosition:id,name,authority_level',
+                'escalations.toPosition:id,name,authority_level',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'feedback' => $this->mapFeedback($feedbackMessage, $user),
+                'notification_counts' => $this->notificationService->getUnreadCountByCategory((int) $user->id),
+            ]);
+        }
+
         return redirect()->back();
     }
 
@@ -332,6 +353,16 @@ class FeedbackController extends Controller
         }
 
         return false;
+    }
+
+    private function markRelatedNotificationsAsRead(User $user, FeedbackMessage $feedbackMessage): void
+    {
+        Notification::query()
+            ->where('user_id', $user->id)
+            ->where('reference_type', FeedbackMessage::class)
+            ->where('reference_id', $feedbackMessage->id)
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
     }
 
     private function receiverGroupsForUser(User $user): array
@@ -433,6 +464,7 @@ class FeedbackController extends Controller
 
         return [
             'id' => $item->id,
+            'sender_id' => (int) $item->sender_id,
             'subject' => $item->subject,
             'message' => $item->message,
             'receiver_group' => $item->receiver_group,

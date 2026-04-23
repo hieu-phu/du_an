@@ -17,6 +17,7 @@ class EmployeeProfile extends Model
         'employee_code',
         'department_id',
         'position_id',
+        'reports_to_user_id',
         'default_work_shift_id',
         'province_id',
         'ward_id',
@@ -27,6 +28,7 @@ class EmployeeProfile extends Model
         'base_salary',
         'employment_status',
         'employment_type',
+        'is_department_head',
     ];
 
     protected $casts = [
@@ -34,6 +36,7 @@ class EmployeeProfile extends Model
         'hire_date' => 'date',
         'termination_date' => 'date',
         'base_salary' => 'decimal:2',
+        'is_department_head' => 'boolean',
     ];
 
     public function user(): BelongsTo
@@ -49,6 +52,11 @@ class EmployeeProfile extends Model
     public function position(): BelongsTo
     {
         return $this->belongsTo(Position::class);
+    }
+
+    public function manager(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reports_to_user_id');
     }
 
     public function defaultWorkShift(): BelongsTo

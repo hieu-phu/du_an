@@ -38,7 +38,7 @@
               <InputDate v-model="shiftForm.break_end_time" label="Ket thuc nghi giua ca" placeholder="Khong nghi" :config="timePickerConfig" :error="shiftForm.errors.break_end_time" />
               <Field label="Phut chuan" :error="shiftForm.errors.standard_minutes">
                 <input v-model.number="shiftForm.standard_minutes" class="form-input bg-gray-100 text-gray-700" type="number" min="1" readonly>
-                <p class="text-xs text-gray-500">Tu tinh bang thoi luong ca tru nghi giua ca va nghi giao ca.</p>
+                <p class="text-xs text-gray-500">Tu tinh bang thoi luong ca tru nghi giua ca.</p>
               </Field>
               <Field label="Nguong nua cong" :error="shiftForm.errors.half_day_minutes">
                 <input v-model.number="shiftForm.half_day_minutes" class="form-input bg-gray-100 text-gray-700" type="number" min="1" readonly>

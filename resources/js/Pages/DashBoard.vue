@@ -241,8 +241,20 @@ const positionCapabilities = computed(() => page.props.auth?.position_capabiliti
 const isDepartmentHead = computed(() => !!page.props.auth?.user?.is_department_head)
 const positionLabel = computed(() => page.props.auth?.user?.position_name || (page.props.auth?.user?.authority_level ? `Rank ${page.props.auth.user.authority_level}` : 'Chua thiet lap'))
 
-const canCheckIn = computed(() => !props.todayAttendance?.check_in_at)
-const canCheckOut = computed(() => !!props.todayAttendance?.check_in_at && !props.todayAttendance?.check_out_at)
+const attendanceActionBlocked = computed(() => {
+  const dayStatus = String(props.todayAttendance?.day_status || '')
+  const approvalStatus = String(props.todayAttendance?.approval_status || '')
+  const leaveDurationType = String(props.todayAttendance?.leave_duration_type || 'full_day')
+
+  if (!['approved', 'pending'].includes(approvalStatus)) return false
+  if (dayStatus === 'business_trip') return true
+  if (dayStatus === 'leave') return leaveDurationType === 'full_day'
+  if (dayStatus === 'unpaid_leave') return leaveDurationType === 'full_day'
+
+  return false
+})
+const canCheckIn = computed(() => !attendanceActionBlocked.value && !props.todayAttendance?.check_in_at)
+const canCheckOut = computed(() => !attendanceActionBlocked.value && !!props.todayAttendance?.check_in_at && !props.todayAttendance?.check_out_at)
 const projectStatusCounts = computed(() => props.dashboardSummary?.project_status_counts || [])
 const activeProjectProgress = computed(() => props.dashboardSummary?.active_project_progress || [])
 const attendanceMonthReport = computed(() => props.dashboardSummary?.attendance_month_report || {})
@@ -331,8 +343,11 @@ function getStatusClass(status) {
       return 'bg-amber-100 text-amber-700'
     case 'absent':
       return 'bg-slate-100 text-slate-700'
-    case 'unpaid_leave':
     case 'leave':
+      return 'bg-sky-100 text-sky-700'
+    case 'business_trip':
+      return 'bg-indigo-100 text-indigo-700'
+    case 'unpaid_leave':
       return 'bg-red-100 text-red-700'
     case 'pending':
       return 'bg-blue-100 text-blue-700'

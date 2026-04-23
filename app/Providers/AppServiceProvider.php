@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Database\Schema\Grammars\TestingMySqlGrammar;
 use App\Models\PositionCapability as PositionCapabilityModel;
+use App\Repositories\NotificationRepository;
 use App\Support\AccessMatrix;
 use App\Support\MenuBuilder;
 use App\Support\PositionCapability;
@@ -33,6 +34,9 @@ class AppServiceProvider extends ServiceProvider
             'auth' => function () {
                 $user = auth()->user();
                 $availableCapabilities = $this->availableCapabilities();
+                $notificationCounts = $user
+                    ? app(NotificationRepository::class)->countUnreadByCategory($this->currentSubdomain())
+                    : [];
 
                 return [
                     'user' => $user ? [
@@ -121,10 +125,24 @@ class AppServiceProvider extends ServiceProvider
                             ],
                         ],
                     ],
-                    'menuItems' => MenuBuilder::build($user),
+                    'notification_counts' => $notificationCounts,
+                    'menuItems' => MenuBuilder::build($user, $notificationCounts),
                 ];
             },
         ]);
+    }
+
+    private function currentSubdomain(): ?string
+    {
+        $request = request();
+
+        if (!$request) {
+            return null;
+        }
+
+        $parts = explode('.', $request->getHost());
+
+        return count($parts) >= 3 ? $parts[0] : 'main';
     }
 
     private function availableCapabilities(): array

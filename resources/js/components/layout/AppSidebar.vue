@@ -37,9 +37,7 @@
             <span class="text-[11px] font-bold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
               {{ group.title }}
             </span>
-            <span v-if="group.items.length > 0" class="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-gray-100 px-1.5 text-[10px] font-bold text-gray-600 dark:bg-gray-800 dark:text-gray-400">
-              {{ group.items.length }}
-            </span>
+            <span class="ml-auto"></span>
             <ChevronDownIcon
               class="h-3.5 w-3.5 text-gray-400 transition-transform duration-300"
               :class="{ 'rotate-180': isGroupOpen(group) }"
@@ -77,6 +75,12 @@
                   </span>
 
                   <span class="truncate">{{ item.name }}</span>
+                  <span
+                    v-if="Number(item.notification_count || 0) > 0"
+                    class="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-100 px-1.5 text-[10px] font-bold text-rose-700 dark:bg-rose-900/40 dark:text-rose-300"
+                  >
+                    {{ formatBadgeCount(item.notification_count) }}
+                  </span>
                 </Link>
               </li>
             </ul>
@@ -112,7 +116,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Link, usePage } from '@inertiajs/vue3'
 import { ChevronDownIcon } from '@/icons'
 import { useSidebar } from '@/composables/useSidebar'
@@ -120,7 +124,14 @@ import { useSidebar } from '@/composables/useSidebar'
 const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar()
 const page = usePage()
 
-const menuGroups = computed(() => page.props.auth?.menuItems || [])
+const notificationCounts = ref(page.props.auth?.notification_counts || {})
+const menuGroups = computed(() => (page.props.auth?.menuItems || []).map((group) => ({
+  ...group,
+  items: (group.items || []).map((item) => ({
+    ...item,
+    notification_count: notificationCountForItem(item),
+  })),
+})))
 const flatMenuItems = computed(() => menuGroups.value.flatMap((group) => group.items || []))
 const showLabel = computed(() => isExpanded.value || isHovered.value || isMobileOpen.value)
 const openGroupTitle = ref(null)
@@ -131,6 +142,72 @@ const getIconComponent = (iconName) => {
   const modulePath = `../../icons/${iconName}.vue`
   return iconModules[modulePath]?.default || iconModules['../../icons/GridIcon.vue']?.default || null
 }
+
+const notificationCountForItem = (item) => {
+  const paths = item.notification_paths || []
+
+  if (paths.length) {
+    return paths.reduce((total, path) => total + Number(notificationCounts.value?.[`path:${path}`] || 0), 0)
+  }
+
+  const categories = item.notification_categories || []
+  return categories.reduce((total, category) => total + Number(notificationCounts.value?.[category] || 0), 0)
+}
+
+const formatBadgeCount = (value) => {
+  const count = Number(value || 0)
+  return count > 99 ? '99+' : String(count)
+}
+
+const handleNotificationCountsUpdated = (event) => {
+  notificationCounts.value = event.detail || {}
+}
+
+const handleNotificationReceived = (event) => {
+  const category = event.detail?.category || 'general'
+  const path = resolveNotificationPath(event.detail)
+  notificationCounts.value = {
+    ...notificationCounts.value,
+    all: Number(notificationCounts.value?.all || 0) + 1,
+    [category]: Number(notificationCounts.value?.[category] || 0) + 1,
+    ...(path
+      ? {
+          [`path:${path}`]: Number(notificationCounts.value?.[`path:${path}`] || 0) + 1,
+        }
+      : {}),
+  }
+}
+
+const resolveNotificationPath = (notification) => {
+  const rawPath = notification?.url_link || notification?.data?.action_url
+
+  if (!rawPath) {
+    return null
+  }
+
+  try {
+    return new URL(rawPath, window.location.origin).pathname
+  } catch {
+    return null
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('notification-counts-updated', handleNotificationCountsUpdated)
+  window.addEventListener('notification-received', handleNotificationReceived)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('notification-counts-updated', handleNotificationCountsUpdated)
+  window.removeEventListener('notification-received', handleNotificationReceived)
+})
+
+watch(
+  () => page.props.auth?.notification_counts,
+  (counts) => {
+    notificationCounts.value = counts || {}
+  },
+)
 
 const isItemActive = (item) => {
   const currentUrl = page.url.split('?')[0]

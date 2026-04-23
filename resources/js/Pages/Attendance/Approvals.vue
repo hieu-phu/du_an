@@ -833,7 +833,7 @@ watch(
 )
 
 function applyFilters() {
-  router.get(route(isLeaveApproval.value ? 'leave.approvals' : 'attendance.approvals'), {
+  router.get(route('attendance.approvals'), {
     month: filterForm.month,
     year: filterForm.year,
     employee_profile_id: filterForm.employee_profile_id,

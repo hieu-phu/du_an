@@ -85,19 +85,37 @@ class NotificationRepository extends BaseRepository
         $counts = [
             'all' => $notifications->count(),
             'general' => 0,
-            'user' => 0,
-            'order' => 0,
-            'system' => 0,
         ];
 
         foreach ($notifications as $notification) {
             $category = $notification->category ?? 'general';
-            if (isset($counts[$category])) {
-                $counts[$category]++;
+            $counts[$category] = (int) ($counts[$category] ?? 0) + 1;
+
+            $path = $this->resolveNotificationPath($notification);
+
+            if ($path) {
+                $counts['path:' . $path] = (int) ($counts['path:' . $path] ?? 0) + 1;
             }
         }
 
         return $counts;
+    }
+
+    private function resolveNotificationPath(Notification $notification): ?string
+    {
+        $url = $notification->url_link ?: data_get($notification->data, 'action_url');
+
+        if (!$url) {
+            return null;
+        }
+
+        $path = parse_url($url, PHP_URL_PATH);
+
+        if (!is_string($path) || $path === '') {
+            return null;
+        }
+
+        return $path;
     }
 
     /**

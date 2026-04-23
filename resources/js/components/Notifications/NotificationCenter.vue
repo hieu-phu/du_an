@@ -486,6 +486,9 @@ const fetchUnreadCounts = async () => {
         const response = await axios.get('/api/notifications/unread-count');
         if (response.data.success && response.data.by_category) {
             unreadCounts.value = response.data.by_category;
+            window.dispatchEvent(new CustomEvent('notification-counts-updated', {
+                detail: response.data.by_category
+            }));
         }
     } catch (error) {
         console.error('Error fetching unread counts:', error);
@@ -518,11 +521,7 @@ const fetchNotifications = async (reset = false) => {
 
 const handleNotificationClick = async (notification) => {
     await markAsRead(notification);
-    if (notification.url_link) {
-        window.location.href = notification.url_link;
-    } else if (notification.data?.action_url) {
-        window.location.href = notification.data.action_url;
-    }
+    navigateToNotification(notification);
 };
 
 const markAsRead = async (notification) => {
@@ -534,6 +533,36 @@ const markAsRead = async (notification) => {
         } catch (error) {
             console.error('Error marking notification as read:', error);
         }
+    }
+};
+
+const resolveNotificationDestination = (notification) => {
+    const rawTarget = notification?.url_link || notification?.data?.action_url;
+
+    if (!rawTarget) {
+        return null;
+    }
+
+    try {
+        const target = new URL(rawTarget, window.location.origin);
+
+        if (notification?.category === 'feedback' && notification?.data?.feedback_message_id) {
+            target.searchParams.set('feedback_message_id', String(notification.data.feedback_message_id));
+            target.searchParams.set('from_notification', '1');
+        }
+
+        return target.toString();
+    } catch (error) {
+        console.error('Error resolving notification destination:', error);
+        return null;
+    }
+};
+
+const navigateToNotification = (notification) => {
+    const destination = resolveNotificationDestination(notification);
+
+    if (destination) {
+        window.location.href = destination;
     }
 };
 
@@ -667,9 +696,7 @@ const joinChannel = (channel) => {
                         tag: notification.id,
                         onClick: () => {
                             window.focus();
-                            if (notification.url_link) {
-                                window.location.href = notification.url_link;
-                            }
+                            navigateToNotification(notification);
                         }
                     });
                 } else if ('Notification' in window && Notification.permission !== 'denied') {
@@ -682,9 +709,7 @@ const joinChannel = (channel) => {
                                 tag: notification.id,
                                 onClick: () => {
                                     window.focus();
-                                    if (notification.url_link) {
-                                        window.location.href = notification.url_link;
-                                    }
+                                    navigateToNotification(notification);
                                 }
                             });
                         }
@@ -694,14 +719,10 @@ const joinChannel = (channel) => {
                 // Tab đang được kích hoạt, hiển thị toast
                 toast.success(notification.message || 'Bạn có một thông báo mới.', {
                     onClick: () => {
-                        if (notification.url_link) {
-                            window.location.href = notification.url_link;
-                        } else if (notification.data?.action_url) {
-                            window.location.href = notification.data.action_url;
-                        }
+                        navigateToNotification(notification);
                     },
                     style: {
-                        cursor: notification.url_link || notification.data?.action_url ? 'pointer' : 'default'
+                        cursor: resolveNotificationDestination(notification) ? 'pointer' : 'default'
                     }
                 });
             }

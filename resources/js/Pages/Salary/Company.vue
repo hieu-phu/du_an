@@ -388,6 +388,13 @@
                 </div>
               </div>
 
+              <div
+                v-if="periodStatus?.is_locked"
+                class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+              >
+                Ky luong da khoa snapshot. Muon sua phu cap hoac khau tru, hay mo khoa ky luong truoc.
+              </div>
+
               <div class="mt-4 overflow-auto">
                 <table class="min-w-full text-sm">
                   <thead>
@@ -396,7 +403,7 @@
                       <th class="p-2">Noi dung</th>
                       <th class="p-2">So tien</th>
                       <th class="p-2">Ghi chu</th>
-                      <th v-if="permissions.can_manage_payroll" class="p-2 text-right">Tac vu</th>
+                      <th v-if="permissions.can_manage_payroll && !periodStatus?.is_locked" class="p-2 text-right">Tac vu</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -412,7 +419,7 @@
                       <td class="p-2 font-medium text-gray-900">{{ item.label }}</td>
                       <td class="p-2">{{ formatCurrency(item.amount, selectedDetail.profile.currency) }}</td>
                       <td class="p-2">{{ item.note || '-' }}</td>
-                      <td v-if="permissions.can_manage_payroll" class="p-2 text-right">
+                      <td v-if="permissions.can_manage_payroll && !periodStatus?.is_locked" class="p-2 text-right">
                         <button
                           type="button"
                           class="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50"
@@ -423,7 +430,7 @@
                       </td>
                     </tr>
                     <tr v-if="!selectedDetail.adjustments.length">
-                      <td class="border-t p-4 text-center text-gray-500" :colspan="permissions.can_manage_payroll ? 5 : 4">
+                      <td class="border-t p-4 text-center text-gray-500" :colspan="permissions.can_manage_payroll && !periodStatus?.is_locked ? 5 : 4">
                         Chua co phu cap/khau tru rieng trong ky.
                       </td>
                     </tr>
@@ -431,7 +438,7 @@
                 </table>
               </div>
 
-              <div v-if="permissions.can_manage_payroll" class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-12">
+              <div v-if="permissions.can_manage_payroll && !periodStatus?.is_locked" class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-12">
                 <label class="block md:col-span-2">
                   <span class="mb-2 block text-sm font-medium text-gray-700">Loai</span>
                   <select v-model="adjustmentForm.type" class="h-11 w-full rounded-xl border border-gray-300 bg-white px-4 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
@@ -453,7 +460,7 @@
                 </label>
               </div>
 
-              <div v-if="permissions.can_manage_payroll" class="mt-3 flex justify-end">
+              <div v-if="permissions.can_manage_payroll && !periodStatus?.is_locked" class="mt-3 flex justify-end">
                 <button
                   type="button"
                   class="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
@@ -766,6 +773,10 @@ function recalculatePeriod() {
 
 function saveAdjustment() {
   if (!props.selectedDetail?.profile?.id) return
+  if (periodStatusLocked()) {
+    window.alert('Ky luong da khoa. Hay mo khoa ky luong truoc khi them phu cap hoac khau tru.')
+    return
+  }
 
   if (!adjustmentForm.label.trim() || Number(adjustmentForm.amount) <= 0) {
     window.alert('Vui long nhap noi dung va so tien hop le.')
@@ -791,6 +802,11 @@ function saveAdjustment() {
 }
 
 function removeAdjustment(item) {
+  if (periodStatusLocked()) {
+    window.alert('Ky luong da khoa. Hay mo khoa ky luong truoc khi xoa phu cap hoac khau tru.')
+    return
+  }
+
   if (!window.confirm(`Xoa khoan ${item.type === 'allowance' ? 'phu cap' : 'khau tru'} "${item.label}"?`)) {
     return
   }
