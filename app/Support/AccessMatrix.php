@@ -27,7 +27,6 @@ class AccessMatrix
         'positions.manage' => true,
         'projects.all.view' => true,
         'projects.mine.view' => true,
-        'settings.view' => true,
     ];
 
     private const ABILITY_CAPABILITIES = [
@@ -90,9 +89,6 @@ class AccessMatrix
         ],
         'projects.mine.view' => [
             PositionCapability::VIEW_OWN_PROJECTS,
-        ],
-        'settings.view' => [
-            PositionCapability::VIEW_ACTIVITY_LOGS,
         ],
     ];
 

@@ -30,6 +30,14 @@ class AttendanceController extends Controller
         ));
     }
 
+    public function myLeave(Request $request): Response
+    {
+        return Inertia::render('Leave/My', $this->attendanceService->getMyLeaveData(
+            $request->user(),
+            $request->integer('year') ?: null,
+        ));
+    }
+
     public function approvals(Request $request): Response
     {
         $canApproveAttendance = $request->user()->hasPositionCapability(PositionCapability::APPROVE_ATTENDANCE);
@@ -215,6 +223,27 @@ class AttendanceController extends Controller
         }
 
         return redirect()->back()->with('success', 'Đã gửi đơn chấm công.');
+    }
+
+    public function cancelRequest(Request $request, ApprovalRequest $approvalRequest)
+    {
+        $validated = $request->validate([
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $this->attendanceService->cancelApprovalRequest(
+                $approvalRequest,
+                $request->user(),
+                $validated['note'] ?? null
+            );
+        } catch (ValidationException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            return back()->withErrors(['error' => $exception->getMessage()]);
+        }
+
+        return redirect()->back()->with('success', 'Da huy don cham cong.');
     }
 
     public function lockMonth(Request $request)

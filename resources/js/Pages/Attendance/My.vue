@@ -93,18 +93,27 @@
         {{ formError }}
       </div>
 
-      <div v-if="selectedSmartContext && !isAttendancePeriodClosed" class="mb-4 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <div v-if="selectedSmartContext && !isAttendancePeriodClosed" class="mb-4 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-4 text-sm text-blue-900">
+        <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <div class="font-semibold">{{ selectedSmartContext.title }}</div>
             <div class="mt-1">{{ selectedSmartContext.description }}</div>
+            <div v-if="selectedSmartContext.details?.length" class="mt-3 flex flex-wrap gap-2">
+              <span
+                v-for="detail in selectedSmartContext.details"
+                :key="detail"
+                class="rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-semibold text-blue-800"
+              >
+                {{ detail }}
+              </span>
+            </div>
           </div>
           <button
             type="button"
             class="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
             @click="clearSmartContext"
           >
-            Bo chon goi y
+            Bo goi y va tu nhap lai
           </button>
         </div>
       </div>
@@ -116,6 +125,7 @@
             <option value="">Chon loai don</option>
             <option v-for="type in request_types" :key="type.value" :value="type.value">{{ requestTypeLabel(type.value) }}</option>
           </select>
+          <p class="mt-1 text-xs text-gray-500">Chon "Xin di muon / ve som" neu can giai trinh vi pham gio cong.</p>
           <p v-if="requestForm.errors.request_type" class="mt-1 text-sm text-red-500">{{ requestForm.errors.request_type }}</p>
         </div>
 
@@ -188,11 +198,14 @@
         </div>
 
         <div v-if="requestForm.request_type === 'late_early'">
-          <label class="mb-2 block text-sm font-medium text-gray-700">Loai vi pham</label>
+          <label class="mb-2 block text-sm font-medium text-gray-700">Vi pham can giai trinh</label>
           <select v-model="requestForm.requested_status" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-            <option value="late">Xin di muon</option>
-            <option value="early_leave">Xin ve som</option>
+            <option value="late">Di muon</option>
+            <option value="early_leave">Ve som</option>
           </select>
+          <p v-if="selectedSmartContext?.requestType === 'late_early'" class="mt-1 text-xs text-gray-500">
+            Da dien theo vi pham chinh, ban co the doi neu can.
+          </p>
           <p v-if="requestForm.errors.requested_status" class="mt-1 text-sm text-red-500">{{ requestForm.errors.requested_status }}</p>
         </div>
 
@@ -491,7 +504,15 @@
           </div>
         </div>
 
-        <div class="mt-6 flex justify-end">
+        <div class="mt-6 flex justify-end gap-2">
+          <button
+            v-if="canCancelSubmittedRequest(selectedSubmittedRequest)"
+            type="button"
+            class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
+            @click="cancelSubmittedRequest(selectedSubmittedRequest)"
+          >
+            Huy don
+          </button>
           <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700" @click="closeSubmittedRequestDetail">
             Dong
           </button>
@@ -590,6 +611,15 @@ const requestActions = [
       class: 'border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 shadow-sm hover:border-blue-300 hover:bg-blue-100 hover:text-blue-800',
     },
     onClick: (item) => openSubmittedRequestDetail(item),
+  },
+  {
+    label: 'Huy',
+    buttonProps: {
+      title: 'Huy don dang cho duyet',
+      class: 'border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-sm hover:border-rose-300 hover:bg-rose-100 hover:text-rose-800',
+    },
+    hidden: (item) => !canCancelSubmittedRequest(item),
+    onClick: (item) => cancelSubmittedRequest(item),
   },
 ]
 
@@ -741,7 +771,7 @@ const datePickerConfig = {
 const todayDate = new Date().toISOString().slice(0, 10)
 
 const singleDatePickerConfig = computed(() => {
-  if (requestForm.request_type === 'forgot_check') {
+  if (['forgot_check', 'late_early'].includes(requestForm.request_type)) {
     return {
       ...datePickerConfig,
       maxDate: todayDate,
@@ -946,6 +976,26 @@ function closeSubmittedRequestDetail() {
   selectedSubmittedRequest.value = null
 }
 
+function canCancelSubmittedRequest(item) {
+  return item?.status === 'pending' && !!item?.approval_request_id
+}
+
+function cancelSubmittedRequest(item) {
+  if (!canCancelSubmittedRequest(item)) return
+
+  const confirmed = window.confirm('Huy don dang cho duyet nay?')
+  if (!confirmed) return
+
+  router.delete(route('attendance.requests.destroy', item.approval_request_id), {
+    preserveScroll: true,
+    onSuccess: () => {
+      if (selectedSubmittedRequest.value?.approval_request_id === item.approval_request_id) {
+        selectedSubmittedRequest.value = null
+      }
+    },
+  })
+}
+
 async function applySmartRequest(record, requestType) {
   if (!record || !requestType || isAttendancePeriodClosed.value) return
 
@@ -955,18 +1005,27 @@ async function applySmartRequest(record, requestType) {
   selectedSmartContext.value = {
     title: smartRecommendationTitle(record, requestType),
     description: smartRecommendationDescription(record, requestType),
+    details: smartRecommendationDetails(record, requestType),
+    requestType,
   }
 
   await nextTick()
 
   if (requestType === 'forgot_check') {
     requestForm.request_date = record.work_date || ''
+    requestForm.from_time = record.missing_check_in ? suggestedCheckInTime(record) : ''
+    requestForm.to_time = record.missing_check_out ? suggestedCheckOutTime(record) : ''
     requestForm.reason = buildDefaultReason(record, requestType)
   }
 
   if (requestType === 'late_early') {
+    const status = preferredLateEarlyStatus(record)
+    const range = suggestedLateEarlyRange(record, status)
+
     requestForm.request_date = record.work_date || ''
-    requestForm.requested_status = preferredLateEarlyStatus(record)
+    requestForm.requested_status = status
+    requestForm.from_time = range.from
+    requestForm.to_time = range.to
     requestForm.reason = buildDefaultReason(record, requestType)
   }
 
@@ -993,6 +1052,10 @@ async function applySmartRequest(record, requestType) {
 
 function clearSmartContext() {
   selectedSmartContext.value = null
+  requestForm.reset()
+  if (attachmentInput.value) {
+    attachmentInput.value.value = ''
+  }
 }
 
 function requestLinkTitle(item) {
@@ -1080,19 +1143,21 @@ function smartRecommendationTitle(item, requestType) {
 
 function smartRecommendationDescription(item, requestType) {
   if (requestType === 'forgot_check') {
-    return item?.missing_check_in ? 'He thong phat hien thieu check-in. Bam de mo form quen cham cong cho ngay nay.' : 'He thong phat hien thieu check-out. Bam de mo form quen cham cong cho ngay nay.'
+    return item?.missing_check_in
+      ? `Thieu check-in ngay ${formatDate(item?.work_date)}. Form se dien ngay vi pham va gio vao ca du kien.`
+      : `Thieu check-out ngay ${formatDate(item?.work_date)}. Form se dien ngay vi pham va gio ra ca du kien.`
   }
 
   if (requestType === 'late_early') {
     if (item?.violation_status === 'early_leave') {
-      return `Ve som ${formatMinutes(item?.early_leave_minutes)}. Form se duoc dien san theo ngay vi pham.`
+      return `Ve som ${formatMinutes(item?.early_leave_minutes)} ngay ${formatDate(item?.work_date)}. Form se dien san ngay va khung gio can giai trinh.`
     }
 
     if (item?.violation_status === 'late_early') {
-      return `Di muon ${formatMinutes(item?.late_minutes)} va ve som ${formatMinutes(item?.early_leave_minutes)}. Form se dien san theo vi pham chinh.`
+      return `Co ca di muon ${formatMinutes(item?.late_minutes)} va ve som ${formatMinutes(item?.early_leave_minutes)} ngay ${formatDate(item?.work_date)}. Form se chon vi pham chinh truoc.`
     }
 
-    return `Di muon ${formatMinutes(item?.late_minutes)}. Form se duoc dien san theo ngay vi pham.`
+    return `Di muon ${formatMinutes(item?.late_minutes)} ngay ${formatDate(item?.work_date)}. Form se dien san ngay va khung gio can giai trinh.`
   }
 
   if (requestType === 'make_up') {
@@ -1104,21 +1169,67 @@ function smartRecommendationDescription(item, requestType) {
   return 'He thong de xuat don phu hop nhat voi ngay cong nay.'
 }
 
+function smartRecommendationDetails(item, requestType) {
+  const details = [
+    `Ngay: ${formatDate(item?.work_date)}`,
+  ]
+
+  if (item?.shift_name) {
+    details.push(`Ca: ${item.shift_name}`)
+  }
+
+  if (item?.shift_start_time || item?.shift_end_time) {
+    details.push(`Gio ca: ${[item?.shift_start_time, item?.shift_end_time].filter(Boolean).join(' - ')}`)
+  }
+
+  if (requestType === 'forgot_check') {
+    details.push(item?.missing_check_in ? 'Thieu check-in' : 'Thieu check-out')
+    const suggestedTime = item?.missing_check_in ? suggestedCheckInTime(item) : suggestedCheckOutTime(item)
+    if (suggestedTime) details.push(`Gio de xuat: ${suggestedTime}`)
+  }
+
+  if (requestType === 'late_early') {
+    const status = preferredLateEarlyStatus(item)
+    const range = suggestedLateEarlyRange(item, status)
+
+    if (Number(item?.late_minutes || 0) > 0) {
+      details.push(`Di muon: ${formatMinutes(item.late_minutes)}`)
+    }
+
+    if (Number(item?.early_leave_minutes || 0) > 0) {
+      details.push(`Ve som: ${formatMinutes(item.early_leave_minutes)}`)
+    }
+
+    if (range.from && range.to) {
+      details.push(`Khung gio: ${range.from} - ${range.to}`)
+    }
+  }
+
+  if (requestType === 'make_up') {
+    const quota = makeUpQuotaMap.value[item?.work_date]
+    if (quota) {
+      details.push(`Con thieu: ${formatMinutes(quota.remaining_minutes)}`)
+    }
+  }
+
+  return details
+}
+
 function buildDefaultReason(item, requestType) {
   const dateText = formatDate(item?.work_date)
 
   if (requestType === 'forgot_check') {
     return item?.missing_check_in
-      ? `Bo sung check-in cho ngay ${dateText}.`
-      : `Bo sung check-out cho ngay ${dateText}.`
+      ? `Giai trinh bo sung check-in ngay ${dateText}.`
+      : `Giai trinh bo sung check-out ngay ${dateText}.`
   }
 
   if (requestType === 'late_early') {
     if (preferredLateEarlyStatus(item) === 'early_leave') {
-      return `Giai trinh ve som ngay ${dateText}.`
+      return `Giai trinh ve som ngay ${dateText}, ve som ${formatMinutes(item?.early_leave_minutes)}.`
     }
 
-    return `Giai trinh di muon ngay ${dateText}.`
+    return `Giai trinh di muon ngay ${dateText}, di muon ${formatMinutes(item?.late_minutes)}.`
   }
 
   if (requestType === 'make_up') {
@@ -1134,6 +1245,60 @@ function buildDefaultReason(item, requestType) {
   }
 
   return ''
+}
+
+function suggestedLateEarlyRange(item, status) {
+  if (status === 'early_leave') {
+    const from = timeFromDateTime(item?.check_out_at) || subtractMinutesFromTime(item?.shift_end_time, Number(item?.early_leave_minutes || 0))
+    const to = item?.shift_end_time || addMinutesToTime(from, Number(item?.early_leave_minutes || 0))
+
+    return normalizeSuggestedRange(from, to)
+  }
+
+  const to = timeFromDateTime(item?.check_in_at) || addMinutesToTime(item?.shift_start_time, Number(item?.late_minutes || 0))
+  const from = item?.shift_start_time || subtractMinutesFromTime(to, Number(item?.late_minutes || 0))
+
+  return normalizeSuggestedRange(from, to)
+}
+
+function suggestedCheckInTime(item) {
+  return item?.shift_start_time || timeFromDateTime(item?.check_in_at) || ''
+}
+
+function suggestedCheckOutTime(item) {
+  return item?.shift_end_time || timeFromDateTime(item?.check_out_at) || ''
+}
+
+function normalizeSuggestedRange(from, to) {
+  if (!from || !to || from === to) {
+    return { from: from || '', to: to || '' }
+  }
+
+  return { from, to }
+}
+
+function timeFromDateTime(value) {
+  if (!value) return ''
+  const text = String(value)
+  const match = text.match(/(\d{2}:\d{2})/)
+  return match?.[1] || ''
+}
+
+function addMinutesToTime(value, minutes) {
+  return shiftTime(value, Math.abs(Number(minutes || 0)))
+}
+
+function subtractMinutesFromTime(value, minutes) {
+  return shiftTime(value, -Math.abs(Number(minutes || 0)))
+}
+
+function shiftTime(value, minutes) {
+  if (!value) return ''
+  const [hour, minute] = String(value).split(':').map((part) => Number(part))
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return ''
+
+  const date = new Date(2000, 0, 1, hour, minute + Number(minutes || 0), 0)
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
 function formatWorkUnits(value) {

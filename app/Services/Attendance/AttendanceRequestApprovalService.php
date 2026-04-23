@@ -37,11 +37,6 @@ class AttendanceRequestApprovalService
         return $attendanceService->buildMyAdjustmentData($user);
     }
 
-    public function getAdjustmentApprovalsData(AttendanceService $attendanceService, array $filters = [], ?User $viewer = null): array
-    {
-        return $attendanceService->buildAdjustmentApprovalsData($filters, $viewer);
-    }
-
     public function submitAttendanceRequest(AttendanceService $attendanceService, User $user, array $payload): AttendanceRequest|OvertimeRequest
     {
         return $attendanceService->handleSubmitAttendanceRequest($user, $payload);
@@ -50,11 +45,6 @@ class AttendanceRequestApprovalService
     public function submitAttendanceAdjustmentRequest(AttendanceService $attendanceService, User $user, array $payload): AttendanceAdjustment
     {
         return $attendanceService->handleSubmitAttendanceAdjustmentRequest($user, $payload);
-    }
-
-    public function reviewAttendanceAdjustmentRequest(AttendanceService $attendanceService, AttendanceAdjustment $adjustment, User $reviewer, string $decision, ?string $note = null): AttendanceAdjustment
-    {
-        return $attendanceService->handleReviewAttendanceAdjustmentRequest($adjustment, $reviewer, $decision, $note);
     }
 
     public function reviewApprovalRequest(AttendanceService $attendanceService, ApprovalRequest $approvalRequest, User $reviewer, string $decision, ?string $note = null): ApprovalRequest

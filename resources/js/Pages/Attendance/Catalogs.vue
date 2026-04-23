@@ -290,7 +290,7 @@
       <section class="rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
         <div class="flex flex-col gap-1">
           <h3 class="text-lg font-semibold text-gray-900">Phan ca</h3>
-          <p class="text-sm text-gray-500">Gan ca cho nhan vien hoac phong ban trong mot khoang thoi gian cu the, co the gioi han theo ngay trong tuan.</p>
+          <p class="text-sm text-gray-500">Gan ca cho ca nhan, phong ban hoac toan cong ty trong mot khoang thoi gian cu the, co the gioi han theo ngay trong tuan.</p>
         </div>
 
         <form class="mt-5 space-y-4" @submit.prevent="submitAssignment">
@@ -301,6 +301,7 @@
           <div class="grid grid-cols-1 gap-4 md:grid-cols-5">
             <Field label="Ap dung cho" :error="assignmentForm.errors.target_type">
               <select v-model="assignmentForm.target_type" class="form-input">
+                <option value="company">Toan cong ty</option>
                 <option value="employee">Nhan vien</option>
                 <option value="department">Phong ban</option>
               </select>
@@ -311,11 +312,14 @@
                 <option v-for="item in employeeOptions" :key="item.id" :value="item.id">{{ item.label }}</option>
               </select>
             </Field>
-            <Field v-else label="Phong ban" :error="assignmentForm.errors.department_id">
+            <Field v-else-if="assignmentForm.target_type === 'department'" label="Phong ban" :error="assignmentForm.errors.department_id">
               <select v-model="assignmentForm.department_id" class="form-input">
                 <option :value="null">Chon phong ban</option>
                 <option v-for="item in departmentOptions" :key="item.id" :value="item.id">{{ item.name }}</option>
               </select>
+            </Field>
+            <Field v-else label="Pham vi">
+              <input class="form-input bg-gray-50" value="Toan cong ty" disabled>
             </Field>
             <Field label="Ca lam" :error="assignmentForm.errors.work_shift_id">
               <select v-model="assignmentForm.work_shift_id" class="form-input">
@@ -374,8 +378,8 @@
           <tbody>
             <tr v-for="item in assignments" :key="item.id" class="border-t">
               <td class="p-2">
-                <div class="font-semibold text-gray-900">{{ item.employee_name || item.department_name || '-' }}</div>
-                <div class="text-xs text-gray-500">{{ item.target_type === 'employee' ? 'Nhan vien' : 'Phong ban' }}</div>
+                <div class="font-semibold text-gray-900">{{ assignmentTargetName(item) }}</div>
+                <div class="text-xs text-gray-500">{{ assignmentTargetLabel(item.target_type) }}</div>
               </td>
               <td class="p-2">{{ item.work_shift_name }}</td>
               <td class="p-2">{{ formatDate(item.effective_from) }} - {{ item.effective_to ? formatDate(item.effective_to) : 'Khong gioi han' }}</td>
@@ -503,7 +507,7 @@ const holidayForm = useForm({
 })
 
 const assignmentForm = useForm({
-  target_type: 'employee',
+  target_type: 'company',
   employee_profile_id: null,
   department_id: null,
   work_shift_id: null,
@@ -557,8 +561,11 @@ const shiftPreviewError = computed(() => {
 watch(() => assignmentForm.target_type, (type) => {
   if (type === 'employee') {
     assignmentForm.department_id = null
+  } else if (type === 'department') {
+    assignmentForm.employee_profile_id = null
   } else {
     assignmentForm.employee_profile_id = null
+    assignmentForm.department_id = null
   }
 })
 
@@ -630,7 +637,7 @@ function resetHolidayForm() {
 
 function resetAssignmentForm() {
   assignmentForm.reset()
-  assignmentForm.target_type = 'employee'
+  assignmentForm.target_type = 'company'
   assignmentForm.employee_profile_id = null
   assignmentForm.department_id = null
   assignmentForm.work_shift_id = null
@@ -720,7 +727,7 @@ function editHoliday(item) {
 
 function editAssignment(item) {
   editingAssignmentId.value = item.id
-  assignmentForm.target_type = item.target_type || 'employee'
+  assignmentForm.target_type = item.target_type || 'company'
   assignmentForm.employee_profile_id = item.employee_profile_id ?? null
   assignmentForm.department_id = item.department_id ?? null
   assignmentForm.work_shift_id = item.work_shift_id ?? null
@@ -823,6 +830,18 @@ function holidayTypeLabel(type) {
     compensatory: 'Nghi bu',
     special: 'Dac biet',
   }[type] || type || '-'
+}
+
+function assignmentTargetLabel(type) {
+  return {
+    company: 'Toan cong ty',
+    employee: 'Nhan vien',
+    department: 'Phong ban',
+  }[type] || 'Khac'
+}
+
+function assignmentTargetName(item) {
+  return item.employee_name || item.department_name || 'Toan cong ty'
 }
 
 function weekdayLabels(days) {

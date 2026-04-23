@@ -64,12 +64,12 @@ class MenuBuilder
                     $can(PositionCapability::VIEW_OWN_ATTENDANCE)
                         ? self::item('Cong cua toi', '/my-attendance', 'ClockIcon', false, [], ['/my-attendance'])
                         : null,
+                    $can(PositionCapability::VIEW_OWN_ATTENDANCE)
+                        ? self::item('Nghi phep cua toi', '/my-leave', 'Calendar2Line', false, [], ['/my-leave'])
+                        : null,
                     ($can(PositionCapability::APPROVE_ATTENDANCE) || $can(PositionCapability::APPROVE_LEAVE))
                         ? self::item('Duyet cong', '/attendance/approvals', 'CheckCircleIcon', false, [], ['/attendance/approvals'])
                         : null,
-                    // $can(PositionCapability::APPROVE_ATTENDANCE)
-                    //     ? self::item('Duyet dieu chinh cong', '/attendance/adjustments/approvals', 'ListCheckIcon', false, [], ['/attendance/adjustments/approvals'])
-                    //     : null,
                     $can(PositionCapability::APPROVE_ATTENDANCE)
                         ? self::item('Danh muc cham cong', '/attendance/catalogs', 'Calendar2Line')
                         : null,

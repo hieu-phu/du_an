@@ -567,7 +567,12 @@ class ProjectController extends Controller
             'search' => trim((string) $request->string('search')),
             'status' => (string) $request->string('status'),
             'employee_profile_id' => (int) $request->integer('employee_profile_id'),
+            'per_page' => (int) $request->integer('per_page', 10),
         ];
+        $allowedPerPage = [10, 25, 50, 100];
+        if (!in_array($filters['per_page'], $allowedPerPage, true)) {
+            $filters['per_page'] = 10;
+        }
 
         $query = $this->baseProjectQuery($request, $scope);
 
@@ -594,7 +599,7 @@ class ProjectController extends Controller
 
         $pageUser = $request->user();
 
-        $projects = $query
+        $projectsPaginator = $query
             ->with([
                 'members' => function ($relation): void {
                     $relation
@@ -619,7 +624,11 @@ class ProjectController extends Controller
                 'members as active_members_count' => fn ($relation) => $relation->where('is_active', true),
             ])
             ->orderByDesc('id')
-            ->get()
+            ->paginate($filters['per_page'])
+            ->withQueryString();
+
+        $projects = $projectsPaginator
+            ->getCollection()
             ->map(fn (Project $project) => $this->transformProject($project, $pageUser))
             ->values();
 
@@ -673,6 +682,14 @@ class ProjectController extends Controller
 
         return Inertia::render('Projects/Index', [
             'projects' => $projects,
+            'pagination' => [
+                'current_page' => $projectsPaginator->currentPage(),
+                'last_page' => $projectsPaginator->lastPage(),
+                'per_page' => $projectsPaginator->perPage(),
+                'total' => $projectsPaginator->total(),
+                'from' => $projectsPaginator->firstItem(),
+                'to' => $projectsPaginator->lastItem(),
+            ],
             'scope' => $scope,
             'title' => $scope === 'mine' ? 'Du an cua toi' : 'Danh sach du an',
             'filters' => $filters,

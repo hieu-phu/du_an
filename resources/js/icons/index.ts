@@ -22,7 +22,6 @@ import TableIcon from "./TableIcon.vue";
 import LogoutIcon from "./LogoutIcon.vue";
 import InfoCircleIcon from "./InfoCircleIcon.vue";
 import FolderIcon from "./FolderIcon.vue";
-import SettingsIcon from "./SettingsIcon.vue";
 import HomeIcon from "./HomeIcon.vue";
 import ChevronRightIcon from "./ChevronRightIcon.vue";
 import BoxIcon from "./BoxIcon.vue";
@@ -113,7 +112,6 @@ export {
   ListIcon,
   LogoutIcon,
   InfoCircleIcon,
-  SettingsIcon,
   ErrorIcon,
   SuccessIcon,
   InfoIcon,

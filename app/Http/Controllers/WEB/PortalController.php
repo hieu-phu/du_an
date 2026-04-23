@@ -13,6 +13,7 @@ use App\Models\ProjectImplementationDetail;
 use App\Models\ProjectMember;
 use App\Models\User;
 use App\Support\AccessMatrix;
+use App\Support\PositionCapability;
 use App\Repositories\AttendanceRepository;
 use App\Services\AttendanceService;
 use Carbon\Carbon;
@@ -43,8 +44,9 @@ class PortalController extends Controller
         $now = now('Asia/Ho_Chi_Minh');
         $personalAttendanceData = null;
         $todayAttendance = null;
+        $canViewOwnAttendance = (bool) ($user?->hasPositionCapability(PositionCapability::VIEW_OWN_ATTENDANCE));
 
-        if ($user && $profileId) {
+        if ($user && $profileId && $canViewOwnAttendance) {
             $personalAttendanceData = $this->attendanceService->getMyAttendanceData(
                 $user,
                 (int) $now->month,
@@ -101,9 +103,13 @@ class PortalController extends Controller
             ];
         }
 
+        if (!$canViewOwnAttendance && $user && !$this->hasGlobalProjectAccess($user) && $profileId) {
+            $stats = array_slice($stats, 0, 2);
+        }
+
         $warnings = [];
 
-        if ($profileId) {
+        if ($profileId && $canViewOwnAttendance) {
             $missedPunches = $this->attendanceRepository->getMissedPunchCount($profileId);
             if ($missedPunches > 0) {
                 $warnings[] = [
@@ -270,6 +276,23 @@ class PortalController extends Controller
         $year = (int) $now->year;
 
         if (!AccessMatrix::canManageAllAttendance($user)) {
+            if (!$profileId || !$user->hasPositionCapability(PositionCapability::VIEW_OWN_ATTENDANCE)) {
+                return [
+                    'scope' => 'none',
+                    'month' => $month,
+                    'year' => $year,
+                    'total_records' => 0,
+                    'on_time_records' => 0,
+                    'late_records' => 0,
+                    'leave_records' => 0,
+                    'unpaid_leave_records' => 0,
+                    'absent_records' => 0,
+                    'early_leave_records' => 0,
+                    'approved_records' => 0,
+                    'total_worked_minutes' => 0,
+                ];
+            }
+
             $summary = $personalAttendanceData['summary'] ?? [];
 
             return [
@@ -493,13 +516,19 @@ class PortalController extends Controller
                             ->where('department_id', $profile->department_id);
                     });
                 }
+
+                $query->orWhere(function (Builder $companyQuery) {
+                    $companyQuery
+                        ->whereNull('employee_profile_id')
+                        ->whereNull('department_id');
+                });
             })
             ->whereDate('effective_from', '<=', $today->toDateString())
             ->where(function (Builder $query) use ($today) {
                 $query->whereNull('effective_to')
                     ->orWhereDate('effective_to', '>=', $today->toDateString());
             })
-            ->orderByDesc('employee_profile_id')
+            ->orderByRaw('case when employee_profile_id is not null then 2 when department_id is not null then 1 else 0 end desc')
             ->orderByDesc('effective_from')
             ->get()
             ->first(function (EmployeeWorkShiftAssignment $item) use ($weekday) {

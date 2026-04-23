@@ -6,7 +6,8 @@
 
     <div class="space-y-6">
       <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
-        <h3 class="text-lg font-semibold text-gray-900">Gui yeu cau dieu chinh</h3>
+        <h3 class="text-lg font-semibold text-gray-900">Ap dung dieu chinh cong</h3>
+        <p class="mt-1 text-sm text-gray-500">Dieu chinh duoc ap dung ngay len ban ghi cong chua duyet. Ban ghi sau do van nam trong luong duyet cong chung neu can.</p>
 
         <div v-if="formError" class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {{ formError }}
@@ -119,14 +120,14 @@
               :disabled="form.processing || !canSubmit"
               type="submit"
             >
-              {{ form.processing ? 'Dang gui...' : 'Gui yeu cau' }}
+              {{ form.processing ? 'Dang ap dung...' : 'Ap dung dieu chinh' }}
             </button>
           </div>
         </form>
       </div>
 
       <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
-        <h3 class="text-lg font-semibold text-gray-900">Lich su yeu cau</h3>
+        <h3 class="text-lg font-semibold text-gray-900">Lich su dieu chinh</h3>
         <div class="mt-4 overflow-auto">
           <table class="min-w-full text-sm">
             <thead>
@@ -137,8 +138,8 @@
                 <th class="p-2">Sau dieu chinh</th>
                 <th class="p-2">Trang thai</th>
                 <th class="p-2">Ly do</th>
-                <th class="p-2">Ghi chu duyet</th>
-                <th class="p-2">Gui luc</th>
+                <th class="p-2">Ghi chu</th>
+                <th class="p-2">Thoi gian</th>
               </tr>
             </thead>
             <tbody>
@@ -160,7 +161,7 @@
                 <td class="p-2">{{ formatDateTime(item.submitted_at) }}</td>
               </tr>
               <tr v-if="!adjustments.length">
-                <td class="p-4 text-center text-gray-500" colspan="8">Chua co yeu cau dieu chinh nao.</td>
+                <td class="p-4 text-center text-gray-500" colspan="8">Chua co lan dieu chinh nao.</td>
               </tr>
             </tbody>
           </table>
@@ -202,13 +203,11 @@ const dateTimePickerConfig = {
 }
 
 const selectedRecord = computed(() => props.records.find((item) => Number(item.id) === Number(form.attendance_record_id)) || null)
-const pendingAdjustmentRecordIds = computed(() => new Set(props.adjustments.filter((item) => item.status === 'pending').map((item) => Number(item.attendance_record_id))))
-const hasPendingAdjustment = computed(() => selectedRecord.value ? pendingAdjustmentRecordIds.value.has(Number(selectedRecord.value.id)) : false)
 const isApprovedRecord = computed(() => selectedRecord.value?.is_confirmed || selectedRecord.value?.approval_status === 'approved')
 const checkInMissing = computed(() => Boolean(selectedRecord.value?.missing_check_in) || selectedRecord.value?.day_status === 'missing_check_in' || !selectedRecord.value?.check_in_at)
 const checkOutMissing = computed(() => Boolean(selectedRecord.value?.missing_check_out) || selectedRecord.value?.day_status === 'missing_check_out' || !selectedRecord.value?.check_out_at)
-const checkInDisabled = computed(() => !selectedRecord.value || isApprovedRecord.value || hasPendingAdjustment.value || (checkOutMissing.value && !checkInMissing.value))
-const checkOutDisabled = computed(() => !selectedRecord.value || isApprovedRecord.value || hasPendingAdjustment.value || (checkInMissing.value && !checkOutMissing.value))
+const checkInDisabled = computed(() => !selectedRecord.value || isApprovedRecord.value || (checkOutMissing.value && !checkInMissing.value))
+const checkOutDisabled = computed(() => !selectedRecord.value || isApprovedRecord.value || (checkInMissing.value && !checkOutMissing.value))
 const proposedCheckIn = computed(() => normalizeDateTimeForForm(form.new_check_in_at))
 const proposedCheckOut = computed(() => normalizeDateTimeForForm(form.new_check_out_at))
 const currentCheckIn = computed(() => normalizeDateTimeForForm(selectedRecord.value?.check_in_at))
@@ -266,7 +265,6 @@ const logicMessages = computed(() => {
     return messages
   }
   if (isApprovedRecord.value) messages.push('Ban ghi da duoc duyet, nhan vien khong the tu gui dieu chinh.')
-  if (hasPendingAdjustment.value) messages.push('Ban ghi nay da co yeu cau dieu chinh dang cho duyet.')
   if (!workDateMatches.value && (form.new_check_in_at || form.new_check_out_at)) messages.push('Thoi gian de xuat phai nam trong dung ngay cong dang chon.')
   if (!isCheckoutAfterCheckin.value) messages.push('Check-out de xuat phai sau check-in de xuat.')
   if (!hasActualChange.value) messages.push('Nhap it nhat mot thoi gian de xuat khac du lieu hien tai.')
@@ -277,7 +275,6 @@ const logicMessages = computed(() => {
 
 const canSubmit = computed(() => selectedRecord.value
   && !isApprovedRecord.value
-  && !hasPendingAdjustment.value
   && workDateMatches.value
   && isCheckoutAfterCheckin.value
   && hasActualChange.value
@@ -425,8 +422,8 @@ function formatDayStatus(value) {
 
 function formatApprovalStatus(value) {
   const labels = {
-    pending: 'Cho duyet',
-    approved: 'Da duyet',
+    pending: 'Cho xu ly cu',
+    approved: 'Da ap dung',
     rejected: 'Tu choi',
   }
   return labels[value] || '-'
@@ -449,10 +446,6 @@ function applyClientValidationErrors() {
 
   if (isApprovedRecord.value) {
     form.setError('attendance_record_id', 'Ban ghi da duoc duyet, vui long lien he HR de dieu chinh.')
-  }
-
-  if (hasPendingAdjustment.value) {
-    form.setError('attendance_record_id', 'Ban ghi nay da co yeu cau dieu chinh dang cho duyet.')
   }
 
   if (!workDateMatches.value) {

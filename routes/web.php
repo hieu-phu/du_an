@@ -13,7 +13,6 @@ use App\Http\Controllers\WEB\PositionController;
 use App\Http\Controllers\WEB\ProjectController;
 use App\Http\Controllers\WEB\ReportController;
 use App\Http\Controllers\WEB\SalaryController;
-use App\Http\Controllers\WEB\SettingsController;
 use App\Http\Controllers\WEB\UserApprovalController;
 use App\Http\Controllers\WEB\UserController;
 use App\Support\PositionCapability;
@@ -71,6 +70,10 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
         ->middleware('position.capability:' . PositionCapability::REQUEST_ATTENDANCE_ADJUSTMENT)
         ->name('attendance.requests.store');
 
+    Route::delete('/attendance/requests/{approvalRequest}', [AttendanceController::class, 'cancelRequest'])
+        ->middleware('position.capability:' . PositionCapability::REQUEST_ATTENDANCE_ADJUSTMENT)
+        ->name('attendance.requests.destroy');
+
     Route::get('/attendance/adjustments', [AttendanceAdjustmentController::class, 'index'])
         ->middleware('position.capability:' . PositionCapability::REQUEST_ATTENDANCE_ADJUSTMENT)
         ->name('attendance.adjustments.index');
@@ -99,9 +102,17 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
         ->middleware('position.capability:' . PositionCapability::VIEW_OWN_ATTENDANCE)
         ->name('attendance.mine');
 
+    Route::get('/my-leave', [AttendanceController::class, 'myLeave'])
+        ->middleware('position.capability:' . PositionCapability::VIEW_OWN_ATTENDANCE)
+        ->name('leave.mine');
+
     Route::get('/my-salary', [SalaryController::class, 'mine'])
         ->middleware('position.capability:' . PositionCapability::VIEW_OWN_SALARY)
         ->name('salary.mine');
+
+    Route::get('/my-salary/export/pdf', [SalaryController::class, 'exportMinePdf'])
+        ->middleware('position.capability:' . PositionCapability::VIEW_OWN_SALARY)
+        ->name('salary.mine.export.pdf');
 
     Route::get('/salary/company', [SalaryController::class, 'company'])
         ->middleware('position.capability:' . PositionCapability::VIEW_ALL_SALARY)
@@ -197,13 +208,6 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
 
         Route::post('/attendance/request-approvals/{approvalRequest}/reject', [AttendanceController::class, 'rejectRequest'])
             ->name('attendance.request-approvals.reject');
-
-        Route::get('/attendance/adjustments/approvals', [AttendanceAdjustmentController::class, 'approvals'])
-            ->name('attendance.adjustments.approvals');
-        Route::post('/attendance/adjustments/{adjustment}/approve', [AttendanceAdjustmentController::class, 'approve'])
-            ->name('attendance.adjustments.approve');
-        Route::post('/attendance/adjustments/{adjustment}/reject', [AttendanceAdjustmentController::class, 'reject'])
-            ->name('attendance.adjustments.reject');
     });
 
     Route::middleware(['position.capability:' . PositionCapability::APPROVE_LEAVE])->group(function () {
@@ -341,12 +345,6 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
         ->middleware('position.capability:' . PositionCapability::VIEW_ACTIVITY_LOGS)
         ->name('activity-logs.index');
 
-    Route::get('/settings', [SettingsController::class, 'index'])
-        ->middleware('position.capability:' . PositionCapability::VIEW_ACTIVITY_LOGS)
-        ->name('settings.index');
-    Route::put('/settings', [SettingsController::class, 'update'])
-        ->middleware('position.capability:' . PositionCapability::VIEW_ACTIVITY_LOGS)
-        ->name('settings.update');
 });
 
 require __DIR__ . '/auth.php';

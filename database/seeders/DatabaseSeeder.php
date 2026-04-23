@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Hash;
 class DatabaseSeeder extends Seeder
 {
     private const SYSTEM_OWNER_EMAIL = 'gtvbehieu@gmail.com';
+    private const SYSTEM_OWNER_SELF_SERVICE_DENY_REASON = 'Disable self-service attendance, leave, and personal salary for system operator account.';
 
     public function run(): void
     {
@@ -103,6 +104,8 @@ class DatabaseSeeder extends Seeder
                 'updated_at' => now(),
             ]);
 
+        $this->denySystemOwnerSelfServiceCapabilities($user);
+
         return $user->fresh('employeeProfile.position');
     }
 
@@ -135,6 +138,42 @@ class DatabaseSeeder extends Seeder
         }
 
         return 10;
+    }
+
+    private function denySystemOwnerSelfServiceCapabilities(User $user): void
+    {
+        if (!DB::getSchemaBuilder()->hasTable('user_position_capability_overrides')) {
+            return;
+        }
+
+        $capabilityIds = PositionCapabilityModel::query()
+            ->whereIn('code', [
+                PositionCapability::CHECK_IN,
+                PositionCapability::CHECK_OUT,
+                PositionCapability::VIEW_OWN_ATTENDANCE,
+                PositionCapability::VIEW_OWN_SALARY,
+                PositionCapability::REQUEST_ATTENDANCE_ADJUSTMENT,
+            ])
+            ->pluck('id');
+
+        $now = now();
+
+        foreach ($capabilityIds as $capabilityId) {
+            DB::table('user_position_capability_overrides')->updateOrInsert(
+                [
+                    'user_id' => $user->id,
+                    'capability_id' => $capabilityId,
+                ],
+                [
+                    'effect' => 'deny',
+                    'reason' => self::SYSTEM_OWNER_SELF_SERVICE_DENY_REASON,
+                    'expires_at' => null,
+                    'created_by' => null,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]
+            );
+        }
     }
 
     private function seedHrManager(): User

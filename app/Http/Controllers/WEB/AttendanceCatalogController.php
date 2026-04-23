@@ -65,7 +65,9 @@ class AttendanceCatalogController extends Controller
                 ->get()
                 ->map(fn (EmployeeWorkShiftAssignment $assignment) => [
                     'id' => $assignment->id,
-                    'target_type' => $assignment->employee_profile_id ? 'employee' : 'department',
+                    'target_type' => $assignment->employee_profile_id
+                        ? 'employee'
+                        : ($assignment->department_id ? 'department' : 'company'),
                     'employee_profile_id' => $assignment->employee_profile_id,
                     'employee_name' => $assignment->employeeProfile?->user?->name,
                     'department_id' => $assignment->department_id,
@@ -434,7 +436,7 @@ class AttendanceCatalogController extends Controller
     private function validateAssignment(Request $request): array
     {
         $validated = $request->validate([
-            'target_type' => ['required', Rule::in(['employee', 'department'])],
+            'target_type' => ['required', Rule::in(['employee', 'department', 'company'])],
             'employee_profile_id' => ['nullable', 'integer', 'exists:employee_profiles,id'],
             'department_id' => ['nullable', 'integer', 'exists:departments,id'],
             'work_shift_id' => ['required', 'integer', 'exists:work_shifts,id'],
@@ -462,6 +464,11 @@ class AttendanceCatalogController extends Controller
                 ]);
             }
             $validated['employee_profile_id'] = null;
+        }
+
+        if ($validated['target_type'] === 'company') {
+            $validated['employee_profile_id'] = null;
+            $validated['department_id'] = null;
         }
 
         $shiftIsActive = WorkShift::query()
@@ -502,30 +509,54 @@ class AttendanceCatalogController extends Controller
 
     private function ensureAssignmentDoesNotOverlap(array $validated, ?EmployeeWorkShiftAssignment $current = null): void
     {
-        $targetColumn = filled($validated['employee_profile_id'] ?? null) ? 'employee_profile_id' : 'department_id';
-        $targetId = $validated[$targetColumn] ?? null;
+        $from = $validated['effective_from'];
+        $to = $validated['effective_to'] ?? '9999-12-31';
+        $query = EmployeeWorkShiftAssignment::query()
+            ->where('is_active', true)
+            ->when($current, fn ($builder) => $builder->whereKeyNot($current->id))
+            ->whereDate('effective_from', '<=', $to)
+            ->where(function ($builder) use ($from) {
+                $builder->whereNull('effective_to')
+                    ->orWhereDate('effective_to', '>=', $from);
+            });
 
-        if (!filled($targetId)) {
+        if (filled($validated['employee_profile_id'] ?? null)) {
+            $overlaps = $query
+                ->where('employee_profile_id', $validated['employee_profile_id'])
+                ->exists();
+
+            if ($overlaps) {
+                throw ValidationException::withMessages([
+                    'employee_profile_id' => 'Nhan vien nay da co phan ca hieu luc trong khoang ngay duoc chon.',
+                ]);
+            }
+
             return;
         }
 
-        $from = $validated['effective_from'];
-        $to = $validated['effective_to'] ?? '9999-12-31';
+        if (filled($validated['department_id'] ?? null)) {
+            $overlaps = $query
+                ->whereNull('employee_profile_id')
+                ->where('department_id', $validated['department_id'])
+                ->exists();
 
-        $overlaps = EmployeeWorkShiftAssignment::query()
-            ->where('is_active', true)
-            ->where($targetColumn, $targetId)
-            ->when($current, fn ($query) => $query->whereKeyNot($current->id))
-            ->whereDate('effective_from', '<=', $to)
-            ->where(function ($query) use ($from) {
-                $query->whereNull('effective_to')
-                    ->orWhereDate('effective_to', '>=', $from);
-            })
+            if ($overlaps) {
+                throw ValidationException::withMessages([
+                    'department_id' => 'Phong ban nay da co phan ca hieu luc trong khoang ngay duoc chon.',
+                ]);
+            }
+
+            return;
+        }
+
+        $overlaps = $query
+            ->whereNull('employee_profile_id')
+            ->whereNull('department_id')
             ->exists();
 
         if ($overlaps) {
             throw ValidationException::withMessages([
-                $targetColumn => 'Nhan vien/phong ban nay da co phan ca hieu luc trong khoang ngay duoc chon.',
+                'target_type' => 'Da ton tai phan ca toan cong ty hieu luc trong khoang ngay duoc chon.',
             ]);
         }
     }

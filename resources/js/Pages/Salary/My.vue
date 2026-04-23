@@ -34,6 +34,13 @@
             >
               Thang nay
             </button>
+            <button
+              class="rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+              type="button"
+              @click="exportPayslipPdf"
+            >
+              Xuat PDF
+            </button>
             <button class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700" type="button" @click="printPayslip">
                 In phieu luong
             </button>
@@ -393,6 +400,13 @@ function jumpToCurrentPeriod() {
   filterForm.month = now.getMonth() + 1
   filterForm.year = now.getFullYear()
   filterForm.period = buildPeriodValue(filterForm.year, filterForm.month)
+}
+
+function exportPayslipPdf() {
+  window.location.href = route('salary.mine.export.pdf', {
+    month: filterForm.month,
+    year: filterForm.year,
+  })
 }
 
 async function printPayslip() {

@@ -213,6 +213,9 @@ class LeaveManagementService extends BaseService
             $balance->used_days = (float) $balance->used_days + $days;
             $type = 'approve';
             $note = 'Duyet don nghi phep';
+        } elseif ($decision === 'cancelled') {
+            $type = 'reject';
+            $note = 'Hoan phep do huy don';
         } else {
             $type = 'reject';
             $note = 'Hoan phep do tu choi don';

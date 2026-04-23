@@ -16,6 +16,8 @@ use App\Models\SalarySnapshot;
 use App\Support\PositionCapability;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
@@ -36,31 +38,50 @@ class SalaryController extends Controller
 
     public function mine(Request $request): Response
     {
-        [$month, $year, $now] = $this->resolvePeriod($request);
-
-        $profile = $request->user()
-            ->employeeProfile()
-            ->with(['user:id,name,email', 'department:id,name', 'position:id,name'])
-            ->firstOrFail();
-
-        $payrollPeriod = $this->payrollPeriod($month, $year);
-        $period = $payrollPeriod && $payrollPeriod->status === 'locked' ? $payrollPeriod : null;
-        $salaryData = $period
-            ? $this->buildSalaryStatementFromSnapshot(
-                $period->snapshots()->where('employee_profile_id', $profile->id)->first(),
-                $profile,
-                $month,
-                $year
-            )
-            : $this->buildSalaryStatement($profile, null, $month, $year, true);
+        $payload = $this->buildMySalaryPayload($request);
+        $salaryData = $payload['salaryData'];
 
         return Inertia::render('Salary/My', [
-            'filters' => $this->buildFilterOptions($month, $year, $now),
+            'filters' => $this->buildFilterOptions($payload['month'], $payload['year'], $payload['now']),
             'profile' => $salaryData['profile'],
             'summary' => $salaryData['summary'],
             'records' => $salaryData['records'],
             'salaryHistory' => $salaryData['salaryHistory'],
-            'periodStatus' => $this->periodStatusPayload($payrollPeriod, $month, $year),
+            'periodStatus' => $this->periodStatusPayload($payload['payrollPeriod'], $payload['month'], $payload['year']),
+        ]);
+    }
+
+    public function exportMinePdf(Request $request)
+    {
+        $payload = $this->buildMySalaryPayload($request);
+        $salaryData = $payload['salaryData'];
+        $profile = $salaryData['profile'];
+        $month = (int) $payload['month'];
+        $year = (int) $payload['year'];
+        $employeeCode = preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) ($profile['employee_code'] ?? 'employee'));
+        $filename = sprintf('payslip-%s-%04d-%02d.pdf', trim($employeeCode, '-') ?: 'employee', $year, $month);
+
+        $html = view('exports.my-salary-pdf', [
+            'filters' => ['month' => $month, 'year' => $year],
+            'profile' => $profile,
+            'summary' => $salaryData['summary'],
+            'records' => $salaryData['records'],
+            'adjustments' => $salaryData['adjustments'] ?? collect(),
+            'periodStatus' => $this->periodStatusPayload($payload['payrollPeriod'], $month, $year),
+        ])->render();
+
+        $options = new Options();
+        $options->set('defaultFont', 'DejaVu Sans');
+        $options->set('isRemoteEnabled', true);
+
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html, 'UTF-8');
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        return response($dompdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ]);
     }
 
@@ -107,51 +128,6 @@ class SalaryController extends Controller
         $this->refreshSnapshots($request, $month, $year, true);
 
         return redirect()->back()->with('success', 'Da chot ky luong va luu snapshot.');
-
-        DB::transaction(function () use ($request, $month, $year) {
-            $payload = $this->buildCompanySalaryPayload($request, false, false);
-
-            $period = PayrollPeriod::query()->updateOrCreate(
-                ['month' => $month, 'year' => $year],
-                [
-                    'status' => 'locked',
-                    'locked_at' => now(self::TIMEZONE),
-                    'locked_by' => $request->user()->id,
-                    'unlocked_at' => null,
-                    'unlocked_by' => null,
-                ]
-            );
-
-            foreach ($payload['allSalaryData'] as $item) {
-                $salaryData = $item['salary_data'];
-                $summary = $salaryData['summary'];
-
-                SalarySnapshot::query()->updateOrCreate(
-                    [
-                        'payroll_period_id' => $period->id,
-                        'employee_profile_id' => $item['employee_profile_id'],
-                    ],
-                    [
-                        'employee_code' => $salaryData['profile']['employee_code'] ?? null,
-                        'employee_name' => $salaryData['profile']['name'] ?? null,
-                        'department_name' => $salaryData['profile']['department'] ?? null,
-                        'position_name' => $salaryData['profile']['position'] ?? null,
-                        'currency' => $salaryData['profile']['currency'] ?? 'VND',
-                        'base_salary' => $summary['base_salary'] ?? 0,
-                        'approved_work_units' => $summary['approved_work_units'] ?? 0,
-                        'approved_overtime_minutes' => $summary['approved_overtime_minutes'] ?? 0,
-                        'base_salary_amount' => $summary['base_salary_amount'] ?? 0,
-                        'overtime_amount' => $summary['overtime_amount'] ?? 0,
-                        'pending_amount' => $summary['pending_amount'] ?? 0,
-                        'deduction_amount' => $summary['deduction_amount'] ?? 0,
-                        'net_amount' => $summary['net_amount'] ?? 0,
-                        'payload' => $salaryData,
-                    ]
-                );
-            }
-        });
-
-        return redirect()->back()->with('success', 'Đã chốt kỳ lương và lưu snapshot.');
     }
 
     public function unlockCompanyPeriod(Request $request): RedirectResponse
@@ -170,8 +146,6 @@ class SalaryController extends Controller
         }
 
         return redirect()->back()->with('success', 'Da mo khoa ky luong. Du lieu quay ve che do tinh dong.');
-
-        return redirect()->back()->with('success', 'Đã mở khóa kỳ lương. Dữ liệu quay về chế độ tính động.');
     }
 
     public function recalculateCompanyPeriod(Request $request): RedirectResponse
@@ -237,6 +211,36 @@ class SalaryController extends Controller
         $salaryAdjustment->delete();
 
         return redirect()->back()->with('success', 'Da xoa khoan dieu chinh luong.');
+    }
+
+    private function buildMySalaryPayload(Request $request): array
+    {
+        [$month, $year, $now] = $this->resolvePeriod($request);
+
+        $profile = $request->user()
+            ->employeeProfile()
+            ->with(['user:id,name,email', 'department:id,name', 'position:id,name'])
+            ->firstOrFail();
+
+        $payrollPeriod = $this->payrollPeriod($month, $year);
+        $lockedPeriod = $payrollPeriod && $payrollPeriod->status === 'locked' ? $payrollPeriod : null;
+        $salaryData = $lockedPeriod
+            ? $this->buildSalaryStatementFromSnapshot(
+                $lockedPeriod->snapshots()->where('employee_profile_id', $profile->id)->first(),
+                $profile,
+                $month,
+                $year
+            )
+            : $this->buildSalaryStatement($profile, null, $month, $year, true);
+
+        return [
+            'month' => $month,
+            'year' => $year,
+            'now' => $now,
+            'profile' => $profile,
+            'payrollPeriod' => $payrollPeriod,
+            'salaryData' => $salaryData,
+        ];
     }
 
     private function resolvePeriod(Request $request): array
@@ -892,6 +896,12 @@ class SalaryController extends Controller
                             ->where('department_id', $profile->department_id);
                     });
                 }
+
+                $query->orWhere(function (Builder $companyQuery) {
+                    $companyQuery
+                        ->whereNull('employee_profile_id')
+                        ->whereNull('department_id');
+                });
             })
             ->whereDate('effective_from', '<=', $end->toDateString())
             ->where(function (Builder $query) use ($start) {
@@ -899,7 +909,7 @@ class SalaryController extends Controller
                     ->whereNull('effective_to')
                     ->orWhereDate('effective_to', '>=', $start->toDateString());
             })
-            ->orderByDesc('employee_profile_id')
+            ->orderByRaw('case when employee_profile_id is not null then 2 when department_id is not null then 1 else 0 end desc')
             ->orderByDesc('effective_from')
             ->get();
     }
@@ -930,8 +940,8 @@ class SalaryController extends Controller
             return $weekdays->isEmpty() || $weekdays->contains($weekday);
         });
 
-        if ($matchedAssignment) {
-            return true;
+        if ($shiftAssignments->isNotEmpty()) {
+            return (bool) $matchedAssignment;
         }
 
         return !$workDate->isWeekend();

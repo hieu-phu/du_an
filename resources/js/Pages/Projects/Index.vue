@@ -6,7 +6,7 @@
 
     <div class="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div class="grid flex-1 grid-cols-1 gap-3 md:grid-cols-3">
+        <div class="grid flex-1 grid-cols-1 gap-3 md:grid-cols-4">
           <div>
             <label class="mb-1.5 block text-sm font-medium text-gray-700">Tim kiem du an</label>
             <input
@@ -41,6 +41,19 @@
               <option v-for="option in employeeOptions" :key="option.id" :value="String(option.id)">
                 {{ option.label }}
               </option>
+            </select>
+          </div>
+
+          <div>
+            <label class="mb-1.5 block text-sm font-medium text-gray-700">So dong/trang</label>
+            <select
+              v-model="localFilters.per_page"
+              class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500"
+            >
+              <option value="10">10 dong</option>
+              <option value="25">25 dong</option>
+              <option value="50">50 dong</option>
+              <option value="100">100 dong</option>
             </select>
           </div>
         </div>
@@ -168,6 +181,9 @@
             </tr>
           </tbody>
         </table>
+      </div>
+      <div v-if="paginationMeta.last_page > 1" class="border-t border-gray-200 p-4">
+        <Pagination :meta="paginationMeta" @page-change="goToPage" />
       </div>
     </div>
 
@@ -798,9 +814,11 @@ import { toast } from 'vue3-toastify'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import Modal from '@/components/ui/Modal.vue'
+import Pagination from '@/components/tables/Pagination.vue'
 
 const props = defineProps({
   projects: { type: Array, default: () => [] },
+  pagination: { type: Object, default: () => ({}) },
   scope: { type: String, default: 'all' },
   title: { type: String, default: 'Danh sach du an' },
   filters: { type: Object, default: () => ({}) },
@@ -849,6 +867,7 @@ const localFilters = reactive({
   search: props.filters?.search ?? '',
   status: props.filters?.status ?? '',
   employee_profile_id: props.filters?.employee_profile_id ? String(props.filters.employee_profile_id) : '',
+  per_page: props.filters?.per_page ? String(props.filters.per_page) : '10',
 })
 
 const form = useForm({
@@ -872,6 +891,14 @@ const canEditImplementationSchedule = computed(() => props.can_edit_implementati
 const formRoleOptions = computed(() => projectRoleOptions.value)
 const selectedProjectRoleOptions = computed(() => selectedProject.value?.role_options || projectRoleOptions.value)
 const selectedImplementationDetails = computed(() => selectedProject.value?.implementation_details || [])
+const paginationMeta = computed(() => ({
+  current_page: Number(props.pagination?.current_page || 1),
+  last_page: Number(props.pagination?.last_page || 1),
+  per_page: Number(props.pagination?.per_page || localFilters.per_page || 10),
+  total: Number(props.pagination?.total || 0),
+  from: props.pagination?.from ?? 0,
+  to: props.pagination?.to ?? 0,
+}))
 const selectedProjectMemberOptions = computed(() => {
   return (selectedProject.value?.members || []).map((member) => ({
     id: String(member.employee_profile_id),
@@ -890,10 +917,16 @@ function routeName() {
 }
 
 function applyFilter() {
+  goToPage(1)
+}
+
+function goToPage(page = 1) {
   router.get(route(routeName()), {
     search: localFilters.search || undefined,
     status: localFilters.status || undefined,
     employee_profile_id: localFilters.employee_profile_id || undefined,
+    per_page: localFilters.per_page || undefined,
+    page,
   }, {
     preserveState: true,
     preserveScroll: true,
@@ -905,6 +938,7 @@ function resetFilter() {
   localFilters.search = ''
   localFilters.status = ''
   localFilters.employee_profile_id = ''
+  localFilters.per_page = '10'
   applyFilter()
 }
 

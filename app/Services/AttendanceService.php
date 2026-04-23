@@ -211,8 +211,8 @@ class AttendanceService extends BaseService
                 AttendanceEvent::query()->create([
                     'attendance_record_id' => $record->id,
                     'employee_profile_id' => $record->employee_profile_id,
-                    'event_type' => 'manual_update',
-                    'event_time' => $resolvedCheckOut,
+                    'event_type' => 'manual_adjustment',
+                    'event_at' => $resolvedCheckOut,
                     'note' => 'Admin resolved missing check-out before approval',
                     'created_by' => $approver->id,
                 ]);
@@ -381,6 +381,49 @@ class AttendanceService extends BaseService
         ];
     }
 
+    public function getMyLeaveData(User $user, ?int $year = null): array
+    {
+        $year ??= (int) now(self::TIMEZONE)->year;
+        $profile = $user->employeeProfile;
+
+        if (!$profile) {
+            return [
+                'filters' => ['year' => $year],
+                'year_options' => [$year],
+                'summary' => [
+                    'total_entitled' => 0.0,
+                    'total_used' => 0.0,
+                    'total_pending' => 0.0,
+                    'total_available' => 0.0,
+                ],
+                'balances' => [],
+                'leave_requests' => [],
+            ];
+        }
+
+        $balances = EmployeeLeaveBalance::query()
+            ->with('leaveType:id,name,code,is_paid,deducts_balance')
+            ->where('employee_profile_id', $profile->id)
+            ->where('year', $year)
+            ->get();
+
+        return [
+            'filters' => ['year' => $year],
+            'year_options' => $this->myLeaveYearOptions($profile, $year),
+            'summary' => [
+                'total_entitled' => round((float) $balances->sum(fn (EmployeeLeaveBalance $item) => (float) $item->total_entitled), 2),
+                'total_used' => round((float) $balances->sum(fn (EmployeeLeaveBalance $item) => (float) $item->used_days), 2),
+                'total_pending' => round((float) $balances->sum(fn (EmployeeLeaveBalance $item) => (float) $item->pending_days), 2),
+                'total_available' => round((float) $balances->sum(fn (EmployeeLeaveBalance $item) => (float) $item->available_days), 2),
+            ],
+            'balances' => $balances
+                ->map(fn (EmployeeLeaveBalance $balance) => $this->leaveService->transformBalance($balance))
+                ->values()
+                ->all(),
+            'leave_requests' => $this->getMyLeaveRequestHistory($profile, $year),
+        ];
+    }
+
     public function getApprovalsData(array $filters = [], ?User $viewer = null): array
     {
         $authenticatedViewer = $viewer ?? $this->user();
@@ -480,58 +523,16 @@ class AttendanceService extends BaseService
         ];
     }
 
-    public function getAdjustmentApprovalsData(array $filters = []): array
-    {
-        $month = max(1, min(12, (int) ($filters['month'] ?? now(self::TIMEZONE)->month)));
-        $year = max(2000, min(2100, (int) ($filters['year'] ?? now(self::TIMEZONE)->year)));
-
-        $baseQuery = AttendanceAdjustment::query()
-            ->with([
-                'attendanceRecord.employeeProfile.user:id,name',
-                'attendanceRecord.employeeProfile.department:id,name',
-                'attendanceRecord.employeeProfile.position:id,name',
-                'approvalRequest:id,status,submitted_at,reviewed_at,reviewed_by,review_note',
-                'approvalRequest.reviewer:id,name',
-            ])
-            ->whereHas('attendanceRecord', function (Builder $recordQuery) use ($month, $year) {
-                $recordQuery->whereMonth('work_date', $month)->whereYear('work_date', $year);
-            });
-
-        if (filled($filters['employee_profile_id'] ?? null)) {
-            $baseQuery->whereHas('attendanceRecord', fn (Builder $recordQuery) => $recordQuery->where('employee_profile_id', (int) $filters['employee_profile_id']));
-        }
-
-        $pendingAdjustments = (clone $baseQuery)
-            ->where('status', 'pending')
-            ->orderByDesc('id')
-            ->limit(200)
-            ->get()
-            ->map(fn (AttendanceAdjustment $item) => $this->transformAdjustment($item))
-            ->values()
-            ->all();
-
-        $reviewedAdjustments = (clone $baseQuery)
-            ->whereIn('status', ['approved', 'rejected'])
-            ->orderByDesc('reviewed_at')
-            ->orderByDesc('id')
-            ->limit(200)
-            ->get()
-            ->map(fn (AttendanceAdjustment $item) => $this->transformAdjustment($item))
-            ->values()
-            ->all();
-
-        return [
-            'filters' => $this->buildFiltersPayload($month, $year, filled($filters['employee_profile_id'] ?? null) ? (int) $filters['employee_profile_id'] : null),
-            'employees' => $this->employeeOptions(),
-            'adjustments' => $pendingAdjustments,
-            'reviewed_adjustments' => $reviewedAdjustments,
-        ];
-    }
-
     public function getReportData(User $user, array $filters = []): array
     {
         $filters = $this->sanitizeFilters($filters);
-        $records = $this->reconcileRecords($this->buildScopedQuery($filters, false, $user)
+        $query = $this->buildScopedQuery($filters, false, $user);
+
+        if (AccessMatrix::canManageAllAttendance($user)) {
+            $this->applyReviewerVisibilityToRecordQuery($query, $user);
+        }
+
+        $records = $this->reconcileRecords($query
             ->orderByDesc('work_date')
             ->orderBy('employee_profile_id')
             ->get());
@@ -547,7 +548,9 @@ class AttendanceService extends BaseService
             'summary' => $this->buildSummary($records),
             'records' => $reportRecords,
             'overtime_details' => $this->getOvertimeDetails($user, $filters),
-            'employees' => $this->employeeOptions(),
+            'employees' => AccessMatrix::canManageAllAttendance($user)
+                ? $this->employeeOptionsForReviewer($user)
+                : $this->employeeOptionsForSelf($user),
             'month_lock' => $this->getMonthLockPayload($filters['month'], $filters['year']),
             'can_view_all' => AccessMatrix::canManageAllAttendance($user),
         ];
@@ -665,13 +668,84 @@ class AttendanceService extends BaseService
         });
     }
 
+    public function cancelApprovalRequest(ApprovalRequest $approvalRequest, User $actor, ?string $note = null): ApprovalRequest
+    {
+        return $this->handleTransaction(function () use ($approvalRequest, $actor, $note) {
+            if (!in_array($approvalRequest->request_type, ['leave', 'late_early', 'forgot_check', 'business_trip', 'make_up', 'overtime'], true)) {
+                throw new \RuntimeException('Loai yeu cau khong hop le.');
+            }
+
+            if ($approvalRequest->status !== 'pending') {
+                throw new \RuntimeException('Chi duoc huy don dang cho duyet.');
+            }
+
+            if ((int) $approvalRequest->requested_by !== (int) $actor->id) {
+                throw new \RuntimeException('Ban khong duoc phep huy don nay.');
+            }
+
+            $approvalRequest->loadMissing('target');
+
+            if (!$approvalRequest->target) {
+                throw new \RuntimeException('Khong tim thay don can huy.');
+            }
+
+            $reviewNote = trim((string) ($note ?? ''));
+            if ($reviewNote === '') {
+                $reviewNote = 'Requester cancelled attendance request';
+            }
+
+            $approvalRequest->update([
+                'status' => 'cancelled',
+                'reviewed_by' => $actor->id,
+                'reviewed_at' => now(self::TIMEZONE),
+                'review_note' => $reviewNote,
+            ]);
+
+            $target = $approvalRequest->target;
+
+            if ($target instanceof AttendanceRequest) {
+                if ($target->status !== 'pending') {
+                    throw new \RuntimeException('Don nay khong con o trang thai cho duyet.');
+                }
+
+                if ($target->request_type === 'leave') {
+                    $this->leaveService->finalizeRequest($actor, $target->fresh(['leaveType']), 'cancelled');
+                }
+
+                $target->update([
+                    'status' => 'cancelled',
+                    'applied_at' => null,
+                    'applied_by' => null,
+                ]);
+            }
+
+            if ($target instanceof OvertimeRequest) {
+                if ($target->status !== 'pending') {
+                    throw new \RuntimeException('Don nay khong con o trang thai cho duyet.');
+                }
+
+                $target->update([
+                    'status' => 'cancelled',
+                    'approved_minutes' => 0,
+                    'reviewed_by' => $actor->id,
+                    'reviewed_at' => now(self::TIMEZONE),
+                    'review_note' => $reviewNote,
+                ]);
+            }
+
+            $this->audit('attendance', 'cancel_request', "Cancel approval request #{$approvalRequest->id}", 'approval_requests', $approvalRequest->id);
+
+            return $approvalRequest->fresh(['requester', 'reviewer', 'target']);
+        });
+    }
+
     public function submitAttendanceAdjustmentRequest(User $user, array $payload): AttendanceAdjustment
     {
         return $this->handleTransaction(function () use ($user, $payload) {
             $profile = $user->employeeProfile;
             if (!$profile) {
                 throw ValidationException::withMessages([
-                    'attendance_record_id' => 'Ban chua co ho so nhan su de gui dieu chinh cong.',
+                    'attendance_record_id' => 'Ban chua co ho so nhan su de dieu chinh cong.',
                 ]);
             }
 
@@ -746,157 +820,68 @@ class AttendanceService extends BaseService
                 ]);
             }
 
-            $pendingExists = AttendanceAdjustment::query()
-                ->where('attendance_record_id', $record->id)
-                ->where('status', 'pending')
-                ->exists();
-
-            if ($pendingExists) {
-                throw ValidationException::withMessages([
-                    'attendance_record_id' => 'Ban ghi nay da co yeu cau dieu chinh dang cho duyet.',
-                ]);
-            }
-
             [$previewAttendanceStatus, $previewDayStatus, $previewWorkedMinutes, $previewLateMinutes, $previewEarlyLeaveMinutes, $previewOvertimeMinutes] =
                 $this->previewAttendanceMetrics($record, $resolvedCheckIn, $resolvedCheckOut);
 
-            $approvalRequest = ApprovalRequest::query()->create([
-                'request_type' => 'manual_adjustment',
-                'target_type' => AttendanceAdjustment::class,
-                'target_id' => 0,
-                'requested_by' => $user->id,
-                'status' => 'pending',
-                'submitted_at' => now(self::TIMEZONE),
-                'reason' => (string) $payload['reason'],
-            ]);
-
             $adjustment = AttendanceAdjustment::query()->create([
                 'attendance_record_id' => $record->id,
-                'approval_request_id' => $approvalRequest->id,
+                'approval_request_id' => null,
                 'old_check_in_at' => $record->check_in_at,
                 'new_check_in_at' => $newCheckIn,
                 'old_check_out_at' => $record->check_out_at,
                 'new_check_out_at' => $newCheckOut,
                 'reason' => (string) $payload['reason'],
-                'status' => 'pending',
+                'status' => 'approved',
                 'requested_by' => $user->id,
+                'reviewed_by' => $user->id,
+                'reviewed_at' => now(self::TIMEZONE),
+                'review_note' => 'Tu dong ap dung, khong qua buoc duyet rieng.',
             ]);
 
-            $approvalRequest->update([
-                'target_id' => $adjustment->id,
+            $record->update([
+                'check_in_at' => $resolvedCheckIn,
+                'check_out_at' => $resolvedCheckOut,
+                'worked_minutes' => $previewWorkedMinutes,
+                'late_minutes' => $previewLateMinutes,
+                'early_leave_minutes' => $previewEarlyLeaveMinutes,
+                'overtime_minutes' => $previewOvertimeMinutes,
+                'missing_check_in' => !$resolvedCheckIn,
+                'missing_check_out' => !$resolvedCheckOut,
+                'attendance_status' => $previewAttendanceStatus,
+                'day_status' => $previewDayStatus,
+                'approval_status' => 'pending',
+                'is_confirmed' => false,
+                'confirmed_by' => null,
+                'rejected_by' => null,
+                'confirmed_at' => null,
+                'rejected_at' => null,
+                'approval_note' => null,
             ]);
+
+            AttendanceEvent::query()->create([
+                'attendance_record_id' => $record->id,
+                'employee_profile_id' => $record->employee_profile_id,
+                'event_type' => 'manual_adjustment',
+                'event_at' => now(self::TIMEZONE),
+                'source' => 'web',
+                'note' => 'Self adjustment applied #' . $adjustment->id,
+                'created_by' => $user->id,
+            ]);
+
+            $this->refreshMonthlySummary($record->fresh());
 
             $this->audit(
                 'attendance',
-                'submit_adjustment_request',
-                "Submit attendance adjustment #{$adjustment->id}: {$previewAttendanceStatus}/{$previewDayStatus}, worked {$previewWorkedMinutes}, late {$previewLateMinutes}, early {$previewEarlyLeaveMinutes}, overtime {$previewOvertimeMinutes}",
+                'apply_adjustment',
+                "Apply attendance adjustment #{$adjustment->id}: {$previewAttendanceStatus}/{$previewDayStatus}, worked {$previewWorkedMinutes}, late {$previewLateMinutes}, early {$previewEarlyLeaveMinutes}, overtime {$previewOvertimeMinutes}",
                 'attendance_adjustments',
                 $adjustment->id
             );
-
-            $this->notifyAttendanceAdjustmentApprovers($adjustment->fresh(['attendanceRecord.employeeProfile.user']), $user);
 
             return $adjustment->fresh(['attendanceRecord', 'approvalRequest']);
         });
     }
 
-    public function reviewAttendanceAdjustmentRequest(AttendanceAdjustment $adjustment, User $reviewer, string $decision, ?string $note = null): AttendanceAdjustment
-    {
-        return $this->handleTransaction(function () use ($adjustment, $reviewer, $decision, $note) {
-            if (!in_array($decision, ['approved', 'rejected'], true)) {
-                throw new \RuntimeException('Quyet dinh duyet khong hop le.');
-            }
-
-            if ($adjustment->status !== 'pending') {
-                throw new \RuntimeException('Yeu cau dieu chinh cong da duoc xu ly.');
-            }
-
-            $adjustment->loadMissing(['attendanceRecord.employeeProfile', 'approvalRequest']);
-            $record = $adjustment->attendanceRecord;
-            if (!$record) {
-                throw new \RuntimeException('Khong tim thay ban ghi cong lien quan.');
-            }
-
-            $record->loadMissing(['employeeProfile.user', 'employeeProfile.position']);
-            $this->ensureReviewerOutranksEmployee($reviewer, $record->employeeProfile);
-
-            $this->ensureMonthNotLocked($record->employeeProfile, Carbon::parse($record->work_date, self::TIMEZONE));
-
-            if ($decision === 'approved') {
-                $nextCheckIn = $adjustment->new_check_in_at ? Carbon::parse($adjustment->new_check_in_at, self::TIMEZONE) : null;
-                $nextCheckOut = $adjustment->new_check_out_at ? Carbon::parse($adjustment->new_check_out_at, self::TIMEZONE) : null;
-                $snapshotCheckIn = $adjustment->old_check_in_at ? Carbon::parse($adjustment->old_check_in_at, self::TIMEZONE) : null;
-                $snapshotCheckOut = $adjustment->old_check_out_at ? Carbon::parse($adjustment->old_check_out_at, self::TIMEZONE) : null;
-                $resolvedCheckIn = $nextCheckIn ?: $snapshotCheckIn;
-                $resolvedCheckOut = $nextCheckOut ?: $snapshotCheckOut;
-
-                if ($resolvedCheckIn && $resolvedCheckOut && $resolvedCheckOut->lessThanOrEqualTo($resolvedCheckIn)) {
-                    throw new \RuntimeException('Du lieu dieu chinh khong hop le.');
-                }
-
-                [$attendanceStatus, $dayStatus, $workedMinutes, $lateMinutes, $earlyLeaveMinutes, $overtimeMinutes] =
-                    $this->previewAttendanceMetrics($record, $resolvedCheckIn, $resolvedCheckOut);
-
-                $record->update([
-                    'check_in_at' => $resolvedCheckIn,
-                    'check_out_at' => $resolvedCheckOut,
-                    'worked_minutes' => $workedMinutes,
-                    'late_minutes' => $lateMinutes,
-                    'early_leave_minutes' => $earlyLeaveMinutes,
-                    'overtime_minutes' => $overtimeMinutes,
-                    'missing_check_in' => !$resolvedCheckIn,
-                    'missing_check_out' => !$resolvedCheckOut,
-                    'attendance_status' => $attendanceStatus,
-                    'day_status' => $dayStatus,
-                    'approval_status' => 'approved',
-                    'is_confirmed' => true,
-                    'confirmed_by' => $reviewer->id,
-                    'confirmed_at' => now(self::TIMEZONE),
-                    'approval_note' => $note ?: 'Approved manual attendance adjustment',
-                ]);
-
-                AttendanceEvent::query()->create([
-                    'attendance_record_id' => $record->id,
-                    'employee_profile_id' => $record->employee_profile_id,
-                    'event_type' => 'manual_adjustment',
-                    'event_at' => now(self::TIMEZONE),
-                    'source' => 'web',
-                    'note' => 'Manual adjustment approved #' . $adjustment->id,
-                    'created_by' => $reviewer->id,
-                ]);
-
-                $this->refreshMonthlySummary($record->fresh());
-            }
-
-            $adjustment->update([
-                'status' => $decision,
-                'reviewed_by' => $reviewer->id,
-                'reviewed_at' => now(self::TIMEZONE),
-                'review_note' => $note,
-            ]);
-
-            if ($adjustment->approvalRequest) {
-                $adjustment->approvalRequest->update([
-                    'status' => $decision,
-                    'reviewed_by' => $reviewer->id,
-                    'reviewed_at' => now(self::TIMEZONE),
-                    'review_note' => $note,
-                ]);
-            }
-
-            $this->audit(
-                'attendance',
-                'review_adjustment_' . $decision,
-                "Review attendance adjustment #{$adjustment->id}",
-                'attendance_adjustments',
-                $adjustment->id
-            );
-
-            $this->notifyAttendanceAdjustmentRequester($adjustment->fresh(['attendanceRecord.employeeProfile.user']), $decision, $reviewer);
-
-            return $adjustment->fresh(['attendanceRecord', 'approvalRequest.reviewer']);
-        });
-    }
     public function lockMonth(User $actor, int $month, int $year, ?string $note = null): AttendanceMonthLock
     {
         return $this->handleTransaction(function () use ($actor, $month, $year, $note) {
@@ -946,7 +931,7 @@ class AttendanceService extends BaseService
         });
     }
 
-        public function reviewApprovalRequest(ApprovalRequest $approvalRequest, User $reviewer, string $decision, ?string $note = null): ApprovalRequest
+    public function reviewApprovalRequest(ApprovalRequest $approvalRequest, User $reviewer, string $decision, ?string $note = null): ApprovalRequest
     {
         return $this->handleTransaction(function () use ($approvalRequest, $reviewer, $decision, $note) {
             if (!in_array($decision, ['approved', 'rejected'], true)) {
@@ -1104,11 +1089,6 @@ class AttendanceService extends BaseService
         return $this->getMyAdjustmentData($user);
     }
 
-    public function buildAdjustmentApprovalsData(array $filters = [], ?User $viewer = null): array
-    {
-        return $this->getAdjustmentApprovalsData($filters);
-    }
-
     public function handleSubmitAttendanceRequest(User $user, array $payload): AttendanceRequest|OvertimeRequest
     {
         return $this->submitAttendanceRequest($user, $payload);
@@ -1117,11 +1097,6 @@ class AttendanceService extends BaseService
     public function handleSubmitAttendanceAdjustmentRequest(User $user, array $payload): AttendanceAdjustment
     {
         return $this->submitAttendanceAdjustmentRequest($user, $payload);
-    }
-
-    public function handleReviewAttendanceAdjustmentRequest(AttendanceAdjustment $adjustment, User $reviewer, string $decision, ?string $note = null): AttendanceAdjustment
-    {
-        return $this->reviewAttendanceAdjustmentRequest($adjustment, $reviewer, $decision, $note);
     }
 
     public function handleReviewApprovalRequest(ApprovalRequest $approvalRequest, User $reviewer, string $decision, ?string $note = null): ApprovalRequest
@@ -1441,7 +1416,13 @@ class AttendanceService extends BaseService
             'work_date' => optional($record->work_date)->format('Y-m-d'),
             'check_in_at' => optional($record->check_in_at)->format('Y-m-d H:i:s'),
             'check_out_at' => optional($record->check_out_at)->format('Y-m-d H:i:s'),
+            'shift_name' => $shiftConfig['shift_name'] ?? null,
+            'shift_start_time' => substr((string) ($shiftConfig['start_time'] ?? ''), 0, 5) ?: null,
             'shift_end_time' => substr((string) ($shiftConfig['end_time'] ?? ''), 0, 5) ?: null,
+            'standard_minutes' => (int) ($shiftConfig['standard_minutes'] ?? 0),
+            'half_day_minutes' => (int) ($shiftConfig['half_day_minutes'] ?? 0),
+            'break_minutes' => $this->scheduledBreakMinutesFromShiftConfig($shiftConfig),
+            'handover_break_minutes' => (int) ($shiftConfig['handover_break_minutes'] ?? 0),
             'check_in_ip_address' => $record->check_in_ip_address,
             'check_out_ip_address' => $record->check_out_ip_address,
             'check_in_device' => $record->check_in_device,
@@ -1493,21 +1474,6 @@ class AttendanceService extends BaseService
         return $payload;
     }
 
-    private function employeeOptions(): array
-    {
-        return EmployeeProfile::query()
-            ->with(['user:id,name', 'department:id,name'])
-            ->orderBy('employee_code')
-            ->get()
-            ->map(fn (EmployeeProfile $profile) => [
-                'id' => $profile->id,
-                'label' => trim(($profile->employee_code ?: 'EMP') . ' - ' . ($profile->user?->name ?: 'Unknown')),
-                'department_name' => $profile->department?->name,
-            ])
-            ->values()
-            ->all();
-    }
-
     private function getLeaveBalancePayload(EmployeeProfile $profile, int $year): array
     {
         return EmployeeLeaveBalance::query()
@@ -1518,6 +1484,23 @@ class AttendanceService extends BaseService
             ->map(fn (EmployeeLeaveBalance $balance) => $this->leaveService->transformBalance($balance))
             ->values()
             ->all();
+    }
+
+    private function employeeOptionsForSelf(User $viewer): array
+    {
+        $profile = $viewer->employeeProfile;
+
+        if (!$profile) {
+            return [];
+        }
+
+        $profile->loadMissing(['user:id,name', 'department:id,name']);
+
+        return [[
+            'id' => $profile->id,
+            'label' => trim(($profile->employee_code ?: 'EMP') . ' - ' . ($profile->user?->name ?: 'Unknown')),
+            'department_name' => $profile->department?->name,
+        ]];
     }
 
     private function employeeOptionsForReviewer(?User $viewer): array
@@ -2046,6 +2029,8 @@ class AttendanceService extends BaseService
     {
         $dayStatus = (string) ($record->day_status ?: $this->normalizeDayStatus($record));
         $reportDayStatus = $this->resolveReportDayStatus($record);
+        $workedOnSpecialDay = in_array($reportDayStatus, ['holiday_paid', 'day_off'], true)
+            && $this->hasAttendanceActivity($record);
 
         if ($this->shouldSuppressOpenShiftViolation($record, $dayStatus)) {
             return null;
@@ -2059,7 +2044,7 @@ class AttendanceService extends BaseService
             return 'missing_check_out';
         }
 
-        if (in_array($reportDayStatus, ['holiday_paid', 'day_off'], true)) {
+        if (in_array($reportDayStatus, ['holiday_paid', 'day_off'], true) && ! $workedOnSpecialDay) {
             return null;
         }
 
@@ -2078,6 +2063,10 @@ class AttendanceService extends BaseService
 
         if ($hasEarlyLeave) {
             return 'early_leave';
+        }
+
+        if (in_array($reportDayStatus, ['holiday_paid', 'day_off'], true)) {
+            return null;
         }
 
         $approvalStatus = (string) ($record->approval_status ?: ((bool) $record->is_confirmed ? 'approved' : 'pending'));
@@ -2159,6 +2148,12 @@ class AttendanceService extends BaseService
                             ->where('department_id', $profile->department_id);
                     });
                 }
+
+                $query->orWhere(function (Builder $companyQuery) {
+                    $companyQuery
+                        ->whereNull('employee_profile_id')
+                        ->whereNull('department_id');
+                });
             })
             ->whereDate('effective_from', '<=', $workDate->toDateString())
             ->where(function (Builder $query) use ($workDate) {
@@ -2166,12 +2161,12 @@ class AttendanceService extends BaseService
                     ->whereNull('effective_to')
                     ->orWhereDate('effective_to', '>=', $workDate->toDateString());
             })
-            ->orderByDesc('employee_profile_id')
+            ->orderByRaw('case when employee_profile_id is not null then 2 when department_id is not null then 1 else 0 end desc')
             ->orderByDesc('effective_from')
             ->get();
 
         if ($assignments->isNotEmpty()) {
-            return $assignments->contains(function (EmployeeWorkShiftAssignment $assignment) use ($weekday) {
+            return (bool) $assignments->first(function (EmployeeWorkShiftAssignment $assignment) use ($weekday) {
                 $weekdays = collect($assignment->weekdays ?? [])
                     ->map(fn ($value) => (int) $value)
                     ->filter(fn (int $value) => $value >= 1 && $value <= 7)
@@ -2330,90 +2325,6 @@ class AttendanceService extends BaseService
         }
     }
 
-    private function notifyAttendanceAdjustmentApprovers(AttendanceAdjustment $adjustment, User $requester): void
-    {
-        $record = $adjustment->attendanceRecord;
-
-        if (!$record) {
-            return;
-        }
-
-        $approverUserIds = User::query()
-            ->where('status', 'active')
-            ->with('employeeProfile.position')
-            ->get(['id'])
-            ->filter(fn (User $user) => $user->id !== $requester->id)
-            ->filter(fn (User $user) => $user->hasPositionCapability(PositionCapability::APPROVE_ATTENDANCE))
-            ->pluck('id')
-            ->values()
-            ->all();
-
-        if (empty($approverUserIds)) {
-            return;
-        }
-
-        $employeeName = $record->employeeProfile?->user?->name ?: $requester->name;
-        $workDate = optional($record->work_date)->format('d/m/Y');
-
-        try {
-            $this->notificationService->createForUsers(
-                $approverUserIds,
-                'Yeu cau dieu chinh cong',
-                "{$employeeName} vua gui yeu cau dieu chinh cong ngay {$workDate}.",
-                [
-                    'attendance_adjustment_id' => $adjustment->id,
-                    'attendance_record_id' => $record->id,
-                    'work_date' => optional($record->work_date)->format('Y-m-d'),
-                    'request_type' => 'manual_adjustment',
-                ],
-                '/attendance/adjustments/approvals',
-                null,
-                'attendance',
-                $requester->id,
-                AttendanceAdjustment::class,
-                $adjustment->id
-            );
-        } catch (\Throwable $exception) {
-            report($exception);
-        }
-    }
-
-    private function notifyAttendanceAdjustmentRequester(AttendanceAdjustment $adjustment, string $decision, User $reviewer): void
-    {
-        $record = $adjustment->attendanceRecord;
-        $requesterId = (int) ($adjustment->requested_by ?? 0);
-
-        if (!$requesterId || !$record) {
-            return;
-        }
-
-        $statusLabel = $decision === 'approved' ? 'duoc duyet' : 'bi tu choi';
-        $workDate = optional($record->work_date)->format('d/m/Y');
-
-        try {
-            $this->notificationService->create(
-                $requesterId,
-                'Ket qua dieu chinh cong',
-                "Yeu cau dieu chinh cong ngay {$workDate} da {$statusLabel}.",
-                [
-                    'attendance_adjustment_id' => $adjustment->id,
-                    'attendance_record_id' => $record->id,
-                    'work_date' => optional($record->work_date)->format('Y-m-d'),
-                    'decision' => $decision,
-                    'reviewer_id' => $reviewer->id,
-                ],
-                '/attendance/adjustments',
-                null,
-                'attendance',
-                $reviewer->id,
-                AttendanceAdjustment::class,
-                $adjustment->id
-            );
-        } catch (\Throwable $exception) {
-            report($exception);
-        }
-    }
-
     private function normalizeEventNote(string $prefix, ?string $userAgent): string
     {
         if (!$userAgent) {
@@ -2484,6 +2395,10 @@ class AttendanceService extends BaseService
 
         if (!AccessMatrix::canManageAllAttendance($actor)) {
             $query->where('employee_profile_id', $actor->employeeProfile?->id ?? 0);
+        } else {
+            $query->whereHas('employeeProfile', function (Builder $profileQuery) use ($actor) {
+                $this->applyReviewerVisibilityToEmployeeQuery($profileQuery, $actor);
+            });
         }
 
         return $query
@@ -2530,40 +2445,11 @@ class AttendanceService extends BaseService
 
         $attendanceRequests = AttendanceRequest::query()
             ->where('employee_profile_id', $profileId)
-            ->with(['approvalRequest.reviewer:id,name', 'leaveType:id,name,requires_attachment'])
+            ->with(['approvalRequest.reviewer:id,name', 'leaveType:id,name,requires_attachment,is_paid,deducts_balance'])
             ->latest('id')
             ->limit(10)
             ->get()
-            ->map(fn (AttendanceRequest $request) => [
-                'id' => 'attendance-' . $request->id,
-                'target_type' => 'attendance',
-                'request_type' => $request->request_type,
-                'request_type_label' => $this->attendanceRequestTypeLabel($request->request_type),
-                'request_date' => optional($request->request_date)->format('Y-m-d'),
-                'period' => $this->formatRequestPeriod($request->from_date, $request->to_date, $request->from_time, $request->to_time),
-                'from_date' => optional($request->from_date)->format('Y-m-d'),
-                'to_date' => optional($request->to_date)->format('Y-m-d'),
-                'from_time' => $request->from_time,
-                'to_time' => $request->to_time,
-                'business_trip_location' => $request->business_trip_location,
-                'make_up_related_leave_date' => optional($request->make_up_related_leave_date)->format('Y-m-d'),
-                'leave_type' => $request->leave_type,
-                'leave_type_name' => $request->leaveType?->name,
-                'leave_type_requires_attachment' => (bool) $request->leaveType?->requires_attachment,
-                'leave_days' => (float) ($request->leave_days ?? 0),
-                'leave_duration_type' => $request->leave_duration_type,
-                'leave_hours' => (float) ($request->leave_hours ?? 0),
-                'requested_status' => $request->requested_status,
-                'attachment_path' => $request->attachment_path,
-                'attachment_url' => $request->attachment_path ? asset('storage/' . ltrim($request->attachment_path, '/')) : null,
-                'status' => $request->status,
-                'status_label' => $this->approvalStatusLabel($request->status),
-                'reason' => $request->reason,
-                'review_note' => $request->approvalRequest?->review_note,
-                'reviewed_by_name' => $request->approvalRequest?->reviewer?->name,
-                'reviewed_at' => optional($request->approvalRequest?->reviewed_at)->format('Y-m-d H:i:s'),
-                'submitted_at' => optional($request->approvalRequest?->submitted_at ?? $request->created_at)->format('Y-m-d H:i:s'),
-            ]);
+            ->map(fn (AttendanceRequest $request) => $this->transformAttendanceRequestHistoryItem($request));
 
         $overtimeRequests = OvertimeRequest::query()
             ->where('employee_profile_id', $profileId)
@@ -2573,6 +2459,7 @@ class AttendanceService extends BaseService
             ->get()
             ->map(fn (OvertimeRequest $request) => [
                 'id' => 'overtime-' . $request->id,
+                'approval_request_id' => $request->approval_request_id,
                 'target_type' => 'overtime',
                 'request_type' => 'overtime',
                 'request_type_label' => $this->attendanceRequestTypeLabel('overtime'),
@@ -2600,6 +2487,96 @@ class AttendanceService extends BaseService
             ->take(10)
             ->values()
             ->all();
+    }
+
+    private function getMyLeaveRequestHistory(EmployeeProfile $profile, int $year): array
+    {
+        return AttendanceRequest::query()
+            ->where('employee_profile_id', $profile->id)
+            ->where('request_type', 'leave')
+            ->where(function (Builder $query) use ($year) {
+                $query
+                    ->whereYear('from_date', $year)
+                    ->orWhereYear('to_date', $year)
+                    ->orWhereYear('request_date', $year)
+                    ->orWhereYear('created_at', $year);
+            })
+            ->with(['approvalRequest.reviewer:id,name', 'leaveType:id,name,requires_attachment,is_paid,deducts_balance'])
+            ->latest('id')
+            ->limit(100)
+            ->get()
+            ->map(fn (AttendanceRequest $request) => $this->transformAttendanceRequestHistoryItem($request))
+            ->values()
+            ->all();
+    }
+
+    private function myLeaveYearOptions(EmployeeProfile $profile, int $selectedYear): array
+    {
+        $years = EmployeeLeaveBalance::query()
+            ->where('employee_profile_id', $profile->id)
+            ->pluck('year')
+            ->map(fn ($year) => (int) $year);
+
+        $requestYears = AttendanceRequest::query()
+            ->where('employee_profile_id', $profile->id)
+            ->where('request_type', 'leave')
+            ->get(['from_date', 'to_date', 'request_date', 'created_at'])
+            ->flatMap(function (AttendanceRequest $request) {
+                return collect([
+                    optional($request->from_date)->year,
+                    optional($request->to_date)->year,
+                    optional($request->request_date)->year,
+                    optional($request->created_at)->year,
+                ])->filter();
+            });
+
+        return $years
+            ->concat($requestYears)
+            ->push((int) now(self::TIMEZONE)->year)
+            ->push($selectedYear)
+            ->map(fn ($year) => (int) $year)
+            ->filter(fn (int $year) => $year >= 2000 && $year <= 2100)
+            ->unique()
+            ->sortDesc()
+            ->values()
+            ->all();
+    }
+
+    private function transformAttendanceRequestHistoryItem(AttendanceRequest $request): array
+    {
+        return [
+            'id' => 'attendance-' . $request->id,
+            'approval_request_id' => $request->approval_request_id,
+            'target_type' => 'attendance',
+            'request_type' => $request->request_type,
+            'request_type_label' => $this->attendanceRequestTypeLabel($request->request_type),
+            'request_date' => optional($request->request_date)->format('Y-m-d'),
+            'period' => $this->formatRequestPeriod($request->from_date, $request->to_date, $request->from_time, $request->to_time),
+            'from_date' => optional($request->from_date)->format('Y-m-d'),
+            'to_date' => optional($request->to_date)->format('Y-m-d'),
+            'from_time' => $request->from_time,
+            'to_time' => $request->to_time,
+            'business_trip_location' => $request->business_trip_location,
+            'make_up_related_leave_date' => optional($request->make_up_related_leave_date)->format('Y-m-d'),
+            'leave_type' => $request->leave_type,
+            'leave_type_name' => $request->leaveType?->name,
+            'leave_type_paid' => (bool) $request->leaveType?->is_paid,
+            'leave_type_deducts_balance' => (bool) $request->leaveType?->deducts_balance,
+            'leave_type_requires_attachment' => (bool) $request->leaveType?->requires_attachment,
+            'leave_days' => (float) ($request->leave_days ?? 0),
+            'leave_duration_type' => $request->leave_duration_type,
+            'leave_hours' => (float) ($request->leave_hours ?? 0),
+            'requested_status' => $request->requested_status,
+            'attachment_path' => $request->attachment_path,
+            'attachment_url' => $request->attachment_path ? asset('storage/' . ltrim($request->attachment_path, '/')) : null,
+            'status' => $request->status,
+            'status_label' => $this->approvalStatusLabel($request->status),
+            'reason' => $request->reason,
+            'review_note' => $request->approvalRequest?->review_note,
+            'reviewed_by_name' => $request->approvalRequest?->reviewer?->name,
+            'reviewed_at' => optional($request->approvalRequest?->reviewed_at)->format('Y-m-d H:i:s'),
+            'submitted_at' => optional($request->approvalRequest?->submitted_at ?? $request->created_at)->format('Y-m-d H:i:s'),
+        ];
     }
 
     private function getPendingApprovalRequests(array $filters = [], ?User $viewer = null): array
@@ -2634,7 +2611,7 @@ class AttendanceService extends BaseService
     {
         $query = ApprovalRequest::query()
             ->whereIn('request_type', ['leave', 'late_early', 'forgot_check', 'business_trip', 'make_up', 'overtime'])
-            ->whereIn('status', ['approved', 'rejected'])
+            ->whereIn('status', ['approved', 'rejected', 'cancelled'])
             ->with([
                 'requester.employeeProfile:id,user_id,employee_code,department_id',
                 'requester.employeeProfile.department:id,name',
@@ -2781,7 +2758,7 @@ class AttendanceService extends BaseService
             'review_note' => $item->review_note,
             'submitted_at' => optional($item->approvalRequest?->submitted_at ?? $item->created_at)->format('Y-m-d H:i:s'),
             'reviewed_at' => optional($item->reviewed_at)->format('Y-m-d H:i:s'),
-            'reviewed_by_name' => $item->approvalRequest?->reviewer?->name,
+            'reviewed_by_name' => $item->approvalRequest?->reviewer?->name ?? ((int) $item->reviewed_by === (int) $item->requested_by ? 'Tu ap dung' : null),
         ];
     }
 
@@ -3292,6 +3269,160 @@ class AttendanceService extends BaseService
 
         return [];
     }
+
+    private function findAttendanceRecordForDate(EmployeeProfile $profile, string $date): ?AttendanceRecord
+    {
+        return AttendanceRecord::query()
+            ->where('employee_profile_id', $profile->id)
+            ->whereDate('work_date', $date)
+            ->first();
+    }
+
+    private function forgotCheckRequestContextErrors(EmployeeProfile $profile, string $requestDate, ?string $fromTime, ?string $toTime): array
+    {
+        if (!$fromTime && !$toTime) {
+            return [
+                'from_time' => 'Don quen cham cong phai bo sung it nhat mot moc gio con thieu.',
+                'to_time' => 'Don quen cham cong phai bo sung it nhat mot moc gio con thieu.',
+            ];
+        }
+
+        if ($fromTime && $toTime && $fromTime === $toTime) {
+            return [
+                'from_time' => 'Gio check in va check out khong duoc trung nhau.',
+                'to_time' => 'Gio check in va check out khong duoc trung nhau.',
+            ];
+        }
+
+        $now = now(self::TIMEZONE);
+        $timeErrors = [];
+
+        if ($fromTime && Carbon::parse($requestDate . ' ' . $fromTime, self::TIMEZONE)->greaterThan($now)) {
+            $timeErrors['from_time'] = 'Gio check in bo sung khong duoc lon hon thoi diem hien tai.';
+        }
+
+        if ($toTime && Carbon::parse($requestDate . ' ' . $toTime, self::TIMEZONE)->greaterThan($now)) {
+            $timeErrors['to_time'] = 'Gio check out bo sung khong duoc lon hon thoi diem hien tai.';
+        }
+
+        if ($timeErrors !== []) {
+            return $timeErrors;
+        }
+
+        $record = $this->findAttendanceRecordForDate($profile, $requestDate);
+
+        if (!$record) {
+            if (!$fromTime || !$toTime) {
+                return [
+                    'from_time' => 'Ngay nay chua co ban ghi cham cong, can nhap du gio check in va check out.',
+                    'to_time' => 'Ngay nay chua co ban ghi cham cong, can nhap du gio check in va check out.',
+                ];
+            }
+
+            return [];
+        }
+
+        $missingCheckIn = (bool) $record->missing_check_in || !$record->check_in_at;
+        $missingCheckOut = (bool) $record->missing_check_out || !$record->check_out_at || ($record->check_in_at && !$record->check_out_at);
+
+        if (!$missingCheckIn && !$missingCheckOut) {
+            return [
+                'request_date' => 'Ngay nay da co du check in va check out, khong the gui don quen cham cong.',
+            ];
+        }
+
+        $errors = [];
+
+        if ($missingCheckIn && !$fromTime) {
+            $errors['from_time'] = 'Ngay nay dang thieu check in, vui long nhap gio check in.';
+        }
+
+        if ($missingCheckOut && !$toTime) {
+            $errors['to_time'] = 'Ngay nay dang thieu check out, vui long nhap gio check out.';
+        }
+
+        if (!$missingCheckIn && $fromTime) {
+            $errors['from_time'] = 'Ngay nay da co check in, khong duoc gui don quen check in.';
+        }
+
+        if (!$missingCheckOut && $toTime) {
+            $errors['to_time'] = 'Ngay nay da co check out, khong duoc gui don quen check out.';
+        }
+
+        if ($fromTime && $record->check_out_at) {
+            $resolvedCheckIn = Carbon::parse($requestDate . ' ' . $fromTime, self::TIMEZONE);
+            $existingCheckOut = Carbon::parse($record->check_out_at, self::TIMEZONE);
+
+            if ($resolvedCheckIn->greaterThanOrEqualTo($existingCheckOut)) {
+                $errors['from_time'] = 'Gio check in bo sung phai nho hon gio check out hien co.';
+            }
+        }
+
+        if ($toTime && $record->check_in_at) {
+            $resolvedCheckOut = Carbon::parse($requestDate . ' ' . $toTime, self::TIMEZONE);
+            $existingCheckIn = Carbon::parse($record->check_in_at, self::TIMEZONE);
+
+            if ($resolvedCheckOut->lessThanOrEqualTo($existingCheckIn)) {
+                $errors['to_time'] = 'Gio check out bo sung phai lon hon gio check in hien co.';
+            }
+        }
+
+        return $errors;
+    }
+
+    private function lateEarlyRequestContextErrors(EmployeeProfile $profile, string $requestDate, string $requestedStatus, ?string $fromTime, ?string $toTime): array
+    {
+        if (!$fromTime || !$toTime) {
+            return [
+                'from_time' => 'Don giai trinh di muon/ve som phai co khoang thoi gian vi pham.',
+                'to_time' => 'Don giai trinh di muon/ve som phai co khoang thoi gian vi pham.',
+            ];
+        }
+
+        if ($fromTime >= $toTime) {
+            return [
+                'from_time' => 'Gio bat dau phai nho hon gio ket thuc. Khong duoc chon cung mot gio.',
+                'to_time' => 'Gio ket thuc phai lon hon gio bat dau. Khong duoc chon cung mot gio.',
+            ];
+        }
+
+        $record = $this->findAttendanceRecordForDate($profile, $requestDate);
+
+        if (!$record) {
+            return [
+                'request_date' => 'Ngay nay chua co ban ghi cham cong de giai trinh vi pham.',
+            ];
+        }
+
+        if ($record->missing_check_in || $record->missing_check_out || ($record->check_in_at && !$record->check_out_at)) {
+            return [
+                'request_date' => 'Ngay nay dang thieu cham cong, can gui don quen cham cong truoc khi giai trinh di muon/ve som.',
+            ];
+        }
+
+        $violationStatus = $this->resolveViolationStatus($record);
+        $hasLate = in_array($violationStatus, ['late', 'late_early'], true)
+            || max(0, (int) ($record->late_minutes ?? 0)) > 0
+            || $this->normalizeAttendanceStatus($record->attendance_status) === 'late';
+        $hasEarlyLeave = in_array($violationStatus, ['early_leave', 'late_early'], true)
+            || max(0, (int) ($record->early_leave_minutes ?? 0)) > 0
+            || (string) $record->day_status === 'early_leave';
+
+        if ($requestedStatus === 'late' && !$hasLate) {
+            return [
+                'requested_status' => 'Ngay da chon khong co vi pham di muon.',
+            ];
+        }
+
+        if ($requestedStatus === 'early_leave' && !$hasEarlyLeave) {
+            return [
+                'requested_status' => 'Ngay da chon khong co vi pham ve som.',
+            ];
+        }
+
+        return [];
+    }
+
     private function validateAttendanceRequestOnSubmit(EmployeeProfile $profile, string $requestType, array $payload): array
     {
         if (!in_array($requestType, ['leave', 'late_early', 'forgot_check', 'business_trip', 'make_up'], true)) {
@@ -3439,15 +3570,15 @@ class AttendanceService extends BaseService
         $today = now(self::TIMEZONE)->startOfDay();
         foreach ($affectedDates as $date) {
             $workDate = Carbon::parse($date, self::TIMEZONE)->startOfDay();
-            if ($requestType === 'forgot_check' && $workDate->gt($today)) {
+            if (in_array($requestType, ['forgot_check', 'late_early'], true) && $workDate->gt($today)) {
                 throw ValidationException::withMessages([
-                    'request_date' => 'Don quen cham cong chi ap dung cho ngay hom nay hoac da qua.',
-                    'from_date' => 'Don quen cham cong chi ap dung cho ngay hom nay hoac da qua.',
-                    'to_date' => 'Don quen cham cong chi ap dung cho ngay hom nay hoac da qua.',
+                    'request_date' => 'Don giai trinh cham cong chi ap dung cho ngay hom nay hoac da qua.',
+                    'from_date' => 'Don giai trinh cham cong chi ap dung cho ngay hom nay hoac da qua.',
+                    'to_date' => 'Don giai trinh cham cong chi ap dung cho ngay hom nay hoac da qua.',
                 ]);
             }
 
-            if ($requestType !== 'forgot_check' && $workDate->lt($today)) {
+            if (!in_array($requestType, ['forgot_check', 'late_early'], true) && $workDate->lt($today)) {
                 throw ValidationException::withMessages([
                     'request_date' => 'Khong the gui don cho ngay trong qua khu.',
                     'from_date' => 'Khong the gui don cho ngay trong qua khu.',
@@ -3462,6 +3593,22 @@ class AttendanceService extends BaseService
                     'from_date' => 'Thang cong cua ngay da chon dang bi khoa.',
                     'to_date' => 'Thang cong cua ngay da chon dang bi khoa.',
                 ]);
+            }
+        }
+
+        if ($requestType === 'forgot_check' && $requestDate) {
+            $contextErrors = $this->forgotCheckRequestContextErrors($profile, $requestDate, $fromTime, $toTime);
+
+            if ($contextErrors !== []) {
+                throw ValidationException::withMessages($contextErrors);
+            }
+        }
+
+        if ($requestType === 'late_early' && $requestDate) {
+            $contextErrors = $this->lateEarlyRequestContextErrors($profile, $requestDate, $requestedStatus, $fromTime, $toTime);
+
+            if ($contextErrors !== []) {
+                throw ValidationException::withMessages($contextErrors);
             }
         }
 
@@ -3809,6 +3956,12 @@ class AttendanceService extends BaseService
                             ->where('department_id', $profile->department_id);
                     });
                 }
+
+                $query->orWhere(function (Builder $companyQuery) {
+                    $companyQuery
+                        ->whereNull('employee_profile_id')
+                        ->whereNull('department_id');
+                });
             })
             ->whereDate('effective_from', '<=', $workDate->toDateString())
             ->where(function (Builder $query) use ($workDate) {
@@ -3816,7 +3969,7 @@ class AttendanceService extends BaseService
                     ->whereNull('effective_to')
                     ->orWhereDate('effective_to', '>=', $workDate->toDateString());
             })
-            ->orderByDesc('employee_profile_id')
+            ->orderByRaw('case when employee_profile_id is not null then 2 when department_id is not null then 1 else 0 end desc')
             ->orderByDesc('effective_from')
             ->get()
             ->first(function (EmployeeWorkShiftAssignment $item) use ($weekday) {
@@ -3979,6 +4132,39 @@ class AttendanceService extends BaseService
 
         foreach ($workDates as $workDate) {
             $this->ensureMonthNotLocked($request->employeeProfile, Carbon::parse($workDate, self::TIMEZONE));
+        }
+
+        if ($request->request_type === 'forgot_check') {
+            $workDate = $workDates[0] ?? optional($request->request_date)->format('Y-m-d');
+            $contextErrors = $workDate
+                ? $this->forgotCheckRequestContextErrors(
+                    $request->employeeProfile,
+                    $workDate,
+                    filled($request->from_time) ? (string) $request->from_time : null,
+                    filled($request->to_time) ? (string) $request->to_time : null
+                )
+                : ['request_date' => 'Don quen cham cong thieu ngay ap dung.'];
+
+            if ($contextErrors !== []) {
+                throw new \RuntimeException((string) reset($contextErrors));
+            }
+        }
+
+        if ($request->request_type === 'late_early') {
+            $workDate = $workDates[0] ?? optional($request->request_date)->format('Y-m-d');
+            $contextErrors = $workDate
+                ? $this->lateEarlyRequestContextErrors(
+                    $request->employeeProfile,
+                    $workDate,
+                    (string) ($request->requested_status ?? ''),
+                    filled($request->from_time) ? (string) $request->from_time : null,
+                    filled($request->to_time) ? (string) $request->to_time : null
+                )
+                : ['request_date' => 'Don giai trinh thieu ngay ap dung.'];
+
+            if ($contextErrors !== []) {
+                throw new \RuntimeException((string) reset($contextErrors));
+            }
         }
 
         if ($request->request_type === 'make_up') {
@@ -4334,6 +4520,7 @@ class AttendanceService extends BaseService
         }
 
         return [
+            'shift_name' => $workShift->shift_name,
             'start_time' => $workShift->start_time,
             'end_time' => $workShift->end_time,
             'break_start_time' => $workShift->break_start_time,
@@ -4341,6 +4528,7 @@ class AttendanceService extends BaseService
             'overtime_start_time' => $workShift->overtimeRule?->start_time,
             'overtime_end_time' => $workShift->overtimeRule?->end_time,
             'standard_minutes' => $workShift->standard_minutes,
+            'half_day_minutes' => $workShift->half_day_minutes,
             'handover_break_minutes' => $workShift->handover_break_minutes,
             'allows_overtime' => $workShift->allows_overtime,
             'grace_minutes' => $workShift->grace_minutes,
@@ -4348,6 +4536,29 @@ class AttendanceService extends BaseService
             'early_leave_grace_minutes' => $workShift->early_leave_grace_minutes,
             'is_overnight' => $workShift->is_overnight,
         ];
+    }
+
+    private function scheduledBreakMinutesFromShiftConfig(?array $shiftConfig): int
+    {
+        if (!is_array($shiftConfig)) {
+            return 0;
+        }
+
+        $breakStart = $shiftConfig['break_start_time'] ?? null;
+        $breakEnd = $shiftConfig['break_end_time'] ?? null;
+
+        if (!filled($breakStart) || !filled($breakEnd)) {
+            return 0;
+        }
+
+        $startMinutes = $this->minutesOfDay((string) $breakStart);
+        $endMinutes = $this->minutesOfDay((string) $breakEnd);
+
+        if ($endMinutes >= $startMinutes) {
+            return max(0, $endMinutes - $startMinutes);
+        }
+
+        return max(0, (24 * 60) - $startMinutes + $endMinutes);
     }
 
     private function normalizeShiftConfig(WorkShift|array|null $workShift): array

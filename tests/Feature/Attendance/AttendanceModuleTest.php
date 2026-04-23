@@ -19,6 +19,7 @@ use App\Models\Holiday;
 use App\Models\LeaveType;
 use App\Models\Notification;
 use App\Models\OvertimeRequest;
+use App\Models\Project;
 use App\Models\SalaryAdjustment;
 use App\Models\SalarySnapshot;
 use App\Models\User;
@@ -828,6 +829,82 @@ class AttendanceModuleTest extends TestCase
         $this->assertSame(2, collect(data_get($page, 'props.employeeByDepartment'))->sum('employee_count'));
     }
 
+    public function test_attendance_report_hides_equal_or_higher_authority_people(): void
+    {
+        $hrViewer = $this->makeUserWithAuthorityProfile('hr', 'HR Attendance Report Viewer');
+        $visibleEmployee = $this->makeUserWithAuthorityProfile('employee', 'Employee Visible Attendance Report');
+        $equalHr = $this->makeUserWithAuthorityProfile('hr', 'HR Hidden Equal Attendance Report');
+        $higherAdmin = $this->makeUserWithAuthorityProfile('admin', 'Admin Hidden Higher Attendance Report');
+
+        foreach ([$visibleEmployee, $equalHr, $higherAdmin] as $target) {
+            $target->employeeProfile->update([
+                'reports_to_user_id' => $hrViewer->id,
+            ]);
+
+            AttendanceRecord::query()->create([
+                'employee_profile_id' => $target->employeeProfile->id,
+                'work_date' => '2026-04-15',
+                'check_in_at' => '2026-04-15 08:00:00',
+                'check_out_at' => '2026-04-15 17:30:00',
+                'worked_minutes' => 480,
+                'attendance_status' => 'on_time',
+                'approval_status' => 'approved',
+                'day_status' => 'present',
+                'missing_check_in' => false,
+                'missing_check_out' => false,
+                'is_confirmed' => true,
+            ]);
+
+            OvertimeRequest::query()->create([
+                'employee_profile_id' => $target->employeeProfile->id,
+                'work_date' => '2026-04-15',
+                'start_at' => '2026-04-15 17:30:00',
+                'end_at' => '2026-04-15 19:30:00',
+                'requested_minutes' => 120,
+                'approved_minutes' => 120,
+                'status' => 'approved',
+                'reason' => 'Tang ca bao cao',
+                'requested_by' => $target->id,
+            ]);
+        }
+
+        $response = $this->actingAs($hrViewer)->get(route('attendance.reports', [
+            'month' => 4,
+            'year' => 2026,
+        ]));
+
+        $response->assertOk();
+        $response->assertViewHas('page');
+
+        $page = $response->viewData('page');
+        $recordNames = collect(data_get($page, 'props.records', []))->pluck('employee_name')->all();
+        $employeeLabels = collect(data_get($page, 'props.employees', []))->pluck('label')->implode('|');
+        $overtimeNames = collect(data_get($page, 'props.overtime_details', []))->pluck('employee_name')->all();
+
+        $this->assertSame(1, (int) data_get($page, 'props.summary.total_records'));
+        $this->assertContains($visibleEmployee->name, $recordNames);
+        $this->assertNotContains($equalHr->name, $recordNames);
+        $this->assertNotContains($higherAdmin->name, $recordNames);
+        $this->assertStringContainsString($visibleEmployee->name, $employeeLabels);
+        $this->assertStringNotContainsString($equalHr->name, $employeeLabels);
+        $this->assertStringNotContainsString($higherAdmin->name, $employeeLabels);
+        $this->assertContains($visibleEmployee->name, $overtimeNames);
+        $this->assertNotContains($equalHr->name, $overtimeNames);
+        $this->assertNotContains($higherAdmin->name, $overtimeNames);
+
+        $forcedHigherFilter = $this->actingAs($hrViewer)->get(route('attendance.reports', [
+            'month' => 4,
+            'year' => 2026,
+            'employee_profile_id' => $higherAdmin->employeeProfile->id,
+        ]));
+
+        $forcedHigherFilter->assertOk();
+        $forcedPage = $forcedHigherFilter->viewData('page');
+
+        $this->assertSame(0, count(data_get($forcedPage, 'props.records', [])));
+        $this->assertSame(0, count(data_get($forcedPage, 'props.overtime_details', [])));
+    }
+
     public function test_dashboard_counts_only_subordinate_attendance_and_pending_approvals(): void
     {
         $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Visible Dashboard');
@@ -898,6 +975,94 @@ class AttendanceModuleTest extends TestCase
         $this->assertSame(0, (int) data_get($approvalPage, 'props.approval_summary.pending_records'));
         $this->assertSame(0, count(data_get($approvalPage, 'props.request_approvals', [])));
         $this->assertTrue($dashboardApprovalWarnings->isEmpty());
+    }
+
+    public function test_system_operator_account_has_self_service_attendance_and_salary_hidden(): void
+    {
+        $systemOwner = $this->makeUserWithAuthorityProfile('admin', 'System Operator Hidden Self Service');
+        $systemOwner->update(['email' => 'gtvbehieu@gmail.com']);
+
+        $capabilityIds = \App\Models\PositionCapability::query()
+            ->whereIn('code', [
+                Capability::CHECK_IN,
+                Capability::CHECK_OUT,
+                Capability::VIEW_OWN_ATTENDANCE,
+                Capability::VIEW_OWN_SALARY,
+                Capability::REQUEST_ATTENDANCE_ADJUSTMENT,
+            ])
+            ->pluck('id');
+
+        foreach ($capabilityIds as $capabilityId) {
+            DB::table('user_position_capability_overrides')->updateOrInsert(
+                [
+                    'user_id' => $systemOwner->id,
+                    'capability_id' => $capabilityId,
+                ],
+                [
+                    'effect' => 'deny',
+                    'reason' => 'Test deny self-service capabilities.',
+                    'expires_at' => null,
+                    'created_by' => null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]
+            );
+        }
+
+        $systemOwner = $systemOwner->fresh('employeeProfile.position.capabilitiesCatalog');
+        $permissions = \App\Support\AccessMatrix::permissionsFor($systemOwner);
+        $menuPaths = collect(\App\Support\MenuBuilder::build($systemOwner))
+            ->flatMap(fn (array $group) => $group['items'] ?? [])
+            ->pluck('path')
+            ->all();
+
+        $this->assertFalse($systemOwner->hasPositionCapability(Capability::CHECK_IN));
+        $this->assertFalse($systemOwner->hasPositionCapability(Capability::CHECK_OUT));
+        $this->assertFalse($systemOwner->hasPositionCapability(Capability::VIEW_OWN_ATTENDANCE));
+        $this->assertFalse($systemOwner->hasPositionCapability(Capability::VIEW_OWN_SALARY));
+        $this->assertFalse($systemOwner->hasPositionCapability(Capability::REQUEST_ATTENDANCE_ADJUSTMENT));
+        $this->assertFalse($permissions['attendance.mine.view']);
+        $this->assertFalse($permissions['attendance.mine.action']);
+        $this->assertNotContains('/my-attendance', $menuPaths);
+        $this->assertNotContains('/my-leave', $menuPaths);
+        $this->assertNotContains('/my-salary', $menuPaths);
+
+        AttendanceRecord::query()->create([
+            'employee_profile_id' => $systemOwner->employeeProfile->id,
+            'work_date' => '2026-04-14',
+            'check_in_at' => '2026-04-14 09:00:00',
+            'check_out_at' => '2026-04-14 17:00:00',
+            'worked_minutes' => 420,
+            'attendance_status' => 'late',
+            'approval_status' => 'approved',
+            'day_status' => 'late',
+            'late_minutes' => 60,
+            'is_confirmed' => false,
+        ]);
+
+        $dashboardResponse = $this->actingAs($systemOwner)->get(route('dashboard'));
+        $dashboardResponse->assertOk();
+        $dashboardPage = $dashboardResponse->viewData('page');
+        $warningUrls = collect(data_get($dashboardPage, 'props.warnings', []))->pluck('cta_url')->all();
+
+        $this->assertNull(data_get($dashboardPage, 'props.todayAttendance'));
+        $this->assertNotContains(route('attendance.mine'), $warningUrls);
+
+        $this->actingAs($systemOwner)
+            ->getJson(route('attendance.mine'))
+            ->assertForbidden();
+
+        $this->actingAs($systemOwner)
+            ->getJson(route('leave.mine'))
+            ->assertForbidden();
+
+        $this->actingAs($systemOwner)
+            ->getJson(route('salary.mine'))
+            ->assertForbidden();
+
+        $this->actingAs($systemOwner)
+            ->postJson(route('attendance.check-in'))
+            ->assertForbidden();
     }
 
     public function test_employee_dashboard_uses_personal_reconciled_attendance_status(): void
@@ -1271,6 +1436,75 @@ class AttendanceModuleTest extends TestCase
         $this->assertSame(412500.0, (float) data_get($page, 'props.summary.overtime_amount'));
         $this->assertSame(1.5, (float) data_get($page, 'props.records.0.overtime_multiplier'));
         $this->assertSame('Ngay thuong', data_get($page, 'props.records.0.overtime_type_label'));
+    }
+
+    public function test_employee_can_export_personal_salary_pdf(): void
+    {
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Salary PDF');
+        $employee->employeeProfile->update([
+            'base_salary' => 22000000,
+        ]);
+
+        AttendanceRecord::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-01',
+            'check_in_at' => Carbon::create(2026, 4, 1, 8, 0, 0, 'Asia/Ho_Chi_Minh'),
+            'check_out_at' => Carbon::create(2026, 4, 1, 17, 30, 0, 'Asia/Ho_Chi_Minh'),
+            'worked_minutes' => 510,
+            'attendance_status' => 'on_time',
+            'day_status' => 'present',
+            'approval_status' => 'approved',
+            'missing_check_in' => false,
+            'missing_check_out' => false,
+            'is_confirmed' => true,
+        ]);
+
+        $response = $this->actingAs($employee)->get(route('salary.mine.export.pdf', [
+            'month' => 4,
+            'year' => 2026,
+        ]));
+
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringContainsString('attachment; filename="payslip-', $response->headers->get('Content-Disposition'));
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_project_list_is_paginated_server_side(): void
+    {
+        $admin = $this->makeUserWithAuthorityProfile('admin', 'Admin Project Pagination');
+
+        foreach (range(1, 15) as $index) {
+            Project::query()->create([
+                'name' => 'Pagination Project ' . str_pad((string) $index, 2, '0', STR_PAD_LEFT),
+                'start_date' => '2026-04-01',
+                'status' => 'planning',
+                'description' => 'Project pagination test',
+                'created_by' => $admin->id,
+                'updated_by' => $admin->id,
+            ]);
+        }
+
+        $firstPage = $this->actingAs($admin)->get(route('projects.index', [
+            'per_page' => 10,
+        ]));
+
+        $firstPage->assertOk();
+        $firstPayload = $firstPage->viewData('page');
+        $this->assertCount(10, data_get($firstPayload, 'props.projects'));
+        $this->assertSame(15, (int) data_get($firstPayload, 'props.pagination.total'));
+        $this->assertSame(2, (int) data_get($firstPayload, 'props.pagination.last_page'));
+        $this->assertSame(1, (int) data_get($firstPayload, 'props.pagination.current_page'));
+
+        $secondPage = $this->actingAs($admin)->get(route('projects.index', [
+            'per_page' => 10,
+            'page' => 2,
+        ]));
+
+        $secondPage->assertOk();
+        $secondPayload = $secondPage->viewData('page');
+        $this->assertCount(5, data_get($secondPayload, 'props.projects'));
+        $this->assertSame(2, (int) data_get($secondPayload, 'props.pagination.current_page'));
     }
 
     public function test_salary_statement_counts_grace_covered_early_leave_as_full_work_unit(): void
@@ -2636,6 +2870,7 @@ class AttendanceModuleTest extends TestCase
             ->post(route('attendance.requests.store'), [
                 'request_type' => 'forgot_check',
                 'request_date' => '2026-04-13',
+                'from_time' => '08:00',
                 'to_time' => '17:00',
                 'reason' => 'Quên check out do mất mạng',
             ])
@@ -2663,6 +2898,100 @@ class AttendanceModuleTest extends TestCase
         ]);
     }
 
+    public function test_employee_can_cancel_pending_attendance_request_and_keep_it_in_history(): void
+    {
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Cancel Request');
+
+        $this->actingAs($employee)
+            ->post(route('attendance.requests.store'), [
+                'request_type' => 'forgot_check',
+                'request_date' => '2026-04-13',
+                'from_time' => '08:00',
+                'to_time' => '17:00',
+                'reason' => 'Quen check out can huy',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $approvalRequest = ApprovalRequest::query()->where('requested_by', $employee->id)->firstOrFail();
+        $attendanceRequest = AttendanceRequest::query()->where('approval_request_id', $approvalRequest->id)->firstOrFail();
+
+        $this->actingAs($employee)
+            ->delete(route('attendance.requests.destroy', $approvalRequest))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('approval_requests', [
+            'id' => $approvalRequest->id,
+            'status' => 'cancelled',
+            'requested_by' => $employee->id,
+            'reviewed_by' => $employee->id,
+        ]);
+
+        $this->assertDatabaseHas('attendance_requests', [
+            'id' => $attendanceRequest->id,
+            'status' => 'cancelled',
+        ]);
+
+        $payload = app(\App\Services\AttendanceService::class)->getMyAttendanceData($employee, 4, 2026);
+        $historyItem = collect($payload['recent_requests'])->firstWhere('approval_request_id', $approvalRequest->id);
+
+        $this->assertNotNull($historyItem);
+        $this->assertSame('cancelled', $historyItem['status']);
+    }
+
+    public function test_cancel_pending_leave_request_releases_reserved_leave_balance(): void
+    {
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Cancel Leave');
+        $leaveType = LeaveType::query()->create([
+            'code' => 'CANCEL-AL',
+            'name' => 'Annual leave cancel test',
+            'is_paid' => true,
+            'deducts_balance' => true,
+            'annual_quota' => 12,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($employee)
+            ->post(route('attendance.requests.store'), [
+                'request_type' => 'leave',
+                'from_date' => '2026-04-15',
+                'to_date' => '2026-04-15',
+                'leave_type_id' => $leaveType->id,
+                'leave_duration_type' => 'full_day',
+                'reason' => 'Xin nghi phep roi huy',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $approvalRequest = ApprovalRequest::query()->where('requested_by', $employee->id)->firstOrFail();
+
+        $this->assertDatabaseHas('employee_leave_balances', [
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'leave_type_id' => $leaveType->id,
+            'year' => 2026,
+            'pending_days' => 1,
+        ]);
+
+        $this->actingAs($employee)
+            ->delete(route('attendance.requests.destroy', $approvalRequest))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('attendance_requests', [
+            'approval_request_id' => $approvalRequest->id,
+            'status' => 'cancelled',
+        ]);
+
+        $this->assertDatabaseHas('employee_leave_balances', [
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'leave_type_id' => $leaveType->id,
+            'year' => 2026,
+            'pending_days' => 0,
+            'used_days' => 0,
+        ]);
+    }
+
     public function test_forgot_check_request_allows_past_date_but_rejects_future_date(): void
     {
         $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Forgot Check Date Rule');
@@ -2671,6 +3000,7 @@ class AttendanceModuleTest extends TestCase
             ->post(route('attendance.requests.store'), [
                 'request_type' => 'forgot_check',
                 'request_date' => '2026-04-13',
+                'from_time' => '08:00',
                 'to_time' => '17:00',
                 'reason' => 'Quen check out hom qua',
             ])
@@ -2682,11 +3012,135 @@ class AttendanceModuleTest extends TestCase
             ->post(route('attendance.requests.store'), [
                 'request_type' => 'forgot_check',
                 'request_date' => '2026-04-15',
+                'from_time' => '08:00',
                 'to_time' => '17:00',
                 'reason' => 'Khong duoc phep cho ngay tuong lai',
             ])
             ->assertRedirect(route('attendance.mine'))
             ->assertSessionHasErrors(['request_date']);
+    }
+
+    public function test_late_early_request_allows_past_violation_date_but_rejects_future_date(): void
+    {
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Late Early Date Rule');
+
+        AttendanceRecord::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-13',
+            'check_in_at' => '2026-04-13 08:00:00',
+            'check_out_at' => '2026-04-13 16:30:00',
+            'worked_minutes' => 450,
+            'late_minutes' => 0,
+            'early_leave_minutes' => 30,
+            'attendance_status' => 'on_time',
+            'approval_status' => 'pending',
+            'day_status' => 'early_leave',
+            'missing_check_in' => false,
+            'missing_check_out' => false,
+            'is_confirmed' => false,
+        ]);
+
+        $this->actingAs($employee)
+            ->from(route('attendance.mine'))
+            ->post(route('attendance.requests.store'), [
+                'request_type' => 'late_early',
+                'request_date' => '2026-04-13',
+                'requested_status' => 'early_leave',
+                'from_time' => '16:30',
+                'to_time' => '17:30',
+                'reason' => 'Giai trinh ve som ngay da xay ra',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('attendance_requests', [
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'request_type' => 'late_early',
+            'request_date' => '2026-04-13',
+            'requested_status' => 'early_leave',
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($employee)
+            ->from(route('attendance.mine'))
+            ->post(route('attendance.requests.store'), [
+                'request_type' => 'late_early',
+                'request_date' => '2026-04-15',
+                'requested_status' => 'late',
+                'from_time' => '08:00',
+                'to_time' => '08:15',
+                'reason' => 'Khong duoc giai trinh ngay tuong lai',
+            ])
+            ->assertRedirect(route('attendance.mine'))
+            ->assertSessionHasErrors(['request_date']);
+    }
+
+    public function test_attendance_requests_require_matching_attendance_context(): void
+    {
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Strict Request Context');
+
+        AttendanceRecord::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-13',
+            'check_in_at' => '2026-04-13 08:00:00',
+            'check_out_at' => '2026-04-13 17:30:00',
+            'worked_minutes' => 510,
+            'late_minutes' => 0,
+            'early_leave_minutes' => 0,
+            'attendance_status' => 'on_time',
+            'approval_status' => 'pending',
+            'day_status' => 'present',
+            'missing_check_in' => false,
+            'missing_check_out' => false,
+            'is_confirmed' => false,
+        ]);
+
+        $this->actingAs($employee)
+            ->from(route('attendance.mine'))
+            ->post(route('attendance.requests.store'), [
+                'request_type' => 'forgot_check',
+                'request_date' => '2026-04-13',
+                'to_time' => '17:30',
+                'reason' => 'Ngay da du cham cong',
+            ])
+            ->assertRedirect(route('attendance.mine'))
+            ->assertSessionHasErrors(['request_date']);
+
+        $this->actingAs($employee)
+            ->from(route('attendance.mine'))
+            ->post(route('attendance.requests.store'), [
+                'request_type' => 'forgot_check',
+                'request_date' => '2026-04-12',
+                'to_time' => '17:30',
+                'reason' => 'Chua co ban ghi nhung thieu check in',
+            ])
+            ->assertRedirect(route('attendance.mine'))
+            ->assertSessionHasErrors(['from_time']);
+
+        $this->actingAs($employee)
+            ->from(route('attendance.mine'))
+            ->post(route('attendance.requests.store'), [
+                'request_type' => 'forgot_check',
+                'request_date' => '2026-04-14',
+                'from_time' => '08:00',
+                'to_time' => '17:30',
+                'reason' => 'Khong duoc dien gio checkout tuong lai',
+            ])
+            ->assertRedirect(route('attendance.mine'))
+            ->assertSessionHasErrors(['to_time']);
+
+        $this->actingAs($employee)
+            ->from(route('attendance.mine'))
+            ->post(route('attendance.requests.store'), [
+                'request_type' => 'late_early',
+                'request_date' => '2026-04-13',
+                'requested_status' => 'late',
+                'from_time' => '08:00',
+                'to_time' => '08:15',
+                'reason' => 'Ngay khong co vi pham di muon',
+            ])
+            ->assertRedirect(route('attendance.mine'))
+            ->assertSessionHasErrors(['requested_status']);
     }
 
     public function test_overtime_request_must_follow_catalog_overtime_window(): void
@@ -2869,7 +3323,9 @@ class AttendanceModuleTest extends TestCase
         $this->actingAs($employee)
             ->post(route('attendance.requests.store'), [
                 'request_type' => 'forgot_check',
-                'request_date' => '2026-04-14',
+                'request_date' => '2026-04-13',
+                'from_time' => '08:00',
+                'to_time' => '17:30',
                 'reason' => 'Quên check out khi mất điện',
             ])
             ->assertRedirect();
@@ -2891,7 +3347,7 @@ class AttendanceModuleTest extends TestCase
         $this->assertSame($hr->id, $attendanceRequest->applied_by);
         $this->assertDatabaseHas('attendance_records', [
             'employee_profile_id' => $employee->employeeProfile->id,
-            'work_date' => '2026-04-14',
+            'work_date' => '2026-04-13',
             'approval_status' => 'approved',
             'day_status' => 'present',
         ]);
@@ -3008,7 +3464,9 @@ class AttendanceModuleTest extends TestCase
             'approval_request_id' => $approvalRequest->id,
             'request_type' => 'forgot_check',
             'status' => 'pending',
-            'request_date' => '2026-04-15',
+            'request_date' => '2026-04-13',
+            'from_time' => '08:00',
+            'to_time' => '17:00',
             'reason' => 'Quen cham cong',
         ]);
 
@@ -3192,7 +3650,9 @@ class AttendanceModuleTest extends TestCase
         $this->actingAs($employee)
             ->post(route('attendance.requests.store'), [
                 'request_type' => 'forgot_check',
-                'request_date' => '2026-04-14',
+                'request_date' => '2026-04-13',
+                'from_time' => '09:00',
+                'to_time' => '18:00',
                 'reason' => 'Quen cham cong',
             ])
             ->assertRedirect();
@@ -3207,7 +3667,7 @@ class AttendanceModuleTest extends TestCase
 
         $record = AttendanceRecord::query()
             ->where('employee_profile_id', $employee->employeeProfile->id)
-            ->whereDate('work_date', '2026-04-14')
+            ->whereDate('work_date', '2026-04-13')
             ->firstOrFail();
 
         $this->assertSame($assignedShift->id, (int) $record->work_shift_id);
