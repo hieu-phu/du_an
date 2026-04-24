@@ -108,7 +108,7 @@ class AttendanceCatalogController extends Controller
         $workShift = WorkShift::query()->create($this->workShiftPayload($validated));
         $this->syncOvertimeRule($workShift, $validated);
 
-        return back()->with('success', 'Da tao ca lam viec.');
+        return back()->with('success', 'Đã tạo ca làm việc.');
     }
 
     public function updateWorkShift(Request $request, WorkShift $workShift)
@@ -117,21 +117,21 @@ class AttendanceCatalogController extends Controller
 
         if (($validated['is_active'] ?? true) === false && $this->hasActiveAssignments($workShift)) {
             throw ValidationException::withMessages([
-                'is_active' => 'Ca nay dang duoc phan cho nhan vien/phong ban, khong the ngung khi phan ca con hieu luc.',
+                'is_active' => 'Ca này đang được phân cho nhân viên/phòng ban, không thể ngừng khi phân ca còn hiệu lực.',
             ]);
         }
 
         $workShift->update($this->workShiftPayload($validated, $workShift));
         $this->syncOvertimeRule($workShift, $validated);
 
-        return back()->with('success', 'Da cap nhat ca lam viec.');
+        return back()->with('success', 'Đã cập nhật ca làm việc.');
     }
 
     public function toggleWorkShift(WorkShift $workShift)
     {
         if ($workShift->is_active && $this->hasActiveAssignments($workShift)) {
             return back()->withErrors([
-                'work_shift' => 'Ca nay dang duoc phan cho nhan vien/phong ban, khong the ngung khi phan ca con hieu luc.',
+                'work_shift' => 'Ca này đang được phân cho nhân viên/phòng ban, không thể ngừng khi phân ca còn hiệu lực.',
             ]);
         }
 
@@ -139,7 +139,7 @@ class AttendanceCatalogController extends Controller
             'is_active' => !$workShift->is_active,
         ]);
 
-        return back()->with('success', 'Da doi trang thai ca lam.');
+        return back()->with('success', 'Đã đổi trạng thái ca làm.');
     }
 
     public function storeHoliday(Request $request)
@@ -155,7 +155,7 @@ class AttendanceCatalogController extends Controller
 
         Holiday::query()->create($this->holidayPayload($validated));
 
-        return back()->with('success', 'Da them ngay nghi.');
+        return back()->with('success', 'Đã thêm ngày nghỉ.');
     }
 
     public function updateHoliday(Request $request, Holiday $holiday)
@@ -171,14 +171,14 @@ class AttendanceCatalogController extends Controller
 
         $holiday->update($this->holidayPayload($validated));
 
-        return back()->with('success', 'Da cap nhat ngay nghi.');
+        return back()->with('success', 'Đã cập nhật ngày nghỉ.');
     }
 
     public function destroyHoliday(Holiday $holiday)
     {
         $holiday->delete();
 
-        return back()->with('success', 'Da xoa ngay nghi.');
+        return back()->with('success', 'Đã xóa ngày nghỉ.');
     }
 
     public function storeAssignment(Request $request)
@@ -191,7 +191,7 @@ class AttendanceCatalogController extends Controller
             'created_by' => $request->user()?->id,
         ]);
 
-        return back()->with('success', 'Da tao phan ca.');
+        return back()->with('success', 'Đã tạo phân ca.');
     }
 
     public function updateAssignment(Request $request, EmployeeWorkShiftAssignment $assignment)
@@ -201,7 +201,7 @@ class AttendanceCatalogController extends Controller
 
         $assignment->update($this->assignmentPayload($validated));
 
-        return back()->with('success', 'Da cap nhat phan ca.');
+        return back()->with('success', 'Đã cập nhật phân ca.');
     }
 
     public function toggleAssignment(EmployeeWorkShiftAssignment $assignment)
@@ -221,7 +221,7 @@ class AttendanceCatalogController extends Controller
             'is_active' => !$assignment->is_active,
         ]);
 
-        return back()->with('success', 'Da doi trang thai phan ca.');
+        return back()->with('success', 'Đã đổi trạng thái phân ca.');
     }
 
     private function validateWorkShift(Request $request, ?WorkShift $workShift = null): array
@@ -263,7 +263,7 @@ class AttendanceCatalogController extends Controller
 
         if (filled($breakStart) xor filled($breakEnd)) {
             throw ValidationException::withMessages([
-                filled($breakStart) ? 'break_end_time' : 'break_start_time' => 'Can nhap du ca gio bat dau va ket thuc nghi giua ca.',
+                filled($breakStart) ? 'break_end_time' : 'break_start_time' => 'Cần nhập đủ cả giờ bắt đầu và kết thúc nghỉ giữa ca.',
             ]);
         }
 
@@ -271,7 +271,7 @@ class AttendanceCatalogController extends Controller
         $overtimeEnd = $validated['overtime_end_time'] ?? null;
         if (filled($overtimeStart) xor filled($overtimeEnd)) {
             throw ValidationException::withMessages([
-                filled($overtimeStart) ? 'overtime_end_time' : 'overtime_start_time' => 'Can nhap du gio bat dau va ket thuc tang ca.',
+                filled($overtimeStart) ? 'overtime_end_time' : 'overtime_start_time' => 'Cần nhập đủ giờ bắt đầu và kết thúc tăng ca.',
             ]);
         }
 
@@ -283,7 +283,7 @@ class AttendanceCatalogController extends Controller
 
         if ($workMinutes <= 0) {
             throw ValidationException::withMessages([
-                'end_time' => 'Gio ket thuc phai sau gio bat dau, hoac bat ca qua dem.',
+                'end_time' => 'Giờ kết thúc phải sau giờ bắt đầu, hoặc bật ca qua đêm.',
             ]);
         }
 
@@ -297,7 +297,7 @@ class AttendanceCatalogController extends Controller
                 !$this->timeRangeInsideShift($validated['start_time'], $validated['end_time'], $breakStart, $breakEnd, (bool) ($validated['is_overnight'] ?? false))
             ) {
                 throw ValidationException::withMessages([
-                    'break_end_time' => 'Khung gio nghi giua ca phai nam trong thoi luong ca lam.',
+                    'break_end_time' => 'Khung giờ nghỉ giữa ca phải nằm trong thời lượng ca làm.',
                 ]);
             }
         }
@@ -305,25 +305,25 @@ class AttendanceCatalogController extends Controller
         $netMinutes = $workMinutes - $breakMinutes;
         if ($netMinutes <= 0) {
             throw ValidationException::withMessages([
-                'break_end_time' => 'Tong thoi gian nghi giua ca khong duoc bang hoac lon hon tong thoi gian ca lam.',
+                'break_end_time' => 'Tổng thời gian nghỉ giữa ca không được bằng hoặc lớn hơn tổng thời gian ca làm.',
             ]);
         }
 
         if ((int) $validated['standard_minutes'] !== $netMinutes) {
             throw ValidationException::withMessages([
-                'standard_minutes' => 'Phut chuan phai khop voi thoi luong ca sau khi tru nghi giua ca (' . $netMinutes . ' phut).',
+                'standard_minutes' => 'Phút chuẩn phải khớp với thời lượng ca sau khi trừ nghỉ giữa ca (' . $netMinutes . ' phút).',
             ]);
         }
 
         if ((int) $validated['half_day_minutes'] > (int) $validated['standard_minutes']) {
             throw ValidationException::withMessages([
-                'half_day_minutes' => 'Nguong nua cong khong duoc lon hon phut chuan.',
+                'half_day_minutes' => 'Ngưỡng nửa công không được lớn hơn phút chuẩn.',
             ]);
         }
 
         if (!($validated['allows_overtime'] ?? true) && (filled($overtimeStart) || filled($overtimeEnd) || filled($validated['overtime_hourly_rate'] ?? null))) {
             throw ValidationException::withMessages([
-                'allows_overtime' => 'Hay bat tinh tang ca hoac xoa cau hinh quy tac tang ca.',
+                'allows_overtime' => 'Hãy bật tính tăng ca hoặc xóa cấu hình quy tắc tăng ca.',
             ]);
         }
 
@@ -348,8 +348,8 @@ class AttendanceCatalogController extends Controller
 
                 throw ValidationException::withMessages([
                     'overtime_start_time' => $overtimeStartMinutes > $shiftEndMinutes
-                        ? 'Khong duoc de khoang ho giua gio hanh chinh va tang ca (' . $gapStart . '-' . $gapEnd . ').'
-                        : 'Gio bat dau tang ca phai noi tiep ngay sau gio ket thuc ca.',
+                        ? 'Không được để khoảng hở giữa giờ hành chính và tăng ca (' . $gapStart . '-' . $gapEnd . ').'
+                        : 'Giờ bắt đầu tăng ca phải nối tiếp ngay sau giờ kết thúc ca.',
                 ]);
             }
         }
@@ -451,7 +451,7 @@ class AttendanceCatalogController extends Controller
         if ($validated['target_type'] === 'employee') {
             if (!filled($validated['employee_profile_id'] ?? null)) {
                 throw ValidationException::withMessages([
-                    'employee_profile_id' => 'Can chon nhan vien de phan ca.',
+                    'employee_profile_id' => 'Cần chọn nhân viên để phân ca.',
                 ]);
             }
             $validated['department_id'] = null;
@@ -460,7 +460,7 @@ class AttendanceCatalogController extends Controller
         if ($validated['target_type'] === 'department') {
             if (!filled($validated['department_id'] ?? null)) {
                 throw ValidationException::withMessages([
-                    'department_id' => 'Can chon phong ban de phan ca.',
+                    'department_id' => 'Cần chọn phòng ban để phân ca.',
                 ]);
             }
             $validated['employee_profile_id'] = null;
@@ -478,7 +478,7 @@ class AttendanceCatalogController extends Controller
 
         if (!$shiftIsActive) {
             throw ValidationException::withMessages([
-                'work_shift_id' => 'Chi duoc phan ca dang hoat dong.',
+                'work_shift_id' => 'Chỉ được phân ca đang hoạt động.',
             ]);
         }
 
@@ -527,7 +527,7 @@ class AttendanceCatalogController extends Controller
 
             if ($overlaps) {
                 throw ValidationException::withMessages([
-                    'employee_profile_id' => 'Nhan vien nay da co phan ca hieu luc trong khoang ngay duoc chon.',
+                    'employee_profile_id' => 'Nhân viên này đã có phân ca hiệu lực trong khoảng ngày được chọn.',
                 ]);
             }
 
@@ -542,7 +542,7 @@ class AttendanceCatalogController extends Controller
 
             if ($overlaps) {
                 throw ValidationException::withMessages([
-                    'department_id' => 'Phong ban nay da co phan ca hieu luc trong khoang ngay duoc chon.',
+                    'department_id' => 'Phòng ban này đã có phân ca hiệu lực trong khoảng ngày được chọn.',
                 ]);
             }
 
@@ -556,7 +556,7 @@ class AttendanceCatalogController extends Controller
 
         if ($overlaps) {
             throw ValidationException::withMessages([
-                'target_type' => 'Da ton tai phan ca toan cong ty hieu luc trong khoang ngay duoc chon.',
+                'target_type' => 'Đã tồn tại phân ca toàn công ty hiệu lực trong khoảng ngày được chọn.',
             ]);
         }
     }
@@ -622,3 +622,5 @@ class AttendanceCatalogController extends Controller
         return substr($time, 0, 5);
     }
 }
+
+

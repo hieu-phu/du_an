@@ -1,6 +1,4 @@
-<?php
-
-namespace App\Services;
+<?php namespace App\Services;
 
 use App\Enums\ApprovalDecision;
 use App\Models\AttendanceApproval;
@@ -61,7 +59,7 @@ class AttendanceService extends BaseService
 
             $openRecord = $this->findLatestOpenAttendanceRecord($employeeProfileId);
             if ($openRecord) {
-                throw new \RuntimeException('Ban chua check-out ca truoc.');
+                throw new \RuntimeException('Bạn chưa check-out ca trước.');
             }
 
             $existingRecord = $this->baseRecordQuery()
@@ -70,7 +68,7 @@ class AttendanceService extends BaseService
                 ->first();
 
             if ($existingRecord) {
-                throw new \RuntimeException('Ban da check-in hom nay roi.');
+                throw new \RuntimeException('Bạn đã check-in hôm nay rồi.');
             }
 
             $workShift = $this->resolveWorkShift($profile, $now);
@@ -125,11 +123,11 @@ class AttendanceService extends BaseService
             $record = $this->findLatestOpenAttendanceRecord($employeeProfileId);
 
             if (!$record) {
-                throw new \RuntimeException('Ban chua check-in ca dang mo.');
+                throw new \RuntimeException('Bạn chưa check-in ca đang mở.');
             }
 
             if ($record->check_out_at) {
-                throw new \RuntimeException('Ban da check-out hom nay roi.');
+                throw new \RuntimeException('Bạn đã check-out hôm nay rồi.');
             }
 
             $record->loadMissing(['employeeProfile.department', 'workShift']);
@@ -194,7 +192,7 @@ class AttendanceService extends BaseService
                 $resolvedCheckOut = $this->resolveTimeForRecordDate($record, $resolvedCheckOutTime);
 
                 if ($resolvedCheckOut->lessThanOrEqualTo($resolvedCheckIn)) {
-                    throw new \RuntimeException('Gio check-out bo sung phai sau gio check-in.');
+                    throw new \RuntimeException('Giờ check-out bổ sung phải sau giờ check-in.');
                 }
 
                 [$attendanceStatus, $dayStatus, $workedMinutes, $lateMinutes, $earlyLeaveMinutes, $overtimeMinutes] =
@@ -211,7 +209,7 @@ class AttendanceService extends BaseService
                     'day_status' => $dayStatus,
                     'note' => trim(collect(array_filter([
                         $record->note,
-                        'Admin resolved missing check-out at ' . $resolvedCheckOut->format('H:i'),
+                        'Admin đã xử lý thiếu check-out lúc ' . $resolvedCheckOut->format('H:i'),
                     ]))->implode(' | ')),
                 ])->save();
 
@@ -220,7 +218,7 @@ class AttendanceService extends BaseService
                     'employee_profile_id' => $record->employee_profile_id,
                     'event_type' => 'manual_adjustment',
                     'event_at' => $resolvedCheckOut,
-                    'note' => 'Admin resolved missing check-out before approval',
+                    'note' => 'Admin đã xử lý thiếu check-out trước khi duyệt',
                     'created_by' => $approver->id,
                 ]);
 
@@ -246,7 +244,7 @@ class AttendanceService extends BaseService
                     'confirmed_at' => null,
                 ]);
 
-                throw new \RuntimeException('Ban ghi thieu check-in/check-out, di muon hoac ve som chi duoc duyet khi da co don cham cong duoc phe duyet hoac admin bo sung gio ra hop le.');
+                throw new \RuntimeException('Bản ghi thiếu check-in/check-out, đi muộn hoặc về sớm chỉ được duyệt khi đã có đơn chấm công được phê duyệt hoặc admin bổ sung giờ ra hợp lệ.');
             }
 
             if ($record->is_confirmed) {
@@ -441,7 +439,7 @@ class AttendanceService extends BaseService
     {
         $authenticatedViewer = $viewer ?? $this->user();
         if (!$authenticatedViewer instanceof User) {
-            throw new \RuntimeException('Khong tim thay nguoi dung dang nhap.');
+            throw new \RuntimeException('Không tìm thấy người dùng đăng nhập.');
         }
 
         $viewer = $authenticatedViewer;
@@ -646,21 +644,21 @@ class AttendanceService extends BaseService
             $profile = $user->employeeProfile;
 
             if (!$profile) {
-                throw new \RuntimeException('Ban chua co ho so nhan su de gui don cham cong.');
+                throw new \RuntimeException('Bạn chưa có hồ sơ nhân sự để gửi đơn chấm công.');
             }
 
             $requestType = (string) ($payload['request_type'] ?? '');
             $reason = trim((string) ($payload['reason'] ?? ''));
 
             if ($requestType === '') {
-                throw new \RuntimeException('Vui long chon loai don.');
+                throw new \RuntimeException('Vui lòng chọn loại đơn.');
             }
 
             if ($reason === '') {
-                throw new \RuntimeException('Vui long nhap ly do.');
+                throw new \RuntimeException('Vui lòng nhập lý do.');
             }
 
-            $normalizedAttendance = null;
+            $normalizedAttendance = null;       
             $normalizedOvertime = null;
 
             if ($requestType === 'overtime') {
@@ -757,26 +755,26 @@ class AttendanceService extends BaseService
     {
         return $this->handleTransaction(function () use ($approvalRequest, $actor, $note) {
             if (!in_array($approvalRequest->request_type, ['leave', 'late_early', 'forgot_check', 'business_trip', 'make_up', 'overtime'], true)) {
-                throw new \RuntimeException('Loai yeu cau khong hop le.');
+                throw new \RuntimeException('Loại yêu cầu không hợp lệ.');
             }
 
             if ($approvalRequest->status !== 'pending') {
-                throw new \RuntimeException('Chi duoc huy don dang cho duyet.');
+                throw new \RuntimeException('Chỉ được hủy đơn đang chờ duyệt.');
             }
 
             if ((int) $approvalRequest->requested_by !== (int) $actor->id) {
-                throw new \RuntimeException('Ban khong duoc phep huy don nay.');
+                throw new \RuntimeException('Bạn không được phép hủy đơn này.');
             }
 
             $approvalRequest->loadMissing('target');
 
             if (!$approvalRequest->target) {
-                throw new \RuntimeException('Khong tim thay don can huy.');
+                throw new \RuntimeException('Không tìm thấy đơn cần hủy.');
             }
 
             $reviewNote = trim((string) ($note ?? ''));
             if ($reviewNote === '') {
-                $reviewNote = 'Requester cancelled attendance request';
+                $reviewNote = 'Người yêu cầu đã hủy đơn chấm công';
             }
 
             $approvalRequest->update([
@@ -790,7 +788,7 @@ class AttendanceService extends BaseService
 
             if ($target instanceof AttendanceRequest) {
                 if ($target->status !== 'pending') {
-                    throw new \RuntimeException('Don nay khong con o trang thai cho duyet.');
+                    throw new \RuntimeException('Đơn này không còn ở trạng thái chờ duyệt.');
                 }
 
                 if ($target->request_type === 'leave') {
@@ -806,7 +804,7 @@ class AttendanceService extends BaseService
 
             if ($target instanceof OvertimeRequest) {
                 if ($target->status !== 'pending') {
-                    throw new \RuntimeException('Don nay khong con o trang thai cho duyet.');
+                    throw new \RuntimeException('Đơn này không còn ở trạng thái chờ duyệt.');
                 }
 
                 $target->update([
@@ -833,7 +831,7 @@ class AttendanceService extends BaseService
             $profile = $user->employeeProfile;
             if (!$profile) {
                 throw ValidationException::withMessages([
-                    'attendance_record_id' => 'Ban chua co ho so nhan su de dieu chinh cong.',
+                    'attendance_record_id' => 'Bạn chưa có hồ sơ nhân sự để điều chỉnh công.',
                 ]);
             }
 
@@ -845,7 +843,7 @@ class AttendanceService extends BaseService
 
             if (!$record) {
                 throw ValidationException::withMessages([
-                    'attendance_record_id' => 'Khong tim thay ban ghi cong cua ban de dieu chinh.',
+                    'attendance_record_id' => 'Không tìm thấy bản ghi công của bạn để điều chỉnh.',
                 ]);
             }
 
@@ -859,7 +857,7 @@ class AttendanceService extends BaseService
 
             if ((bool) $record->is_confirmed || ($record->approval_status ?? 'pending') === 'approved') {
                 throw ValidationException::withMessages([
-                    'attendance_record_id' => 'Ban ghi cong da duoc duyet, vui long lien he HR de dieu chinh.',
+                    'attendance_record_id' => 'Bản ghi công của bạn đã được duyệt, vui lòng liên hệ HR để điều chỉnh.',
                 ]);
             }
 
@@ -872,8 +870,8 @@ class AttendanceService extends BaseService
 
             if (!$newCheckIn && !$newCheckOut) {
                 throw ValidationException::withMessages([
-                    'new_check_in_at' => 'Can nhap it nhat check-in hoac check-out moi.',
-                    'new_check_out_at' => 'Can nhap it nhat check-in hoac check-out moi.',
+                    'new_check_in_at' => 'Cần nhập ít nhất check-in hoặc check-out mới.',
+                    'new_check_out_at' => 'Cần nhập ít nhất check-in hoặc check-out mới.',
                 ]);
             }
 
@@ -881,8 +879,8 @@ class AttendanceService extends BaseService
             foreach ([$newCheckIn, $newCheckOut] as $dateTime) {
                 if ($dateTime && $dateTime->toDateString() !== $workDate) {
                     throw ValidationException::withMessages([
-                        'new_check_in_at' => 'Thoi gian de xuat phai nam trong dung ngay cong dang chon.',
-                        'new_check_out_at' => 'Thoi gian de xuat phai nam trong dung ngay cong dang chon.',
+                        'new_check_in_at' => 'Thời gian đề xuất phải nằm trong cùng ngày công đang chọn.',
+                        'new_check_out_at' => 'Thời gian đề xuất phải nằm trong cùng ngày công đang chọn.',
                     ]);
                 }
             }
@@ -894,7 +892,7 @@ class AttendanceService extends BaseService
 
             if ($resolvedCheckIn && $resolvedCheckOut && $resolvedCheckOut->lessThanOrEqualTo($resolvedCheckIn)) {
                 throw ValidationException::withMessages([
-                    'new_check_out_at' => 'Check-out de xuat phai sau check-in sau dieu chinh.',
+                    'new_check_out_at' => 'Check-out đề xuất phải sau check-in sau điều chỉnh.',
                 ]);
             }
 
@@ -903,8 +901,8 @@ class AttendanceService extends BaseService
 
             if (!$checkInChanged && !$checkOutChanged) {
                 throw ValidationException::withMessages([
-                    'new_check_in_at' => 'Thoi gian de xuat khong khac du lieu hien tai.',
-                    'new_check_out_at' => 'Thoi gian de xuat khong khac du lieu hien tai.',
+                    'new_check_in_at' => 'Thời gian đề xuất không khác dữ liệu hiện tại.',
+                    'new_check_out_at' => 'Thời gian đề xuất không khác dữ liệu hiện tại.',
                 ]);
             }
 
@@ -923,7 +921,7 @@ class AttendanceService extends BaseService
                 'requested_by' => $user->id,
                 'reviewed_by' => $user->id,
                 'reviewed_at' => now(self::TIMEZONE),
-                'review_note' => 'Tu dong ap dung, khong qua buoc duyet rieng.',
+                'review_note' => 'Được tự động áp dụng, không qua bước duyệt riêng.',
             ]);
 
             $record->update([
@@ -1047,10 +1045,10 @@ class AttendanceService extends BaseService
 
             if ($approvalRequest->request_type === 'leave') {
                 if (!$reviewer->hasPositionCapability(PositionCapability::APPROVE_LEAVE) && !$reviewer->hasPositionCapability(PositionCapability::APPROVE_ATTENDANCE)) {
-                    throw new \RuntimeException('Ban khong co quyen duyet nghi phep.');
+                    throw new \RuntimeException('Bạn không có quyền duyệt nghỉ phép.');
                 }
             } elseif (!$reviewer->hasPositionCapability(PositionCapability::APPROVE_ATTENDANCE)) {
-                throw new \RuntimeException('Ban khong co quyen duyet cham cong.');
+                throw new \RuntimeException('Bạn không có quyền duyệt chấm công.');
             }
 
             if (!$approvalRequest->target) {
@@ -1343,7 +1341,7 @@ class AttendanceService extends BaseService
             }
 
             $reviewNote = sprintf(
-                'He thong khong duyet cong sau %d ngay vi chua co don giai trinh hop le.',
+                'Hệ thống không duyệt công sau %d ngày vì chưa có đơn giải trình hợp lệ.',
                 $resolvedDays
             );
 
@@ -1571,8 +1569,8 @@ class AttendanceService extends BaseService
         $hasRequest = (bool) $latestRequest;
         $hasApprovedRequest = $latestRequest?->status === 'approved';
         $requestPresenceLabel = $hasRequest
-            ? sprintf('Co don (%s)', $this->approvalStatusLabel((string) $latestRequest->status))
-            : 'Khong co don';
+            ? sprintf('Có đơn (%s)', $this->approvalStatusLabel((string) $latestRequest->status))
+            : 'Không có đơn';
         $shiftConfig = $this->resolveShiftConfig($record);
         $violationStatus = $this->resolveViolationStatus($record);
         $displayApprovalStatus = $this->resolveDisplayApprovalStatus($record, $violationStatus);
@@ -1806,7 +1804,7 @@ class AttendanceService extends BaseService
             $record->forceFill([
                 'approval_status' => 'rejected',
                 'approval_note' => sprintf(
-                    'He thong khong duyet cong sau %d ngay vi chua co don giai trinh hop le.',
+                    'Hệ thống không duyệt cong sau %d ngay vi chua co don giải trình hop le.',
                     $this->unexplainedAbsenceTimeoutDays()
                 ),
                 'rejected_at' => now(self::TIMEZONE),
@@ -1840,7 +1838,7 @@ class AttendanceService extends BaseService
             (string) ($record->employeeProfile?->employee_code ?? ''),
             'absent',
             'vang',
-            'vắng',
+            'váº¯ng',
             'tu y nghi',
             'chua co don',
         ])));
@@ -2487,7 +2485,7 @@ class AttendanceService extends BaseService
         $label = $this->dayStatusLabel($dayStatus);
 
         if (in_array($dayStatus, ['holiday_paid', 'day_off'], true) && $this->hasAttendanceActivity($record)) {
-            return $label . ' (co di lam)';
+            return $label . ' (có đi làm)';
         }
 
         return $label;
@@ -2661,7 +2659,7 @@ class AttendanceService extends BaseService
             return;
         }
 
-        $employeeName = $record->employeeProfile?->user?->name ?: 'Nhan vien';
+        $employeeName = $record->employeeProfile?->user?->name ?: 'Nhân viên';
         $time = $eventType === 'check_in' ? $record->check_in_at : $record->check_out_at;
         $formattedTime = optional($time)->format('d/m/Y H:i');
         $actionLabel = $eventType === 'check_in' ? 'check-in' : 'check-out';
@@ -2669,7 +2667,7 @@ class AttendanceService extends BaseService
         try {
             $this->notificationService->createForUsers(
                 $hrUserIds,
-                'Thong bao cham cong',
+                'Thông báo chấm công',
                 "{$employeeName} da {$actionLabel} luc {$formattedTime}.",
                 [
                     'attendance_record_id' => $record->id,
@@ -3120,7 +3118,7 @@ class AttendanceService extends BaseService
             'review_note' => $item->review_note,
             'submitted_at' => optional($item->approvalRequest?->submitted_at ?? $item->created_at)->format('Y-m-d H:i:s'),
             'reviewed_at' => optional($item->reviewed_at)->format('Y-m-d H:i:s'),
-            'reviewed_by_name' => $item->approvalRequest?->reviewer?->name ?? ((int) $item->reviewed_by === (int) $item->requested_by ? 'Tu ap dung' : null),
+            'reviewed_by_name' => $item->approvalRequest?->reviewer?->name ?? ((int) $item->reviewed_by === (int) $item->requested_by ? 'Tự áp dụng' : null),
         ];
     }
 
@@ -3151,41 +3149,41 @@ class AttendanceService extends BaseService
     private function attendanceResultLabel(AttendanceRecord $record): string
     {
         if ($record->missing_check_in || $record->missing_check_out || ($record->check_in_at && !$record->check_out_at)) {
-            return 'Chua tinh cong';
+            return 'Chưa tính công';
         }
 
         if (($record->approval_status ?? null) === 'rejected') {
-            return 'Khong duyet cong';
+            return 'Không duyệt công';
         }
 
         $workUnit = $this->resolveWorkUnit($record);
 
         if ($workUnit >= 1.0) {
-            return 'Du cong';
+            return 'Đủ công';
         }
 
         if ($workUnit >= 0.5) {
-            return 'Nua cong';
+            return 'Nửa công';
         }
 
-        return 'Khong cong';
+        return 'Không công';
     }
 
     private function dayStatusLabel(?string $status): string
     {
         return match ($status) {
-            'present' => 'Di lam',
-            'late' => 'Di muon',
-            'early_leave' => 'Ve som',
-            'leave' => 'Nghi phep',
-            'unpaid_leave' => 'Nghi khong luong',
-            'holiday_paid' => 'Le co luong',
-            'day_off' => 'Nghi theo phan ca',
-            'business_trip' => 'Cong tac',
-            'missing_check_in' => 'Thieu check in',
-            'missing_check_out' => 'Thieu check out',
-            'absent' => 'Vang',
-            default => 'Khong xac dinh',
+            'present' => 'Đi làm',
+            'late' => 'Đi muộn',
+            'early_leave' => 'Về sớm',
+            'leave' => 'Nghỉ phép',
+            'unpaid_leave' => 'Nghỉ không lương',
+            'holiday_paid' => 'Lễ có lương',
+            'day_off' => 'Nghỉ theo phân ca',
+            'business_trip' => 'Công tác',
+            'missing_check_in' => 'Thiếu check-in',
+            'missing_check_out' => 'Thiếu check-out',
+            'absent' => 'Vắng',
+            default => 'Không xác định',
         };
     }
 
@@ -3644,15 +3642,15 @@ class AttendanceService extends BaseService
     {
         if (!$fromTime && !$toTime) {
             return [
-                'from_time' => 'Don quen cham cong phai bo sung it nhat mot moc gio con thieu.',
-                'to_time' => 'Don quen cham cong phai bo sung it nhat mot moc gio con thieu.',
+                'from_time' => 'Đơn quên chấm công phải bổ sung ít nhất một mốc giờ còn thiếu.',
+                'to_time' => 'Đơn quên chấm công phải bổ sung ít nhất một mốc giờ còn thiếu.',
             ];
         }
 
         if ($fromTime && $toTime && $fromTime === $toTime) {
             return [
-                'from_time' => 'Gio check in va check out khong duoc trung nhau.',
-                'to_time' => 'Gio check in va check out khong duoc trung nhau.',
+                'from_time' => 'Giờ check in và check out không được trùng nhau.',
+                'to_time' => 'Giờ check in và check out không được trùng nhau.',
             ];
         }
 
@@ -3660,11 +3658,11 @@ class AttendanceService extends BaseService
         $timeErrors = [];
 
         if ($fromTime && Carbon::parse($requestDate . ' ' . $fromTime, self::TIMEZONE)->greaterThan($now)) {
-            $timeErrors['from_time'] = 'Gio check in bo sung khong duoc lon hon thoi diem hien tai.';
+            $timeErrors['from_time'] = 'Giờ check in bổ sung không được lớn hơn thời điểm hiện tại.';
         }
 
         if ($toTime && Carbon::parse($requestDate . ' ' . $toTime, self::TIMEZONE)->greaterThan($now)) {
-            $timeErrors['to_time'] = 'Gio check out bo sung khong duoc lon hon thoi diem hien tai.';
+            $timeErrors['to_time'] = 'Giờ check out bổ sung không được lớn hơn thời điểm hiện tại.';
         }
 
         if ($timeErrors !== []) {
@@ -3676,8 +3674,8 @@ class AttendanceService extends BaseService
         if (!$record) {
             if (!$fromTime || !$toTime) {
                 return [
-                    'from_time' => 'Ngay nay chua co ban ghi cham cong, can nhap du gio check in va check out.',
-                    'to_time' => 'Ngay nay chua co ban ghi cham cong, can nhap du gio check in va check out.',
+                    'from_time' => 'Ngày này chưa có bản ghi chấm công, cần nhập đủ giờ check in và check out.',
+                    'to_time' => 'Ngày này chưa có bản ghi chấm công, cần nhập đủ giờ check in và check out.',
                 ];
             }
 
@@ -3689,26 +3687,26 @@ class AttendanceService extends BaseService
 
         if (!$missingCheckIn && !$missingCheckOut) {
             return [
-                'request_date' => 'Ngay nay da co du check in va check out, khong the gui don quen cham cong.',
+                'request_date' => 'Ngày này đã có đủ check in và check out, không thể gửi đơn quên chấm công.',
             ];
         }
 
         $errors = [];
 
         if ($missingCheckIn && !$fromTime) {
-            $errors['from_time'] = 'Ngay nay dang thieu check in, vui long nhap gio check in.';
+            $errors['from_time'] = 'Ngày này đang thiếu check in, vui lòng nhập giờ check in.';
         }
 
         if ($missingCheckOut && !$toTime) {
-            $errors['to_time'] = 'Ngay nay dang thieu check out, vui long nhap gio check out.';
+            $errors['to_time'] = 'Ngày này đang thiếu check out, vui lòng nhập giờ check out.';
         }
 
         if (!$missingCheckIn && $fromTime) {
-            $errors['from_time'] = 'Ngay nay da co check in, khong duoc gui don quen check in.';
+            $errors['from_time'] = 'Ngày này đã có check in, không được gửi đơn quên check in.';
         }
 
         if (!$missingCheckOut && $toTime) {
-            $errors['to_time'] = 'Ngay nay da co check out, khong duoc gui don quen check out.';
+            $errors['to_time'] = 'Ngày này đã có check out, không được gửi đơn quên check out.';
         }
 
         if ($fromTime && $record->check_out_at) {
@@ -3716,7 +3714,7 @@ class AttendanceService extends BaseService
             $existingCheckOut = Carbon::parse($record->check_out_at, self::TIMEZONE);
 
             if ($resolvedCheckIn->greaterThanOrEqualTo($existingCheckOut)) {
-                $errors['from_time'] = 'Gio check in bo sung phai nho hon gio check out hien co.';
+                $errors['from_time'] = 'Giờ check in bổ sung phải nhỏ hơn giờ check out hiện có.';
             }
         }
 
@@ -3725,7 +3723,7 @@ class AttendanceService extends BaseService
             $existingCheckIn = Carbon::parse($record->check_in_at, self::TIMEZONE);
 
             if ($resolvedCheckOut->lessThanOrEqualTo($existingCheckIn)) {
-                $errors['to_time'] = 'Gio check out bo sung phai lon hon gio check in hien co.';
+                $errors['to_time'] = 'Giờ check out bổ sung phải lớn hơn giờ check in hiện có.';
             }
         }
 
@@ -3736,15 +3734,15 @@ class AttendanceService extends BaseService
     {
         if (!$fromTime || !$toTime) {
             return [
-                'from_time' => 'Don giai trinh di muon/ve som phai co khoang thoi gian vi pham.',
-                'to_time' => 'Don giai trinh di muon/ve som phai co khoang thoi gian vi pham.',
+                'from_time' => 'Đơn giải trình đi muộn/về sớm phải có khoảng thời gian vi phạm.',
+                'to_time' => 'Đơn giải trình đi muộn/về sớm phải có khoảng thời gian vi phạm.',
             ];
         }
 
         if ($fromTime >= $toTime) {
             return [
-                'from_time' => 'Gio bat dau phai nho hon gio ket thuc. Khong duoc chon cung mot gio.',
-                'to_time' => 'Gio ket thuc phai lon hon gio bat dau. Khong duoc chon cung mot gio.',
+                'from_time' => 'Giờ bắt đầu phải nhỏ hơn giờ kết thúc. Không được chọn cùng một giờ.',
+                'to_time' => 'Giờ kết thúc phải lớn hơn giờ bắt đầu. Không được chọn cùng một giờ.',
             ];
         }
 
@@ -3752,13 +3750,13 @@ class AttendanceService extends BaseService
 
         if (!$record) {
             return [
-                'request_date' => 'Ngay nay chua co ban ghi cham cong de giai trinh vi pham.',
+                'request_date' => 'Ngày này chưa có bản ghi chấm công để giải trình vi phạm.',
             ];
         }
 
         if ($record->missing_check_in || $record->missing_check_out || ($record->check_in_at && !$record->check_out_at)) {
             return [
-                'request_date' => 'Ngay nay dang thieu cham cong, can gui don quen cham cong truoc khi giai trinh di muon/ve som.',
+                'request_date' => 'Ngày này đang thiếu chấm công, cần gửi đơn quên chấm công trước khi giải trình đi muộn/về sớm.',
             ];
         }
 
@@ -3772,13 +3770,13 @@ class AttendanceService extends BaseService
 
         if ($requestedStatus === 'late' && !$hasLate) {
             return [
-                'requested_status' => 'Ngay da chon khong co vi pham di muon.',
+                'requested_status' => 'Ngày đã chọn không có vi phạm đi muộn.',
             ];
         }
 
         if ($requestedStatus === 'early_leave' && !$hasEarlyLeave) {
             return [
-                'requested_status' => 'Ngay da chon khong co vi pham ve som.',
+                'requested_status' => 'Ngày đã chọn không có vi phạm về sớm.',
             ];
         }
 
@@ -3789,7 +3787,7 @@ class AttendanceService extends BaseService
     {
         if (!in_array($requestType, ['leave', 'late_early', 'forgot_check', 'business_trip', 'make_up'], true)) {
             throw ValidationException::withMessages([
-                'request_type' => 'Loai don cham cong khong hop le.',
+                'request_type' => 'Loại đơn chấm công không hợp lệ.',
             ]);
         }
 
@@ -3819,7 +3817,7 @@ class AttendanceService extends BaseService
 
             if (!$selectedLeaveType) {
                 throw ValidationException::withMessages([
-                    'leave_type_id' => 'Loai nghi phep khong hop le hoac da ngung dung.',
+                    'leave_type_id' => 'Loại nghỉ phép không hợp lệ hoặc đã ngưng dùng.',
                 ]);
             }
         }
@@ -3832,34 +3830,34 @@ class AttendanceService extends BaseService
 
         if ($fromDate && $toDate && $fromDate > $toDate) {
             throw ValidationException::withMessages([
-                'from_date' => 'Tu ngay phai truoc hoac bang den ngay.',
-                'to_date' => 'Den ngay phai sau hoac bang tu ngay.',
+                'from_date' => 'Từ ngày phải trước hoặc bằng đến ngày.',
+                'to_date' => 'Đến ngày phải sau hoặc bằng từ ngày.',
             ]);
         }
 
         if ($requestType !== 'forgot_check' && (($fromTime && !$toTime) || (!$fromTime && $toTime))) {
             throw ValidationException::withMessages([
-                'from_time' => 'Can nhap du gio bat dau va gio ket thuc.',
-                'to_time' => 'Can nhap du gio bat dau va gio ket thuc.',
+                'from_time' => 'Cần nhập đủ giờ bắt đầu và giờ kết thúc.',
+                'to_time' => 'Cần nhập đủ giờ bắt đầu và giờ kết thúc.',
             ]);
         }
 
         if ($requestType !== 'forgot_check' && $fromTime && $toTime && $fromTime >= $toTime) {
             throw ValidationException::withMessages([
-                'from_time' => 'Gio bat dau phai nho hon gio ket thuc. Khong duoc chon cung mot gio.',
-                'to_time' => 'Gio ket thuc phai lon hon gio bat dau. Khong duoc chon cung mot gio.',
+                'from_time' => 'Giờ bắt đầu phải nhỏ hơn giờ kết thúc. Không được chọn cùng một giờ.',
+                'to_time' => 'Giờ kết thúc phải lớn hơn giờ bắt đầu. Không được chọn cùng một giờ.',
             ]);
         }
 
         if (in_array($requestType, ['forgot_check', 'late_early'], true) && !$requestDate) {
             throw ValidationException::withMessages([
-                'request_date' => 'Loai don nay yeu cau ngay ap dung.',
+                'request_date' => 'Loại đơn này yêu cầu ngày áp dụng.',
             ]);
         }
 
         if ($requestType === 'late_early' && !in_array($requestedStatus, ['late', 'early_leave'], true)) {
             throw ValidationException::withMessages([
-                'requested_status' => 'Trang thai de nghi khong hop le.',
+                'requested_status' => 'Trạng thái de nghi không hop le.',
             ]);
         }
 
@@ -3867,13 +3865,13 @@ class AttendanceService extends BaseService
             $makeUpDate = $requestDate ?: $fromDate;
             if (!$makeUpDate) {
                 throw ValidationException::withMessages([
-                    'request_date' => 'Lam bu yeu cau ngay ap dung.',
+                    'request_date' => 'Làm bù yêu cầu ngày áp dụng.',
                 ]);
             }
             if (!$fromTime || !$toTime) {
                 throw ValidationException::withMessages([
-                    'from_time' => 'Lam bu yeu cau gio bat dau va gio ket thuc.',
-                    'to_time' => 'Lam bu yeu cau gio bat dau va gio ket thuc.',
+                    'from_time' => 'Làm bù yêu cầu giờ bắt đầu và giờ kết thúc.',
+                    'to_time' => 'Làm bù yêu cầu giờ bắt đầu và giờ kết thúc.',
                 ]);
             }
             $makeUpStartAt = Carbon::parse($makeUpDate . ' ' . $fromTime, self::TIMEZONE);
@@ -3881,13 +3879,13 @@ class AttendanceService extends BaseService
 
             if ($this->overlapsWithShiftWorkingHours($profile, $makeUpStartAt, $makeUpEndAt)) {
                 throw ValidationException::withMessages([
-                    'from_time' => 'Lam bu khong duoc trung voi gio lam viec chinh thuc.',
+                    'from_time' => 'Làm bù không được trùng với giờ làm việc chính thức.',
                 ]);
             }
 
             if (!$makeUpRelatedLeaveDate) {
                 throw ValidationException::withMessages([
-                    'make_up_related_leave_date' => 'Lam bu bat buoc chon ngay nghi can bu.',
+                    'make_up_related_leave_date' => 'Làm bù bắt buộc chọn ngày nghỉ cần bù.',
                 ]);
             }
 
@@ -3896,36 +3894,36 @@ class AttendanceService extends BaseService
 
             if (!$leaveQuota['has_linked_leave']) {
                 throw ValidationException::withMessages([
-                    'make_up_related_leave_date' => 'Ngay nghi can bu phai la ngay co trang thai nghi phep, nghi khong luong hoac thieu cong.',
+                    'make_up_related_leave_date' => 'Ngày nghỉ cần bù phải là ngày có trạng thái nghỉ phép, nghỉ không lương hoặc thiếu công.',
                 ]);
             }
 
             if (($leaveQuota['remaining_minutes'] ?? 0) <= 0) {
                 throw ValidationException::withMessages([
-                    'make_up_related_leave_date' => 'Ngay nghi da chon da duoc lam bu du so gio thieu.',
+                    'make_up_related_leave_date' => 'Ngày nghỉ đã chọn đã được làm bù đủ số giờ thiếu.',
                 ]);
             }
 
             if ($makeUpMinutes > (int) ($leaveQuota['remaining_minutes'] ?? 0)) {
                 throw ValidationException::withMessages([
-                    'to_time' => 'So gio lam bu vuot qua so gio thieu con lai cua ngay nghi da chon (' . (int) $leaveQuota['remaining_minutes'] . ' phut).',
-                    'make_up_related_leave_date' => 'So gio lam bu vuot qua so gio thieu con lai cua ngay nghi da chon (' . (int) $leaveQuota['remaining_minutes'] . ' phut).',
+                    'to_time' => 'Số giờ làm bù vượt quá số giờ thiếu còn lại của ngày nghỉ đã chọn (' . (int) $leaveQuota['remaining_minutes'] . ' phút).',
+                    'make_up_related_leave_date' => 'Số giờ làm bù vượt quá số giờ thiếu còn lại của ngày nghỉ đã chọn (' . (int) $leaveQuota['remaining_minutes'] . ' phút).',
                 ]);
             }
         }
 
         if ($requestType === 'business_trip' && ($payload['business_trip_location'] ?? '') === '') {
             throw ValidationException::withMessages([
-                'business_trip_location' => 'Cong tac yeu cau dia diem ap dung.',
+                'business_trip_location' => 'Công tác yêu cầu địa điểm áp dụng.',
             ]);
         }
 
         $affectedDates = $this->deriveSubmissionDates($requestDate, $fromDate, $toDate);
         if (empty($affectedDates)) {
             throw ValidationException::withMessages([
-                'request_date' => 'Vui long nhap ngay ap dung hoac khoang ngay.',
-                'from_date' => 'Vui long nhap ngay ap dung hoac khoang ngay.',
-                'to_date' => 'Vui long nhap ngay ap dung hoac khoang ngay.',
+                'request_date' => 'Vui lòng nhập ngày áp dụng hoặc khoảng ngày.',
+                'from_date' => 'Vui lòng nhập ngày áp dụng hoặc khoảng ngày.',
+                'to_date' => 'Vui lòng nhập ngày áp dụng hoặc khoảng ngày.',
             ]);
         }
 
@@ -3934,26 +3932,26 @@ class AttendanceService extends BaseService
             $workDate = Carbon::parse($date, self::TIMEZONE)->startOfDay();
             if (in_array($requestType, ['forgot_check', 'late_early'], true) && $workDate->gt($today)) {
                 throw ValidationException::withMessages([
-                    'request_date' => 'Don giai trinh cham cong chi ap dung cho ngay hom nay hoac da qua.',
-                    'from_date' => 'Don giai trinh cham cong chi ap dung cho ngay hom nay hoac da qua.',
-                    'to_date' => 'Don giai trinh cham cong chi ap dung cho ngay hom nay hoac da qua.',
+                    'request_date' => 'Đơn giải trình chấm công chỉ áp dụng cho ngày hôm nay hoặc đã qua.',
+                    'from_date' => 'Đơn giải trình chấm công chỉ áp dụng cho ngày hôm nay hoặc đã qua.',
+                    'to_date' => 'Đơn giải trình chấm công chỉ áp dụng cho ngày hôm nay hoặc đã qua.',
                 ]);
             }
 
             if (!in_array($requestType, ['forgot_check', 'late_early'], true) && $workDate->lt($today)) {
                 throw ValidationException::withMessages([
-                    'request_date' => 'Khong the gui don cho ngay trong qua khu.',
-                    'from_date' => 'Khong the gui don cho ngay trong qua khu.',
-                    'to_date' => 'Khong the gui don cho ngay trong qua khu.',
+                    'request_date' => 'Không thể gửi đơn cho ngày trong quá khứ.',
+                    'from_date' => 'Không thể gửi đơn cho ngày trong quá khứ.',
+                    'to_date' => 'Không thể gửi đơn cho ngày trong quá khứ.',
                 ]);
             }
             try {
                 $this->ensureMonthNotLocked($profile, $workDate);
             } catch (\RuntimeException) {
                 throw ValidationException::withMessages([
-                    'request_date' => 'Thang cong cua ngay da chon dang bi khoa.',
-                    'from_date' => 'Thang cong cua ngay da chon dang bi khoa.',
-                    'to_date' => 'Thang cong cua ngay da chon dang bi khoa.',
+                    'request_date' => 'Tháng công của ngày đã chọn đang bị khoá.',
+                    'from_date' => 'Tháng công của ngày đã chọn đang bị khoá.',
+                    'to_date' => 'Tháng công của ngày đã chọn đang bị khoá.',
                 ]);
             }
         }
@@ -3978,48 +3976,48 @@ class AttendanceService extends BaseService
         if ($requestType === 'leave') {
             if (!in_array($leaveDurationType, ['full_day', 'half_day', 'hourly'], true)) {
                 throw ValidationException::withMessages([
-                    'leave_duration_type' => 'Kieu thoi luong nghi khong hop le.',
+                    'leave_duration_type' => 'Kiểu thời lượng nghỉ không hợp lệ.',
                 ]);
             }
 
             if (!$fromDate || !$toDate) {
                 throw ValidationException::withMessages([
-                    'from_date' => 'Nghi phep yeu cau tu ngay.',
-                    'to_date' => 'Nghi phep yeu cau den ngay.',
+                    'from_date' => 'Nghỉ phép yêu cầu từ ngày.',
+                    'to_date' => 'Nghỉ phép yêu cầu đến ngày.',
                 ]);
             }
 
             if (Carbon::parse($fromDate, self::TIMEZONE)->year !== Carbon::parse($toDate, self::TIMEZONE)->year) {
                 throw ValidationException::withMessages([
-                    'from_date' => 'Don nghi phep khong duoc vuot qua 2 nam. Vui long tach thanh 2 don.',
-                    'to_date' => 'Don nghi phep khong duoc vuot qua 2 nam. Vui long tach thanh 2 don.',
+                    'from_date' => 'Đơn nghỉ phép không được vượt quá 2 năm. Vui lòng tách thành 2 đơn.',
+                    'to_date' => 'Đơn nghỉ phép không được vượt quá 2 năm. Vui lòng tách thành 2 đơn.',
                 ]);
             }
 
             if (in_array($leaveDurationType, ['half_day', 'hourly'], true) && $fromDate !== $toDate) {
                 throw ValidationException::withMessages([
-                    'from_date' => 'Nghi nua ngay/theo gio chi ap dung cho mot ngay.',
-                    'to_date' => 'Nghi nua ngay/theo gio chi ap dung cho mot ngay.',
+                    'from_date' => 'Nghỉ nửa ngày/theo giờ chỉ áp dụng cho một ngày.',
+                    'to_date' => 'Nghỉ nửa ngày/theo giờ chỉ áp dụng cho một ngày.',
                 ]);
             }
 
             if ($leaveDurationType === 'hourly' && $leaveHours <= 0) {
                 throw ValidationException::withMessages([
-                    'leave_hours' => 'Vui long nhap so gio nghi.',
+                    'leave_hours' => 'Vui lòng nhập số giờ nghỉ.',
                 ]);
             }
 
             $leaveDays = $this->calculateLeaveDays($profile, $affectedDates, $leaveDurationType, $leaveHours);
             if ($leaveDays <= 0) {
                 throw ValidationException::withMessages([
-                    'from_date' => 'Khoang nghi khong co ngay lam viec hop le de tinh phep.',
-                    'to_date' => 'Khoang nghi khong co ngay lam viec hop le de tinh phep.',
+                    'from_date' => 'Khoảng nghỉ không có ngày làm việc hợp lệ để tính phép.',
+                    'to_date' => 'Khoảng nghỉ không có ngày làm việc hợp lệ để tính phép.',
                 ]);
             }
 
             if ($selectedLeaveType?->max_days_per_request !== null && $leaveDays > (float) $selectedLeaveType->max_days_per_request) {
                 throw ValidationException::withMessages([
-                    'leave_type_id' => 'So ngay nghi vuot qua gioi han moi don cua loai phep.',
+                    'leave_type_id' => 'Số ngày nghỉ vượt quá giới hạn mỗi đơn của loại phép.',
                 ]);
             }
 
@@ -4027,14 +4025,14 @@ class AttendanceService extends BaseService
                 $balance = $this->leaveService->ensureBalance((int) $profile->id, (int) $selectedLeaveType->id, (int) Carbon::parse($fromDate, self::TIMEZONE)->year);
                 if ($balance->available_days < $leaveDays) {
                     throw ValidationException::withMessages([
-                        'leave_type_id' => 'So du phep hien con ' . round($balance->available_days, 2) . ' ngay, khong du cho don ' . round($leaveDays, 2) . ' ngay.',
+                        'leave_type_id' => 'Số dư phep hiện còn ' . round($balance->available_days, 2) . ' ngay, không đủ cho đơn ' . round($leaveDays, 2) . ' ngay.',
                     ]);
                 }
             }
 
             if ($selectedLeaveType?->requires_attachment && blank($payload['attachment_path'] ?? null)) {
                 throw ValidationException::withMessages([
-                    'attachment' => 'Loai nghi nay yeu cau tai len minh chung.',
+                    'attachment' => 'Loại nghỉ này yêu cầu tải lên minh chứng.',
                 ]);
             }
         }
@@ -4067,7 +4065,7 @@ class AttendanceService extends BaseService
 
         if ($duplicateQuery->exists()) {
             throw ValidationException::withMessages([
-                'request_type' => 'Da ton tai don cham cong cung loai trong khoang thoi gian nay.',
+                'request_type' => 'Đã tồn tại đơn chấm công cùng loại trong khoảng thời gian này.',
             ]);
         }
 
@@ -4096,7 +4094,7 @@ class AttendanceService extends BaseService
         } else {
             if (!filled($payload['request_date'] ?? null)) {
                 throw ValidationException::withMessages([
-                    'request_date' => 'Vui long chon ngay tang ca.',
+                    'request_date' => 'Vui lòng chọn ngay tăng ca.',
                 ]);
             }
 
@@ -4106,7 +4104,7 @@ class AttendanceService extends BaseService
 
             if (!$overtimeWindow) {
                 throw ValidationException::withMessages([
-                    'request_date' => 'Ca lam ngay nay chua cau hinh khung gio tang ca trong danh muc cham cong.',
+                    'request_date' => 'Ca làm ngày này chưa cấu hình khung giờ tăng ca trong danh mục chấm công.',
                 ]);
             }
 
@@ -4115,9 +4113,9 @@ class AttendanceService extends BaseService
 
         if ($endAt->lessThanOrEqualTo($startAt)) {
             throw ValidationException::withMessages([
-                'request_date' => 'Khung gio tang ca trong danh muc khong hop le.',
-                'start_at' => 'Bat dau tang ca phai truoc ket thuc tang ca.',
-                'end_at' => 'Ket thuc tang ca phai sau bat dau tang ca.',
+                'request_date' => 'Khoảng thời gian tăng ca không hợp lệ.',
+                'start_at' => 'Bắt đầu tăng ca phải trước kết thúc tăng ca.',
+                'end_at' => 'Kết thúc tăng ca phải sau bắt đầu tăng ca.',
             ]);
         }
 
@@ -4126,9 +4124,9 @@ class AttendanceService extends BaseService
         $today = now(self::TIMEZONE)->startOfDay();
         if ($startAt->copy()->startOfDay()->lt($today)) {
             throw ValidationException::withMessages([
-                'request_date' => 'Khong the gui don tang ca cho ngay trong qua khu.',
-                'start_at' => 'Khong the gui don tang ca cho ngay trong qua khu.',
-                'end_at' => 'Khong the gui don tang ca cho ngay trong qua khu.',
+                'request_date' => 'Không thể gửi đơn tăng ca cho ngày trong quá khứ.',
+                'start_at' => 'Không thể gửi đơn tăng ca cho ngày trong quá khứ.',
+                'end_at' => 'Không thể gửi đơn tăng ca cho ngày trong quá khứ.',
             ]);
         }
 
@@ -4137,18 +4135,18 @@ class AttendanceService extends BaseService
             $this->ensureMonthNotLocked($profile, $endAt->copy());
         } catch (\RuntimeException) {
             throw ValidationException::withMessages([
-                'request_date' => 'Thang cong cua thoi gian tang ca dang bi khoa.',
-                'start_at' => 'Thang cong cua thoi gian tang ca dang bi khoa.',
-                'end_at' => 'Thang cong cua thoi gian tang ca dang bi khoa.',
+                'request_date' => 'Tháng công của thời gian tăng ca đang bị khóa.',
+                'start_at' => 'Tháng công của thời gian tăng ca đang bị khóa.',
+                'end_at' => 'Tháng công của thời gian tăng ca đang bị khóa.',
             ]);
         }
 
         $requestedMinutes = $this->calculateRequestedOvertimeMinutes($profile, $startAt, $endAt);
         if ($requestedMinutes <= 0) {
             throw ValidationException::withMessages([
-                'request_date' => 'Khoang thoi gian tang ca khong hop le.',
-                'start_at' => 'Khoang thoi gian tang ca khong hop le.',
-                'end_at' => 'Khoang thoi gian tang ca khong hop le.',
+                'request_date' => 'Khoảng thời gian tăng ca không hợp lệ.',
+                'start_at' => 'Khoảng thời gian tăng ca không hợp lệ.',
+                'end_at' => 'Khoảng thời gian tăng ca không hợp lệ.',
             ]);
         }
 
@@ -4161,9 +4159,9 @@ class AttendanceService extends BaseService
 
         if ($hasDuplicate) {
             throw ValidationException::withMessages([
-                'request_date' => 'Da ton tai don tang ca trung thoi gian.',
-                'start_at' => 'Da ton tai don tang ca trung thoi gian.',
-                'end_at' => 'Da ton tai don tang ca trung thoi gian.',
+                'request_date' => 'Đã tồn tại đơn tăng ca trùng thời gian.',
+                'start_at' => 'Đã tồn tại đơn tăng ca trùng thời gian.',
+                'end_at' => 'Đã tồn tại đơn tăng ca trùng thời gian.',
             ]);
         }
 
@@ -4483,13 +4481,13 @@ class AttendanceService extends BaseService
         $request->loadMissing('employeeProfile.department');
 
         if (!$request->employee_profile_id || !$request->employeeProfile) {
-            throw new \RuntimeException('Khong tim thay nhan vien cho don cham cong.');
+            throw new \RuntimeException('Không tìm thấy nhân viên cho đơn chấm công.');
         }
 
         $workDates = $this->requestDates($request);
 
         if (empty($workDates)) {
-            throw new \RuntimeException('Don cham cong chua co ngay ap dung hop le.');
+            throw new \RuntimeException('Don chấm công chưa có ngày áp dụng hợp lệ.');
         }
 
         foreach ($workDates as $workDate) {
@@ -4505,7 +4503,7 @@ class AttendanceService extends BaseService
                     filled($request->from_time) ? (string) $request->from_time : null,
                     filled($request->to_time) ? (string) $request->to_time : null
                 )
-                : ['request_date' => 'Don quen cham cong thieu ngay ap dung.'];
+                : ['request_date' => 'Đơn quên chấm công thiếu ngày áp dụng.'];
 
             if ($contextErrors !== []) {
                 throw new \RuntimeException((string) reset($contextErrors));
@@ -4522,7 +4520,7 @@ class AttendanceService extends BaseService
                     filled($request->from_time) ? (string) $request->from_time : null,
                     filled($request->to_time) ? (string) $request->to_time : null
                 )
-                : ['request_date' => 'Don giai trinh thieu ngay ap dung.'];
+                : ['request_date' => 'Đơn giải trình thiếu ngày áp dụng.'];
 
             if ($contextErrors !== []) {
                 throw new \RuntimeException((string) reset($contextErrors));
@@ -4535,18 +4533,18 @@ class AttendanceService extends BaseService
             $toTime = filled($request->to_time) ? (string) $request->to_time : null;
 
             if (!$workDate || !$fromTime || !$toTime) {
-                throw new \RuntimeException('Don lam bu thieu ngay hoac gio ap dung.');
+                throw new \RuntimeException('Đơn làm bù thiếu ngày hoặc giờ áp dụng.');
             }
 
             $startAt = Carbon::parse($workDate . ' ' . $fromTime, self::TIMEZONE);
             $endAt = Carbon::parse($workDate . ' ' . $toTime, self::TIMEZONE);
 
             if ($this->overlapsWithShiftWorkingHours($request->employeeProfile, $startAt, $endAt)) {
-                throw new \RuntimeException('Lam bu khong duoc trung voi gio lam viec chinh thuc.');
+                throw new \RuntimeException('Lam bu không được trùng với giờ làm việc chính thức.');
             }
 
             if (!$request->make_up_related_leave_date) {
-                throw new \RuntimeException('Lam bu bat buoc chon ngay nghi can bu.');
+                throw new \RuntimeException('Lam bu bắt buộc phải chọn ngày nghỉ cần bù.');
             }
 
             $makeUpMinutes = $this->calculateMakeUpMinutes($request);
@@ -4557,15 +4555,15 @@ class AttendanceService extends BaseService
             );
 
             if (!$leaveQuota['has_linked_leave']) {
-                throw new \RuntimeException('Ngay nghi can bu phai la ngay co trang thai nghi phep, nghi khong luong hoac thieu cong.');
+                throw new \RuntimeException('Ngày nghỉ bù phải là ngày có trạng thái nghỉ phép, nghỉ không lương hoặc thiếu công.');
             }
 
             if (($leaveQuota['remaining_minutes'] ?? 0) <= 0) {
-                throw new \RuntimeException('Ngay nghi da chon da duoc lam bu du so gio thieu.');
+                throw new \RuntimeException('Ngày nghỉ đã chọn đã được làm bù đủ số giờ thiếu.');
             }
 
             if ($makeUpMinutes > (int) ($leaveQuota['remaining_minutes'] ?? 0)) {
-                throw new \RuntimeException('So gio lam bu vuot qua so gio thieu con lai cua ngay nghi da chon (' . (int) $leaveQuota['remaining_minutes'] . ' phut).');
+                throw new \RuntimeException('Số giờ làm bù vượt quá số giờ thiếu còn lại của ngày nghỉ đã chọn (' . (int) $leaveQuota['remaining_minutes'] . ' phut).');
             }
         }
     }
@@ -4574,15 +4572,15 @@ class AttendanceService extends BaseService
         $request->loadMissing('employeeProfile.department');
 
         if (!$request->employee_profile_id || !$request->employeeProfile) {
-            throw new \RuntimeException('Khong tim thay nhan vien cho don tang ca.');
+            throw new \RuntimeException('Không tìm thấy nhân viên cho đơn tăng ca.');
         }
 
         if (!$request->start_at || !$request->end_at) {
-            throw new \RuntimeException('Don tang ca thieu moc thoi gian bat dau/ket thuc.');
+            throw new \RuntimeException('Đơn tăng ca thiếu mốc thời gian bắt đầu/kết thúc.');
         }
 
         if (Carbon::parse($request->end_at, self::TIMEZONE)->lessThanOrEqualTo(Carbon::parse($request->start_at, self::TIMEZONE))) {
-            throw new \RuntimeException('Gio ket thuc phai lon hon gio bat dau. Khong duoc chon cung mot gio.');
+            throw new \RuntimeException('Giờ kết thúc phải lớn hơn giờ bắt đầu. Không được chọn cùng một giờ.');
         }
 
         $startAt = Carbon::parse($request->start_at, self::TIMEZONE);
@@ -4591,7 +4589,7 @@ class AttendanceService extends BaseService
 
         $workDate = optional($request->work_date)->format('Y-m-d');
         if (!$workDate) {
-            throw new \RuntimeException('Don tang ca thieu ngay ap dung.');
+            throw new \RuntimeException('Đơn tăng ca thiếu ngày áp dụng.');
         }
 
         $this->ensureMonthNotLocked($request->employeeProfile, Carbon::parse($workDate, self::TIMEZONE));
@@ -4633,7 +4631,7 @@ class AttendanceService extends BaseService
         $workShift = $this->resolveWorkShift($profile, $startAt->copy());
 
         if ($workShift && !($workShift->allows_overtime ?? true)) {
-            throw new \RuntimeException('Ca lam hien tai khong cho phep dang ky tang ca.');
+            throw new \RuntimeException('Ca làm việc hiện tại không cho phép đăng ký tăng ca.');
         }
 
         $overtimeWindow = $this->resolveOvertimeWindowForShift($workShift, $startAt->copy());
@@ -4643,7 +4641,7 @@ class AttendanceService extends BaseService
 
             if ($startAt->lt($overtimeStart) || $endAt->gt($overtimeEnd)) {
                 throw new \RuntimeException(sprintf(
-                    'Thoi gian tang ca phai nam trong khung %s - %s cua danh muc cham cong.',
+                    'Thời gian tăng ca phải nằm trong khung %s - %s của danh mục chấm công.',
                     $overtimeStart->format('H:i'),
                     $overtimeEnd->format('H:i')
                 ));
@@ -4654,7 +4652,7 @@ class AttendanceService extends BaseService
 
         $shiftEnd = $this->resolveShiftEndForProfile($profile, $startAt);
         if ($startAt->lessThanOrEqualTo($shiftEnd)) {
-            throw new \RuntimeException('Tang ca phai bat dau sau khi ket thuc gio hanh chinh.');
+            throw new \RuntimeException('Tăng ca phải bắt đầu sau khi kết thúc giờ hành chính.');
         }
     }
 
@@ -5133,25 +5131,25 @@ class AttendanceService extends BaseService
     private function ensureReviewerOutranksEmployee(User $reviewer, ?EmployeeProfile $targetProfile): void
     {
         if (!$targetProfile) {
-            throw new \RuntimeException('Khong tim thay ho so nhan su can duyet.');
+            throw new \RuntimeException('Không tìm thấy hồ sơ nhân sự cần duyệt.');
         }
 
         $reviewer->loadMissing('employeeProfile.position');
         $targetProfile->loadMissing(['user', 'position', 'department']);
 
         if ((int) ($targetProfile->user_id ?? 0) === (int) $reviewer->id) {
-            throw new \RuntimeException('Khong duoc tu duyet cham cong cua chinh minh.');
+            throw new \RuntimeException('Không được tự duyệt chấm công của chính mình.');
         }
 
         $reviewerLevel = (int) ($reviewer->employeeProfile?->position?->authority_level ?? 0);
         $targetLevel = (int) ($targetProfile->position?->authority_level ?? 0);
 
         if ($reviewerLevel <= $targetLevel) {
-            throw new \RuntimeException('Chi nguoi co chuc vu cao hon nhan vien moi duoc duyet cham cong.');
+            throw new \RuntimeException('Chỉ người có chức vụ cao hơn nhân viên mới được duyệt chấm công.');
         }
 
         if (!$this->isProfileInReviewerSubordinateScope($reviewer, $targetProfile)) {
-            throw new \RuntimeException('Chi duoc duyet cham cong cua cap duoi trong pham vi quan ly cua minh.');
+            throw new \RuntimeException('Chỉ được duyệt chấm công của cấp dưới trong phạm vi quản lý của mình.');
         }
     }
 
@@ -5264,7 +5262,7 @@ class AttendanceService extends BaseService
             ->exists();
 
         if ($isLocked) {
-            throw new \RuntimeException('Bang cong thang nay da bi khoa, khong the chinh sua.');
+            throw new \RuntimeException('Bảng chấm công tháng này đã bị khóa, không thể chỉnh sửa.');
         }
     }
 

@@ -1,48 +1,48 @@
 <template>
-  <Head title="Danh muc cham cong" />
+  <Head title="Danh mục chấm công" />
 
   <AdminLayout>
-    <PageBreadcrumb title="Danh muc cham cong" :items="[{ text: 'Cham cong', link: null }, { text: 'Danh muc', link: null }]" />
+    <PageBreadcrumb title="Danh mục chấm công" :items="[{ text: 'Chấm công', link: null }, { text: 'Danh mục', link: null }]" />
 
     <div class="space-y-6">
       <section class="rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
         <div class="flex flex-col gap-1">
-          <h3 class="text-lg font-semibold text-gray-900">Ca lam viec</h3>
-          <p class="text-sm text-gray-500">Khai bao gio vao, gio ra, nghi giua ca, phut chuan, nguong nua cong va quy tac tinh muon som/tang ca.</p>
+          <h3 class="text-lg font-semibold text-gray-900">Ca làm việc</h3>
+          <p class="text-sm text-gray-500">Khai báo giờ vào, giờ ra, nghỉ giữa ca, phút chuẩn, ngưỡng nửa công và quy tắc tính muộn sớm/tăng ca.</p>
         </div>
 
         <form class="mt-5 space-y-4" @submit.prevent="submitShift">
           <div v-if="editingShiftId" class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-            Dang chinh sua ca lam <strong>{{ shiftForm.shift_name || `#${editingShiftId}` }}</strong>.
+            Đang chỉnh sửa ca làm <strong>{{ shiftForm.shift_name || `#${editingShiftId}` }}</strong>.
           </div>
 
           <div class="rounded-xl border border-gray-200 bg-gray-50/70 p-4">
             <div class="mb-4">
-              <h4 class="text-sm font-semibold text-gray-900">Cau hinh ca lam viec</h4>
-              <p class="mt-1 text-sm text-gray-500">Phan nay dung de khai bao gio hanh chinh, nghi giua ca va quy tac tinh cong.</p>
+              <h4 class="text-sm font-semibold text-gray-900">Cấu hình ca làm việc</h4>
+              <p class="mt-1 text-sm text-gray-500">Phần này dùng để khai báo giờ hành chính, nghỉ giữa ca và quy tắc tính công.</p>
             </div>
 
             <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
-              <Field label="Ten ca" :error="shiftForm.errors.shift_name">
-                <input v-model.trim="shiftForm.shift_name" class="form-input" placeholder="Ca hanh chinh">
+              <Field label="Tên ca" :error="shiftForm.errors.shift_name">
+                <input v-model.trim="shiftForm.shift_name" class="form-input" placeholder="Ca hành chính">
               </Field>
-              <InputDate v-model="shiftForm.start_time" label="Gio bat dau" placeholder="Chon gio" :config="timePickerConfig" :error="shiftForm.errors.start_time" />
-              <InputDate v-model="shiftForm.end_time" label="Gio ket thuc" placeholder="Chon gio" :config="timePickerConfig" :error="shiftForm.errors.end_time" />
+              <InputDate v-model="shiftForm.start_time" label="Giờ bắt đầu" placeholder="Chọn giờ" :config="timePickerConfig" :error="shiftForm.errors.start_time" />
+              <InputDate v-model="shiftForm.end_time" label="Giờ kết thúc" placeholder="Chọn giờ" :config="timePickerConfig" :error="shiftForm.errors.end_time" />
               <div class="rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
-                Ma ca duoc tao tu dong khi luu.
+                Mã ca được tạo tự động khi lưu.
               </div>
             </div>
 
             <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-4">
-              <InputDate v-model="shiftForm.break_start_time" label="Bat dau nghi giua ca" placeholder="Khong nghi" :config="timePickerConfig" :error="shiftForm.errors.break_start_time" />
-              <InputDate v-model="shiftForm.break_end_time" label="Ket thuc nghi giua ca" placeholder="Khong nghi" :config="timePickerConfig" :error="shiftForm.errors.break_end_time" />
-              <Field label="Phut chuan" :error="shiftForm.errors.standard_minutes">
+              <InputDate v-model="shiftForm.break_start_time" label="Bắt đầu nghỉ giữa ca" placeholder="Không nghỉ" :config="timePickerConfig" :error="shiftForm.errors.break_start_time" />
+              <InputDate v-model="shiftForm.break_end_time" label="Kết thúc nghỉ giữa ca" placeholder="Không nghỉ" :config="timePickerConfig" :error="shiftForm.errors.break_end_time" />
+              <Field label="Phút chuẩn" :error="shiftForm.errors.standard_minutes">
                 <input v-model.number="shiftForm.standard_minutes" class="form-input bg-gray-100 text-gray-700" type="number" min="1" readonly>
-                <p class="text-xs text-gray-500">Tu tinh bang thoi luong ca tru nghi giua ca.</p>
+                <p class="text-xs text-gray-500">Tự tính bằng thời lượng ca trừ nghỉ giữa ca.</p>
               </Field>
-              <Field label="Nguong nua cong" :error="shiftForm.errors.half_day_minutes">
+              <Field label="Ngưỡng nửa công" :error="shiftForm.errors.half_day_minutes">
                 <input v-model.number="shiftForm.half_day_minutes" class="form-input bg-gray-100 text-gray-700" type="number" min="1" readonly>
-                <p class="text-xs text-gray-500">Tu tinh bang 50% phut chuan.</p>
+                <p class="text-xs text-gray-500">Tự tính bằng 50% phút chuẩn.</p>
               </Field>
             </div>
 
@@ -50,51 +50,51 @@
               <Field label="Dung sai chung" :error="shiftForm.errors.grace_minutes">
                 <input v-model.number="shiftForm.grace_minutes" class="form-input" type="number" min="0" max="180">
               </Field>
-              <Field label="Nghi giao ca (phut)" :error="shiftForm.errors.handover_break_minutes">
+              <Field label="Nghỉ giao ca (phút)" :error="shiftForm.errors.handover_break_minutes">
                 <input v-model.number="shiftForm.handover_break_minutes" class="form-input" type="number" min="0" max="240">
               </Field>
               <div class="md:col-span-2 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
-                So phut nay dung de ghi nhan quy tac giao ca, khong bi tru khoi phut chuan va thoi gian tinh cong.
+                Số phút này dùng để ghi nhận quy tắc giao ca, không bị trừ khỏi phút chuẩn và thời gian tính công.
               </div>
             </div>
 
             <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-4">
               <div class="grid grid-cols-2 gap-3 md:col-start-4">
-                <ToggleBox v-model="shiftForm.allows_overtime" label="Tinh tang ca" />
-                <ToggleBox v-model="shiftForm.is_overnight" label="Ca qua dem" />
+                <ToggleBox v-model="shiftForm.allows_overtime" label="Tính tăng ca" />
+                <ToggleBox v-model="shiftForm.is_overnight" label="Ca qua đêm" />
               </div>
             </div>
           </div>
 
           <div class="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
             <div class="mb-4">
-              <h4 class="text-sm font-semibold text-blue-900">Quy tac tang ca</h4>
-              <p class="mt-1 text-sm text-blue-800">Phan nay la cau hinh rieng cho tang ca cua ca lam. Co the bo trong neu ca khong su dung OT co quy tac rieng.</p>
+              <h4 class="text-sm font-semibold text-blue-900">Quy tắc tăng ca</h4>
+              <p class="mt-1 text-sm text-blue-800">Phần này là cấu hình riêng cho tăng ca của ca làm. Có thể bỏ trống nếu ca không sử dụng OT có quy tắc riêng.</p>
             </div>
 
             <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <InputDate v-model="shiftForm.overtime_start_time" label="Gio bat dau tang ca" placeholder="Khong cau hinh" :config="timePickerConfig" :error="shiftForm.errors.overtime_start_time" />
-              <InputDate v-model="shiftForm.overtime_end_time" label="Gio ket thuc tang ca" placeholder="Khong cau hinh" :config="timePickerConfig" :error="shiftForm.errors.overtime_end_time" />
-              <Field label="Tien tang ca / gio" :error="shiftForm.errors.overtime_hourly_rate">
-                <input v-model.number="shiftForm.overtime_hourly_rate" class="form-input" type="number" min="0" step="1000" placeholder="Vi du: 50000">
+              <InputDate v-model="shiftForm.overtime_start_time" label="Giờ bắt đầu tăng ca" placeholder="Không cấu hình" :config="timePickerConfig" :error="shiftForm.errors.overtime_start_time" />
+              <InputDate v-model="shiftForm.overtime_end_time" label="Giờ kết thúc tăng ca" placeholder="Không cấu hình" :config="timePickerConfig" :error="shiftForm.errors.overtime_end_time" />
+              <Field label="Tiền tăng ca / giờ" :error="shiftForm.errors.overtime_hourly_rate">
+                <input v-model.number="shiftForm.overtime_hourly_rate" class="form-input" type="number" min="0" step="1000" placeholder="Ví dụ: 50000">
               </Field>
             </div>
           </div>
 
-          <Field label="Ghi chu" :error="shiftForm.errors.description">
-            <textarea v-model.trim="shiftForm.description" class="form-input min-h-[74px]" placeholder="Quy dinh rieng cua ca lam neu co"></textarea>
+          <Field label="Ghi chú" :error="shiftForm.errors.description">
+            <textarea v-model.trim="shiftForm.description" class="form-input min-h-[74px]" placeholder="Quy định riêng của ca làm nếu có"></textarea>
           </Field>
 
           <div class="rounded-lg border p-4 text-sm" :class="shiftPreviewError ? 'border-red-200 bg-red-50 text-red-700' : 'border-blue-100 bg-blue-50 text-blue-900'">
-            <div class="font-semibold">Tom tat ca sau khi luu</div>
+            <div class="font-semibold">Tóm tắt ca sau khi lưu</div>
             <div class="mt-2 grid grid-cols-1 gap-2 md:grid-cols-4">
-              <div>Tong thoi gian tu dau ca den cuoi ca: <strong>{{ formatMinutes(shiftDurationMinutes) }}</strong></div>
-              <div>Thoi gian nghi giua ca: <strong>{{ formatMinutes(breakMinutes) }}</strong></div>
-              <div>Thoi luong ca sau khi tru nghi: <strong>{{ formatMinutes(netShiftMinutes) }}</strong></div>
-              <div>Thoi gian tinh cong theo phut chuan: <strong>{{ formatMinutes(standardMinutes) }}</strong></div>
-              <div>Nghi giao ca: <strong>{{ formatMinutes(Number(shiftForm.handover_break_minutes || 0)) }}</strong></div>
-              <div>Khung tang ca: <strong>{{ overtimePreviewLabel }}</strong></div>
-              <div>Trang thai kiem tra du lieu: <strong>{{ shiftPreviewError || 'Hop le de luu' }}</strong></div>
+              <div>Tổng thời gian từ đầu ca đến cuối ca: <strong>{{ formatMinutes(shiftDurationMinutes) }}</strong></div>
+              <div>Thời gian nghỉ giữa ca: <strong>{{ formatMinutes(breakMinutes) }}</strong></div>
+              <div>Thời lượng ca sau khi trừ nghỉ: <strong>{{ formatMinutes(netShiftMinutes) }}</strong></div>
+              <div>Thời gian tính công theo phút chuẩn: <strong>{{ formatMinutes(standardMinutes) }}</strong></div>
+              <div>Nghỉ giao ca: <strong>{{ formatMinutes(Number(shiftForm.handover_break_minutes || 0)) }}</strong></div>
+              <div>Khung tăng ca: <strong>{{ overtimePreviewLabel }}</strong></div>
+              <div>Trạng thái kiểm tra dữ liệu: <strong>{{ shiftPreviewError || 'Hợp lệ để lưu' }}</strong></div>
             </div>
           </div>
 
@@ -105,10 +105,10 @@
               type="button"
               @click="cancelShiftEdit"
             >
-              Huy sua
+              Hủy sửa
             </button>
             <button class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" :disabled="shiftForm.processing || !!shiftPreviewError">
-              {{ shiftForm.processing ? 'Dang luu...' : (editingShiftId ? 'Luu ca lam' : 'Them ca') }}
+              {{ shiftForm.processing ? 'Đang lưu...' : (editingShiftId ? 'Lưu ca làm' : 'Thêm ca') }}
             </button>
           </div>
         </form>
@@ -116,13 +116,13 @@
         <TableShell class="mt-5">
           <thead>
             <tr class="text-left">
-              <th class="p-2">Ma / Ten ca</th>
-              <th class="p-2">Khung gio</th>
-              <th class="p-2">Nghi giua ca</th>
-              <th class="p-2">Nguong cong</th>
+              <th class="p-2">Mã / Tên ca</th>
+              <th class="p-2">Khung giờ</th>
+              <th class="p-2">Nghỉ giữa ca</th>
+              <th class="p-2">Ngưỡng công</th>
               <th class="p-2">Grace</th>
-              <th class="p-2">Trang thai</th>
-              <th class="p-2">Tac vu</th>
+              <th class="p-2">Trạng thái</th>
+              <th class="p-2">Tác vụ</th>
             </tr>
           </thead>
           <tbody>
@@ -131,26 +131,26 @@
                 <div class="font-semibold text-gray-900">{{ item.shift_name }}</div>
               </td>
               <td class="p-2">{{ item.start_time }} - {{ item.end_time }}<span v-if="item.is_overnight"> (+1)</span></td>
-              <td class="p-2">{{ item.break_start_time && item.break_end_time ? `${item.break_start_time} - ${item.break_end_time}` : 'Khong co' }}</td>
+              <td class="p-2">{{ item.break_start_time && item.break_end_time ? `${item.break_start_time} - ${item.break_end_time}` : 'Không có' }}</td>
               <td class="p-2">
-                <div>{{ item.standard_minutes }}p / nua cong {{ item.half_day_minutes }}p</div>
-                <div class="text-xs text-gray-500">Nghi giao ca {{ item.handover_break_minutes || 0 }}p</div>
+                <div>{{ item.standard_minutes }}p / nửa công {{ item.half_day_minutes }}p</div>
+                <div class="text-xs text-gray-500">Nghỉ giao ca {{ item.handover_break_minutes || 0 }}p</div>
               </td>
               <td class="p-2">
                 <div>Dung sai chung {{ item.grace_minutes }}p</div>
                 <div class="text-xs text-gray-500">
-                  OT: {{ item.overtime_start_time && item.overtime_end_time ? `${item.overtime_start_time} - ${item.overtime_end_time}` : 'Khong cau hinh' }}
-                  <span v-if="item.overtime_hourly_rate"> | {{ formatMoney(item.overtime_hourly_rate) }}/gio</span>
+                  OT: {{ item.overtime_start_time && item.overtime_end_time ? `${item.overtime_start_time} - ${item.overtime_end_time}` : 'Không cấu hình' }}
+                  <span v-if="item.overtime_hourly_rate"> | {{ formatMoney(item.overtime_hourly_rate) }}/giờ</span>
                 </div>
               </td>
               <td class="p-2">
                 <StatusBadge :active="item.is_active" />
               </td>
               <td class="p-2 space-x-2">
-                <button class="rounded border px-3 py-1 text-sm" type="button" @click="editShift(item)">Chinh sua</button>
-                <button class="rounded border px-3 py-1 text-sm" type="button" @click="startQuickAssign(item)">Gan nhan vien</button>
+                <button class="rounded border px-3 py-1 text-sm" type="button" @click="editShift(item)">Chỉnh sửa</button>
+                <button class="rounded border px-3 py-1 text-sm" type="button" @click="startQuickAssign(item)">Gán nhân viên</button>
                 <button class="rounded border px-3 py-1 text-sm" type="button" @click="toggleShift(item.id)">
-                  {{ item.is_active ? 'Ngung dung' : 'Kich hoat' }}
+                  {{ item.is_active ? 'Ngừng dùng' : 'Kích hoạt' }}
                 </button>
               </td>
             </tr>
@@ -160,33 +160,33 @@
         <div v-if="quickAssignShift" class="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-5">
           <div class="flex items-start justify-between gap-4">
             <div>
-              <h4 class="text-base font-semibold text-blue-900">Gan nhan vien vao ca lam</h4>
+              <h4 class="text-base font-semibold text-blue-900">Gán nhân viên vào ca làm</h4>
               <p class="mt-1 text-sm text-blue-800">
-                Dang chon ca <strong>{{ quickAssignShift.shift_name }}</strong>. Ban co the tao phan ca cho nhan vien ngay tai day.
+                Đang chọn ca <strong>{{ quickAssignShift.shift_name }}</strong>. Bạn có thể tạo phân ca cho nhân viên ngay tại đây.
               </p>
             </div>
             <button class="rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-sm font-medium text-blue-800" type="button" @click="cancelQuickAssign">
-              Dong
+              Đóng
             </button>
           </div>
 
           <form class="mt-4 space-y-4" @submit.prevent="submitQuickAssignment">
             <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
-              <Field label="Nhan vien" :error="assignmentForm.errors.employee_profile_id">
+              <Field label="Nhân viên" :error="assignmentForm.errors.employee_profile_id">
                 <select v-model="assignmentForm.employee_profile_id" class="form-input">
-                  <option :value="null">Chon nhan vien</option>
+                  <option :value="null">Chọn nhân viên</option>
                   <option v-for="item in employeeOptions" :key="item.id" :value="item.id">{{ item.label }}</option>
                 </select>
               </Field>
-              <Field label="Ca lam">
+              <Field label="Ca làm">
                 <input class="form-input bg-gray-50" :value="quickAssignShift.shift_name" disabled>
               </Field>
-              <InputDate v-model="assignmentForm.effective_from" label="Tu ngay" placeholder="Chon ngay" :config="datePickerConfig" :error="assignmentForm.errors.effective_from" />
-              <InputDate v-model="assignmentForm.effective_to" label="Den ngay" placeholder="Bo trong neu chua ket thuc" :config="datePickerConfig" :error="assignmentForm.errors.effective_to" />
+              <InputDate v-model="assignmentForm.effective_from" label="Từ ngày" placeholder="Chọn ngày" :config="datePickerConfig" :error="assignmentForm.errors.effective_from" />
+              <InputDate v-model="assignmentForm.effective_to" label="Đến ngày" placeholder="Bỏ trống nếu chưa kết thúc" :config="datePickerConfig" :error="assignmentForm.errors.effective_to" />
             </div>
 
             <div class="grid grid-cols-1 gap-4 md:grid-cols-[1fr_2fr]">
-              <Field label="Ngay trong tuan" :error="assignmentForm.errors.weekdays">
+              <Field label="Ngày trong tuần" :error="assignmentForm.errors.weekdays">
                 <div class="flex flex-wrap gap-2">
                   <label v-for="day in weekdays" :key="`quick-${day.value}`" class="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm">
                     <input v-model="assignmentForm.weekdays" type="checkbox" :value="day.value">
@@ -194,17 +194,17 @@
                   </label>
                 </div>
               </Field>
-              <Field label="Ghi chu" :error="assignmentForm.errors.note">
-                <input v-model.trim="assignmentForm.note" class="form-input" placeholder="Ghi chu phan ca neu can">
+              <Field label="Ghi chú" :error="assignmentForm.errors.note">
+                <input v-model.trim="assignmentForm.note" class="form-input" placeholder="Ghi chú phân ca nếu cần">
               </Field>
             </div>
 
             <div class="flex justify-end gap-3">
               <button class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700" type="button" @click="cancelQuickAssign">
-                Huy
+                Hủy
               </button>
               <button class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" :disabled="assignmentForm.processing">
-                {{ assignmentForm.processing ? 'Dang luu...' : 'Gan vao ca' }}
+                {{ assignmentForm.processing ? 'Đang lưu...' : 'Gán vào ca' }}
               </button>
             </div>
           </form>
@@ -213,36 +213,36 @@
 
       <section class="rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
         <div class="flex flex-col gap-1">
-          <h3 class="text-lg font-semibold text-gray-900">Ngay le</h3>
-          <p class="text-sm text-gray-500">Khai bao ngay nghi ap dung toan cong ty, phan loai ngay nghi va xac dinh co tinh luong hay lap lai hang nam.</p>
+          <h3 class="text-lg font-semibold text-gray-900">Ngày lễ</h3>
+          <p class="text-sm text-gray-500">Khai báo ngày nghỉ áp dụng toàn công ty, phân loại ngày nghỉ và xác định có tính lương hay lặp lại hàng năm.</p>
         </div>
 
         <form class="mt-5 space-y-4" @submit.prevent="submitHoliday">
           <div v-if="editingHolidayId" class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-            Dang chinh sua ngay le <strong>{{ holidayForm.holiday_name || `#${editingHolidayId}` }}</strong>.
+            Đang chỉnh sửa ngày lễ <strong>{{ holidayForm.holiday_name || `#${editingHolidayId}` }}</strong>.
           </div>
 
           <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
-            <InputDate v-model="holidayForm.holiday_date" label="Ngay le" placeholder="Chon ngay" :config="datePickerConfig" :error="holidayForm.errors.holiday_date" />
-            <Field label="Ten ngay le" :error="holidayForm.errors.holiday_name">
-              <input v-model.trim="holidayForm.holiday_name" class="form-input" placeholder="Ten ngay le">
+            <InputDate v-model="holidayForm.holiday_date" label="Ngày lễ" placeholder="Chọn ngày" :config="datePickerConfig" :error="holidayForm.errors.holiday_date" />
+            <Field label="Tên ngày lễ" :error="holidayForm.errors.holiday_name">
+              <input v-model.trim="holidayForm.holiday_name" class="form-input" placeholder="Tên ngày lễ">
             </Field>
-            <Field label="Loai ngay" :error="holidayForm.errors.holiday_type">
+            <Field label="Loại ngày" :error="holidayForm.errors.holiday_type">
               <select v-model="holidayForm.holiday_type" class="form-input">
-                <option value="public">Le nha nuoc</option>
-                <option value="company">Ngay nghi cong ty</option>
-                <option value="compensatory">Nghi bu</option>
-                <option value="special">Dac biet</option>
+                <option value="public">Lễ nhà nước</option>
+                <option value="company">Ngày nghỉ công ty</option>
+                <option value="compensatory">Nghỉ bù</option>
+                <option value="special">Đặc biệt</option>
               </select>
             </Field>
             <div class="grid grid-cols-2 gap-3">
-              <ToggleBox v-model="holidayForm.is_paid_leave" label="Co luong" />
-              <ToggleBox v-model="holidayForm.is_recurring" label="Lap lai hang nam" />
+              <ToggleBox v-model="holidayForm.is_paid_leave" label="Có lương" />
+              <ToggleBox v-model="holidayForm.is_recurring" label="Lặp lại hàng năm" />
             </div>
           </div>
 
-          <Field label="Ghi chu" :error="holidayForm.errors.note">
-            <input v-model.trim="holidayForm.note" class="form-input" placeholder="Ghi chu neu co">
+          <Field label="Ghi chú" :error="holidayForm.errors.note">
+            <input v-model.trim="holidayForm.note" class="form-input" placeholder="Ghi chú nếu có">
           </Field>
 
           <div class="flex justify-end gap-3">
@@ -252,10 +252,10 @@
               type="button"
               @click="cancelHolidayEdit"
             >
-              Huy sua
+              Hủy sửa
             </button>
             <button class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" :disabled="holidayForm.processing">
-              {{ holidayForm.processing ? 'Dang luu...' : (editingHolidayId ? 'Luu ngay le' : 'Them ngay le') }}
+              {{ holidayForm.processing ? 'Đang lưu...' : (editingHolidayId ? 'Lưu ngày lễ' : 'Thêm ngày lễ') }}
             </button>
           </div>
         </form>
@@ -263,12 +263,12 @@
         <TableShell class="mt-5">
           <thead>
             <tr class="text-left">
-              <th class="p-2">Ngay</th>
-              <th class="p-2">Ten</th>
-              <th class="p-2">Loai</th>
-              <th class="p-2">Tinh luong</th>
-              <th class="p-2">Lap lai</th>
-              <th class="p-2">Tac vu</th>
+              <th class="p-2">Ngày</th>
+              <th class="p-2">Tên</th>
+              <th class="p-2">Loại</th>
+              <th class="p-2">Tính lương</th>
+              <th class="p-2">Lặp lại</th>
+              <th class="p-2">Tác vụ</th>
             </tr>
           </thead>
           <tbody>
@@ -276,11 +276,11 @@
               <td class="p-2">{{ formatDate(item.holiday_date) }}</td>
               <td class="p-2">{{ item.holiday_name }}</td>
               <td class="p-2">{{ holidayTypeLabel(item.holiday_type) }}</td>
-              <td class="p-2">{{ item.is_paid_leave ? 'Co luong' : 'Khong luong' }}</td>
-              <td class="p-2">{{ item.is_recurring ? 'Hang nam' : '-' }}</td>
+              <td class="p-2">{{ item.is_paid_leave ? 'Có lương' : 'Không lương' }}</td>
+              <td class="p-2">{{ item.is_recurring ? 'Hàng năm' : '-' }}</td>
               <td class="p-2 space-x-2">
-                <button class="rounded border px-3 py-1 text-sm" type="button" @click="editHoliday(item)">Chinh sua</button>
-                <button class="rounded border px-3 py-1 text-sm text-red-600" type="button" @click="deleteHoliday(item.id)">Xoa</button>
+                <button class="rounded border px-3 py-1 text-sm" type="button" @click="editHoliday(item)">Chỉnh sửa</button>
+                <button class="rounded border px-3 py-1 text-sm text-red-600" type="button" @click="deleteHoliday(item.id)">Xóa</button>
               </td>
             </tr>
           </tbody>
@@ -289,50 +289,50 @@
 
       <section class="rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
         <div class="flex flex-col gap-1">
-          <h3 class="text-lg font-semibold text-gray-900">Phan ca</h3>
-          <p class="text-sm text-gray-500">Gan ca cho ca nhan, phong ban hoac toan cong ty trong mot khoang thoi gian cu the, co the gioi han theo ngay trong tuan.</p>
+          <h3 class="text-lg font-semibold text-gray-900">Phân ca</h3>
+          <p class="text-sm text-gray-500">Gán ca cho cá nhân, phòng ban hoặc toàn công ty trong một khoảng thời gian cụ thể, có thể giới hạn theo ngày trong tuần.</p>
         </div>
 
         <form class="mt-5 space-y-4" @submit.prevent="submitAssignment">
           <div v-if="editingAssignmentId" class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-            Dang chinh sua phan ca <strong>#{{ editingAssignmentId }}</strong>.
+            Đang chỉnh sửa phân ca <strong>#{{ editingAssignmentId }}</strong>.
           </div>
 
           <div class="grid grid-cols-1 gap-4 md:grid-cols-5">
-            <Field label="Ap dung cho" :error="assignmentForm.errors.target_type">
+            <Field label="Áp dụng cho" :error="assignmentForm.errors.target_type">
               <select v-model="assignmentForm.target_type" class="form-input">
-                <option value="company">Toan cong ty</option>
-                <option value="employee">Nhan vien</option>
-                <option value="department">Phong ban</option>
+                <option value="company">Toàn công ty</option>
+                <option value="employee">Nhân viên</option>
+                <option value="department">Phòng ban</option>
               </select>
             </Field>
-            <Field v-if="assignmentForm.target_type === 'employee'" label="Nhan vien" :error="assignmentForm.errors.employee_profile_id">
+            <Field v-if="assignmentForm.target_type === 'employee'" label="Nhân viên" :error="assignmentForm.errors.employee_profile_id">
               <select v-model="assignmentForm.employee_profile_id" class="form-input">
-                <option :value="null">Chon nhan vien</option>
+                <option :value="null">Chọn nhân viên</option>
                 <option v-for="item in employeeOptions" :key="item.id" :value="item.id">{{ item.label }}</option>
               </select>
             </Field>
-            <Field v-else-if="assignmentForm.target_type === 'department'" label="Phong ban" :error="assignmentForm.errors.department_id">
+            <Field v-else-if="assignmentForm.target_type === 'department'" label="Phòng ban" :error="assignmentForm.errors.department_id">
               <select v-model="assignmentForm.department_id" class="form-input">
-                <option :value="null">Chon phong ban</option>
+                <option :value="null">Chọn phòng ban</option>
                 <option v-for="item in departmentOptions" :key="item.id" :value="item.id">{{ item.name }}</option>
               </select>
             </Field>
-            <Field v-else label="Pham vi">
-              <input class="form-input bg-gray-50" value="Toan cong ty" disabled>
+            <Field v-else label="Phạm vi">
+              <input class="form-input bg-gray-50" value="Toàn công ty" disabled>
             </Field>
-            <Field label="Ca lam" :error="assignmentForm.errors.work_shift_id">
+            <Field label="Ca làm" :error="assignmentForm.errors.work_shift_id">
               <select v-model="assignmentForm.work_shift_id" class="form-input">
-                <option :value="null">Chon ca lam</option>
+                <option :value="null">Chọn ca làm</option>
                 <option v-for="item in activeWorkShifts" :key="item.id" :value="item.id">{{ item.shift_name }}</option>
               </select>
             </Field>
-            <InputDate v-model="assignmentForm.effective_from" label="Tu ngay" placeholder="Chon ngay" :config="datePickerConfig" :error="assignmentForm.errors.effective_from" />
-            <InputDate v-model="assignmentForm.effective_to" label="Den ngay" placeholder="Bo trong neu chua ket thuc" :config="datePickerConfig" :error="assignmentForm.errors.effective_to" />
+            <InputDate v-model="assignmentForm.effective_from" label="Từ ngày" placeholder="Chọn ngày" :config="datePickerConfig" :error="assignmentForm.errors.effective_from" />
+            <InputDate v-model="assignmentForm.effective_to" label="Đến ngày" placeholder="Bỏ trống nếu chưa kết thúc" :config="datePickerConfig" :error="assignmentForm.errors.effective_to" />
           </div>
 
           <div class="grid grid-cols-1 gap-4 md:grid-cols-[1fr_2fr]">
-            <Field label="Ngay trong tuan" :error="assignmentForm.errors.weekdays">
+            <Field label="Ngày trong tuần" :error="assignmentForm.errors.weekdays">
               <div class="flex flex-wrap gap-2">
                 <label v-for="day in weekdays" :key="day.value" class="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm">
                   <input v-model="assignmentForm.weekdays" type="checkbox" :value="day.value">
@@ -340,8 +340,8 @@
                 </label>
               </div>
             </Field>
-            <Field label="Ghi chu" :error="assignmentForm.errors.note">
-              <input v-model.trim="assignmentForm.note" class="form-input" placeholder="Ly do/ghi chu phan ca">
+            <Field label="Ghi chú" :error="assignmentForm.errors.note">
+              <input v-model.trim="assignmentForm.note" class="form-input" placeholder="Lý do/ghi chú phân ca">
             </Field>
           </div>
 
@@ -356,10 +356,10 @@
               type="button"
               @click="cancelAssignmentEdit"
             >
-              Huy sua
+              Hủy sửa
             </button>
             <button class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" :disabled="assignmentForm.processing">
-              {{ assignmentForm.processing ? 'Dang luu...' : (editingAssignmentId ? 'Luu phan ca' : 'Them phan ca') }}
+              {{ assignmentForm.processing ? 'Đang lưu...' : (editingAssignmentId ? 'Lưu phân ca' : 'Thêm phân ca') }}
             </button>
           </div>
         </form>
@@ -367,12 +367,12 @@
         <TableShell class="mt-5">
           <thead>
             <tr class="text-left">
-              <th class="p-2">Doi tuong</th>
+              <th class="p-2">Đối tượng</th>
               <th class="p-2">Ca</th>
-              <th class="p-2">Hieu luc</th>
-              <th class="p-2">Ngay ap dung</th>
-              <th class="p-2">Trang thai</th>
-              <th class="p-2">Tac vu</th>
+              <th class="p-2">Hiệu lực</th>
+              <th class="p-2">Ngày áp dụng</th>
+              <th class="p-2">Trạng thái</th>
+              <th class="p-2">Tác vụ</th>
             </tr>
           </thead>
           <tbody>
@@ -382,13 +382,13 @@
                 <div class="text-xs text-gray-500">{{ assignmentTargetLabel(item.target_type) }}</div>
               </td>
               <td class="p-2">{{ item.work_shift_name }}</td>
-              <td class="p-2">{{ formatDate(item.effective_from) }} - {{ item.effective_to ? formatDate(item.effective_to) : 'Khong gioi han' }}</td>
+              <td class="p-2">{{ formatDate(item.effective_from) }} - {{ item.effective_to ? formatDate(item.effective_to) : 'Không giới hạn' }}</td>
               <td class="p-2">{{ weekdayLabels(item.weekdays) }}</td>
               <td class="p-2"><StatusBadge :active="item.is_active" /></td>
               <td class="p-2 space-x-2">
-                <button class="rounded border px-3 py-1 text-sm" type="button" @click="editAssignment(item)">Chinh sua</button>
+                <button class="rounded border px-3 py-1 text-sm" type="button" @click="editAssignment(item)">Chỉnh sửa</button>
                 <button class="rounded border px-3 py-1 text-sm" type="button" @click="toggleAssignment(item.id)">
-                  {{ item.is_active ? 'Ngung dung' : 'Kich hoat' }}
+                  {{ item.is_active ? 'Ngừng dùng' : 'Kích hoạt' }}
                 </button>
               </td>
             </tr>
@@ -438,7 +438,7 @@ const StatusBadge = (props) => h('span', {
     'inline-flex rounded-full px-2.5 py-1 text-xs font-semibold',
     props.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600',
   ],
-}, props.active ? 'Dang dung' : 'Ngung dung')
+}, props.active ? 'Đang dùng' : 'Ngừng dùng')
 StatusBadge.props = ['active']
 
 const TableShell = (props, { slots }) => h('div', { class: ['overflow-auto', props.class] }, [
@@ -541,20 +541,20 @@ const overtimeGapMinutes = computed(() => {
   return overtimeStartMinutes - shiftEndMinutes
 })
 const overtimePreviewLabel = computed(() => {
-  if (!shiftForm.overtime_start_time || !shiftForm.overtime_end_time) return 'Chua cau hinh'
+  if (!shiftForm.overtime_start_time || !shiftForm.overtime_end_time) return 'Chưa cấu hình'
   return `${shiftForm.overtime_start_time} - ${shiftForm.overtime_end_time}`
 })
 const shiftPreviewError = computed(() => {
-  if (shiftDurationMinutes.value <= 0) return 'Gio ket thuc phai sau gio bat dau'
-  if ((shiftForm.break_start_time && !shiftForm.break_end_time) || (!shiftForm.break_start_time && shiftForm.break_end_time)) return 'Can nhap du gio nghi'
-  if ((shiftForm.overtime_start_time && !shiftForm.overtime_end_time) || (!shiftForm.overtime_start_time && shiftForm.overtime_end_time)) return 'Can nhap du gio tang ca'
-  if (breakMinutes.value < 0 || breakMinutes.value >= shiftDurationMinutes.value || !rangeInsideShift(shiftForm.start_time, shiftForm.end_time, shiftForm.break_start_time, shiftForm.break_end_time, shiftForm.is_overnight)) return 'Gio nghi khong hop le'
-  if (Number(shiftForm.handover_break_minutes || 0) < 0) return 'Nghi giao ca khong hop le'
-  if (!shiftForm.allows_overtime && (shiftForm.overtime_start_time || shiftForm.overtime_end_time || shiftForm.overtime_hourly_rate)) return 'Dang tat tinh tang ca nhung van con cau hinh OT'
-  if (standardMinutes.value !== netShiftMinutes.value) return `Phut chuan phai bang ${netShiftMinutes.value} phut`
-  if (Number(shiftForm.half_day_minutes) > Number(shiftForm.standard_minutes)) return 'Nguong nua cong vuot phut chuan'
-  if (shiftForm.overtime_start_time && shiftForm.overtime_end_time && overtimeGapMinutes.value > 0) return `Khong duoc de khoang ho ${shiftForm.end_time}-${shiftForm.overtime_start_time}`
-  if (shiftForm.overtime_start_time && shiftForm.overtime_end_time && overtimeGapMinutes.value < 0) return 'Gio bat dau tang ca phai noi tiep ngay sau gio ket thuc ca'
+  if (shiftDurationMinutes.value <= 0) return 'Giờ kết thúc phải sau giờ bắt đầu'
+  if ((shiftForm.break_start_time && !shiftForm.break_end_time) || (!shiftForm.break_start_time && shiftForm.break_end_time)) return 'Cần nhập đủ giờ nghỉ'
+  if ((shiftForm.overtime_start_time && !shiftForm.overtime_end_time) || (!shiftForm.overtime_start_time && shiftForm.overtime_end_time)) return 'Cần nhập đủ giờ tăng ca'
+  if (breakMinutes.value < 0 || breakMinutes.value >= shiftDurationMinutes.value || !rangeInsideShift(shiftForm.start_time, shiftForm.end_time, shiftForm.break_start_time, shiftForm.break_end_time, shiftForm.is_overnight)) return 'Giờ nghỉ không hợp lệ'
+  if (Number(shiftForm.handover_break_minutes || 0) < 0) return 'Nghỉ giao ca không hợp lệ'
+  if (!shiftForm.allows_overtime && (shiftForm.overtime_start_time || shiftForm.overtime_end_time || shiftForm.overtime_hourly_rate)) return 'Đang tắt tính tăng ca nhưng vẫn còn cấu hình OT'
+  if (standardMinutes.value !== netShiftMinutes.value) return `Phút chuẩn phải bằng ${netShiftMinutes.value} phút`
+  if (Number(shiftForm.half_day_minutes) > Number(shiftForm.standard_minutes)) return 'Ngưỡng nửa công vượt phút chuẩn'
+  if (shiftForm.overtime_start_time && shiftForm.overtime_end_time && overtimeGapMinutes.value > 0) return `Không được để khoảng hở ${shiftForm.end_time}-${shiftForm.overtime_start_time}`
+  if (shiftForm.overtime_start_time && shiftForm.overtime_end_time && overtimeGapMinutes.value < 0) return 'Giờ bắt đầu tăng ca phải nối tiếp ngay sau giờ kết thúc ca'
   return ''
 })
 
@@ -765,11 +765,11 @@ function cancelQuickAssign() {
 const toggleShift = (id) => router.put(route('attendance.catalogs.work-shifts.toggle', id), {}, {
   preserveScroll: true,
   onError: (errors) => {
-    toast.error(errors.work_shift || 'Khong the doi trang thai ca lam.')
+    toast.error(errors.work_shift || 'Không thể đổi trạng thái ca làm.')
   },
 })
 const deleteHoliday = (id) => {
-  if (confirm('Xoa ngay le nay?')) {
+  if (confirm('Xóa ngày lễ này?')) {
     router.delete(route('attendance.catalogs.holidays.destroy', id), { preserveScroll: true })
   }
 }
@@ -805,11 +805,11 @@ function rangeInsideShift(shiftStart, shiftEnd, rangeStart, rangeEnd, overnight 
 }
 
 function formatMinutes(minutes) {
-  if (!minutes || minutes <= 0) return '0 phut'
+  if (!minutes || minutes <= 0) return '0 phút'
   const hours = Math.floor(minutes / 60)
   const rest = minutes % 60
-  if (!hours) return `${rest} phut`
-  return rest ? `${hours} gio ${rest} phut` : `${hours} gio`
+  if (!hours) return `${rest} phút`
+  return rest ? `${hours} giờ ${rest} phút` : `${hours} giờ`
 }
 
 function formatMoney(value) {
@@ -825,27 +825,27 @@ function formatDate(value) {
 
 function holidayTypeLabel(type) {
   return {
-    public: 'Le nha nuoc',
-    company: 'Ngay nghi cong ty',
-    compensatory: 'Nghi bu',
-    special: 'Dac biet',
+    public: 'Lễ nhà nước',
+    company: 'Ngày nghỉ công ty',
+    compensatory: 'Nghỉ bù',
+    special: 'Đặc biệt',
   }[type] || type || '-'
 }
 
 function assignmentTargetLabel(type) {
   return {
-    company: 'Toan cong ty',
-    employee: 'Nhan vien',
-    department: 'Phong ban',
-  }[type] || 'Khac'
+    company: 'Toàn công ty',
+    employee: 'Nhân viên',
+    department: 'Phòng ban',
+  }[type] || 'Khác'
 }
 
 function assignmentTargetName(item) {
-  return item.employee_name || item.department_name || 'Toan cong ty'
+  return item.employee_name || item.department_name || 'Toàn công ty'
 }
 
 function weekdayLabels(days) {
-  if (!days || !days.length) return 'Tat ca ngay'
+  if (!days || !days.length) return 'Tất cả ngày'
   const labels = new Map(weekdays.map((day) => [day.value, day.label]))
   return days.map((day) => labels.get(Number(day))).filter(Boolean).join(', ')
 }

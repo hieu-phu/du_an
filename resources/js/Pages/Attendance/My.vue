@@ -1,8 +1,8 @@
 <template>
-  <Head title="Cong cua toi" />
+  <Head title="Công của tôi" />
 
   <AdminLayout>
-    <PageBreadcrumb title="Cong cua toi" :items="[{ text: 'Cham cong', link: null }, { text: 'Cong cua toi', link: null }]" />
+    <PageBreadcrumb title="Công của tôi" :items="[{ text: 'Chấm công', link: null }, { text: 'Công của tôi', link: null }]" />
 
     <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
       <div v-for="card in summaryCards" :key="card.label" class="rounded-xl border border-gray-200 bg-white p-5 shadow-theme-sm">
@@ -15,11 +15,11 @@
     <div class="mb-6 rounded-[24px] border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <div class="text-sm font-semibold text-gray-900">Bo loc ky cham cong</div>
-          <div class="mt-1 text-sm text-gray-500">Chuyen nhanh qua tung thang hoac chon thang, nam cu the de xem du lieu.</div>
+          <div class="text-sm font-semibold text-gray-900">Bộ lọc kỳ chấm công</div>
+          <div class="mt-1 text-sm text-gray-500">Chuyển nhanh qua từng tháng hoặc chọn tháng, năm cụ thể để xem dữ liệu.</div>
         </div>
         <div class="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-          Dang xem: {{ currentPeriodLabel }}
+          Đang xem: {{ currentPeriodLabel }}
         </div>
       </div>
 
@@ -27,8 +27,8 @@
         <div class="max-w-xl">
           <InputDate
             v-model="filterForm.period"
-            label="Chon thang nam"
-            placeholder="Chon thang nam"
+            label="Chọn tháng năm"
+            placeholder="Chọn tháng năm"
             :clearable="false"
             :config="periodPickerConfig"
           />
@@ -40,7 +40,7 @@
             class="rounded-2xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
             @click="jumpToCurrentPeriod"
           >
-            Thang nay
+            Tháng này
           </button>
         </div>
       </div>
@@ -49,10 +49,10 @@
     <div v-if="!isAttendancePeriodClosed" class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <h3 class="text-lg font-semibold text-gray-900">Goi y xu ly nhanh</h3>
-          <p class="mt-1 text-sm text-gray-500">He thong tu nhan dien ngay can xu ly va dien san form cho ban.</p>
+          <h3 class="text-lg font-semibold text-gray-900">Gợi ý xử lý nhanh</h3>
+          <p class="mt-1 text-sm text-gray-500">Hệ thống tự nhận diện ngày cần xử lý và điền sẵn form cho bạn.</p>
         </div>
-        <div class="text-xs font-medium text-gray-500">Ban cung co the bam "Tao don" ngay trong bang cong ben duoi.</div>
+        <div class="text-xs font-medium text-gray-500">Bạn cũng có thể bấm "Tạo đơn" ngay trong bảng công bên dưới.</div>
       </div>
 
       <div v-if="smartRecommendations.length" class="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-3">
@@ -74,19 +74,19 @@
             class="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
             @click="applySmartRequest(item.record, item.requestType)"
           >
-            Tao don tu dong
+            Tạo đơn tự động
           </button>
         </div>
       </div>
 
       <div v-else class="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-        Khong co ngay nao can xu ly gap trong ky hien tai.
+        Không có ngày nào cần xử lý gấp trong kỳ hiện tại.
       </div>
     </div>
 
     <div class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="mb-4">
-        <h3 class="text-lg font-semibold text-gray-900">Gui don lien quan cham cong</h3>
+        <h3 class="text-lg font-semibold text-gray-900">Gửi đơn liên quan chấm công</h3>
       </div>
 
       <div v-if="formError" class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -113,19 +113,19 @@
             class="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
             @click="clearSmartContext"
           >
-            Bo goi y va tu nhap lai
+            Bỏ gợi ý và tự nhập lại
           </button>
         </div>
       </div>
 
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <label class="mb-2 block text-sm font-medium text-gray-700">Loai don</label>
+          <label class="mb-2 block text-sm font-medium text-gray-700">Loại đơn</label>
           <select v-model="requestForm.request_type" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-            <option value="">Chon loai don</option>
+            <option value="">Chọn loại đơn</option>
             <option v-for="type in request_types" :key="type.value" :value="type.value">{{ requestTypeLabel(type.value) }}</option>
           </select>
-          <p class="mt-1 text-xs text-gray-500">Chon "Xin di muon / ve som" neu can giai trinh vi pham gio cong.</p>
+          <p class="mt-1 text-xs text-gray-500">Chọn "Xin đi muộn / về sớm" nếu cần giải trình vi phạm giờ công.</p>
           <p v-if="requestForm.errors.request_type" class="mt-1 text-sm text-red-500">{{ requestForm.errors.request_type }}</p>
         </div>
 
@@ -133,7 +133,7 @@
           v-if="showSingleDate"
           v-model="requestForm.request_date"
           :label="singleDateLabel"
-          placeholder="Chon ngay"
+          placeholder="Chọn ngày"
           :error="requestForm.errors.request_date"
           :config="singleDatePickerConfig"
         >
@@ -144,7 +144,7 @@
           v-if="showDateRange"
           v-model="requestForm.from_date"
           :label="fromDateLabel"
-          placeholder="Chon tu ngay"
+          placeholder="Chọn từ ngày"
           :error="requestForm.errors.from_date"
           :config="datePickerConfig"
         >
@@ -155,67 +155,67 @@
           v-if="showDateRange"
           v-model="requestForm.to_date"
           :label="toDateLabel"
-          placeholder="Chon den ngay"
+          placeholder="Chọn đến ngày"
           :error="requestForm.errors.to_date"
           :config="datePickerConfig"
         />
 
         <div v-if="requestForm.request_type === 'leave'">
-          <label class="mb-2 block text-sm font-medium text-gray-700">Loai nghi</label>
+          <label class="mb-2 block text-sm font-medium text-gray-700">Loại nghỉ</label>
           <select v-model="requestForm.leave_type_id" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-            <option value="">Chon loai nghi</option>
+            <option value="">Chọn loại nghỉ</option>
             <option v-for="type in leave_types" :key="type.id" :value="type.id">
-              {{ type.name }} - {{ type.is_paid ? 'co luong' : 'khong luong' }}
+              {{ type.name }} - {{ type.is_paid ? 'có lương' : 'không lương' }}
             </option>
           </select>
           <p v-if="selectedLeaveType" class="mt-1 text-xs text-gray-500">
-            {{ selectedLeaveType.deducts_balance ? `Con lai: ${formatWorkUnits(selectedLeaveAvailableDays)} ngay` : 'Loai nghi nay khong tru quy phep.' }}
+            {{ selectedLeaveType.deducts_balance ? `Còn lại: ${formatWorkUnits(selectedLeaveAvailableDays)} ngày` : 'Loại nghỉ này không trừ quỹ phép.' }}
           </p>
           <p v-if="requestForm.errors.leave_type_id || requestForm.errors.leave_type" class="mt-1 text-sm text-red-500">{{ requestForm.errors.leave_type_id || requestForm.errors.leave_type }}</p>
         </div>
 
         <div v-if="requestForm.request_type === 'leave'">
-          <label class="mb-2 block text-sm font-medium text-gray-700">Thoi luong nghi</label>
+          <label class="mb-2 block text-sm font-medium text-gray-700">Thời lượng nghỉ</label>
           <select v-model="requestForm.leave_duration_type" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-            <option value="full_day">Ca ngay</option>
-            <option value="half_day">Nua ngay</option>
-            <option value="hourly">Theo gio</option>
+            <option value="full_day">Cả ngày</option>
+            <option value="half_day">Nửa ngày</option>
+            <option value="hourly">Theo giờ</option>
           </select>
           <p v-if="requestForm.errors.leave_duration_type" class="mt-1 text-sm text-red-500">{{ requestForm.errors.leave_duration_type }}</p>
         </div>
 
         <div v-if="requestForm.request_type === 'leave' && requestForm.leave_duration_type === 'hourly'">
-          <label class="mb-2 block text-sm font-medium text-gray-700">So gio nghi</label>
+          <label class="mb-2 block text-sm font-medium text-gray-700">Số giờ nghỉ</label>
           <input v-model.number="requestForm.leave_hours" class="w-full rounded-lg border border-gray-300 px-3 py-2" type="number" min="0.5" max="24" step="0.5">
           <p v-if="requestForm.errors.leave_hours" class="mt-1 text-sm text-red-500">{{ requestForm.errors.leave_hours }}</p>
         </div>
 
         <div v-if="showLeaveAttachmentField">
-          <label class="mb-2 block text-sm font-medium text-gray-700">Minh chung</label>
+          <label class="mb-2 block text-sm font-medium text-gray-700">Minh chứng</label>
           <input ref="attachmentInput" class="w-full rounded-lg border border-gray-300 px-3 py-2" type="file" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx" @change="setAttachment">
-          <p v-if="selectedLeaveType?.requires_attachment" class="mt-1 text-xs text-amber-700">Loai nghi nay bat buoc co minh chung.</p>
+          <p v-if="selectedLeaveType?.requires_attachment" class="mt-1 text-xs text-amber-700">Loại nghỉ này bắt buộc có minh chứng.</p>
           <p v-if="requestForm.errors.attachment" class="mt-1 text-sm text-red-500">{{ requestForm.errors.attachment }}</p>
         </div>
 
         <div v-if="requestForm.request_type === 'late_early'">
-          <label class="mb-2 block text-sm font-medium text-gray-700">Vi pham can giai trinh</label>
+          <label class="mb-2 block text-sm font-medium text-gray-700">Vi phạm cần giải trình</label>
           <select v-model="requestForm.requested_status" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-            <option value="late">Di muon</option>
-            <option value="early_leave">Ve som</option>
+            <option value="late">Đi muộn</option>
+            <option value="early_leave">Về sớm</option>
           </select>
           <p v-if="selectedSmartContext?.requestType === 'late_early'" class="mt-1 text-xs text-gray-500">
-            Da dien theo vi pham chinh, ban co the doi neu can.
+            Đã điền theo vi phạm chính, bạn có thể đổi nếu cần.
           </p>
           <p v-if="requestForm.errors.requested_status" class="mt-1 text-sm text-red-500">{{ requestForm.errors.requested_status }}</p>
         </div>
 
         <div v-if="requestForm.request_type === 'business_trip'">
-          <label class="mb-2 block text-sm font-medium text-gray-700">Dia diem cong tac</label>
+          <label class="mb-2 block text-sm font-medium text-gray-700">Địa điểm công tác</label>
           <input
             v-model="requestForm.business_trip_location"
             class="w-full rounded-lg border border-gray-300 px-3 py-2"
             type="text"
-            placeholder="Nhap dia diem cong tac"
+            placeholder="Nhập địa điểm công tác"
           >
           <p v-if="requestForm.errors.business_trip_location" class="mt-1 text-sm text-red-500">{{ requestForm.errors.business_trip_location }}</p>
         </div>
@@ -224,7 +224,7 @@
           v-if="showTimeRange"
           v-model="requestForm.from_time"
           :label="fromTimeLabel"
-          placeholder="Chon gio"
+          placeholder="Chọn giờ"
           :error="requestForm.errors.from_time"
           :config="timePickerConfig"
         />
@@ -233,7 +233,7 @@
           v-if="showTimeRange"
           v-model="requestForm.to_time"
           :label="toTimeLabel"
-          placeholder="Chon gio"
+          placeholder="Chọn giờ"
           :error="requestForm.errors.to_time"
           :config="timePickerConfig"
         />
@@ -241,74 +241,74 @@
         <InputDate
           v-if="requestForm.request_type === 'make_up'"
           v-model="requestForm.make_up_related_leave_date"
-          label="Ngay nghi can bu"
-          placeholder="Chon ngay nghi can bu"
+          label="Ngày nghỉ cần bù"
+          placeholder="Chọn ngày nghỉ cần bù"
           :error="requestForm.errors.make_up_related_leave_date"
           :config="makeUpRelatedDatePickerConfig"
         >
           <template #helper>
-            Chi cho chon ngay co trang thai nghi phep, nghi khong luong hoac thieu cong. So gio lam bu khong duoc vuot phan cong thieu cua ngay nay.
+            Chỉ cho chọn ngày có trạng thái nghỉ phép, nghỉ không lương hoặc thiếu công. Số giờ làm bù không được vượt phần công thiếu của ngày này.
           </template>
         </InputDate>
 
         <div v-if="requestForm.request_type === 'make_up' && selectedMakeUpQuota" class="md:col-span-2 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <div class="font-semibold">So gio thieu cua ngay can bu</div>
+          <div class="font-semibold">Số giờ thiếu của ngày cần bù</div>
           <div class="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
             <div>
-              <span class="text-amber-700">Tong thieu:</span>
+              <span class="text-amber-700">Tổng thiếu:</span>
               <strong class="ml-1">{{ formatMinutes(selectedMakeUpQuota.missing_minutes) }}</strong>
             </div>
             <div>
-              <span class="text-amber-700">Da duoc dang ky lam bu:</span>
+              <span class="text-amber-700">Đã được đăng ký làm bù:</span>
               <strong class="ml-1">{{ formatMinutes(selectedMakeUpQuota.allocated_minutes) }}</strong>
             </div>
             <div>
-              <span class="text-amber-700">Con lai:</span>
+              <span class="text-amber-700">Còn lại:</span>
               <strong class="ml-1">{{ formatMinutes(selectedMakeUpQuota.remaining_minutes) }}</strong>
             </div>
           </div>
         </div>
 
         <div v-if="requestForm.request_type === 'make_up'" class="md:col-span-2 rounded-lg border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
-          <div class="font-semibold">Quy tac lam bu</div>
+          <div class="font-semibold">Quy tắc làm bù</div>
           <p class="mt-2">
-            Lam bu dung de bu cong thieu cua mot ngay nghi da chon. Don nay khong duoc tinh la tang ca va khong phat sinh tien OT.
+            Làm bù dùng để bù công thiếu của một ngày nghỉ đã chọn. Đơn này không được tính là tăng ca và không phát sinh tiền OT.
           </p>
           <p class="mt-1">
-            He thong se chan neu so gio lam bu vuot qua phan cong thieu con lai cua ngay nghi can bu.
+            Hệ thống sẽ chặn nếu số giờ làm bù vượt quá phần công thiếu còn lại của ngày nghỉ cần bù.
           </p>
         </div>
 
         <InputDate
           v-if="requestForm.request_type === 'overtime'"
           v-model="requestForm.request_date"
-          label="Ngay tang ca"
-          placeholder="Chon ngay"
+          label="Ngày tăng ca"
+          placeholder="Chọn ngày"
           :error="requestForm.errors.request_date"
           :config="datePickerConfig"
         />
 
         <div v-if="requestForm.request_type === 'overtime'" class="md:col-span-2 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
-          <div class="font-semibold">Khung tang ca theo danh muc cham cong</div>
+          <div class="font-semibold">Khung tăng ca theo danh mục chấm công</div>
           <div class="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
             <div>
-              <span class="text-blue-600">Ca ap dung:</span>
+              <span class="text-blue-600">Ca áp dụng:</span>
               <strong class="ml-1">{{ overtimeCatalog.shift_name || '-' }}</strong>
             </div>
             <div>
-              <span class="text-blue-600">Thoi gian:</span>
+              <span class="text-blue-600">Thời gian:</span>
               <strong class="ml-1">{{ overtimeWindowLabel }}</strong>
             </div>
             <div>
-              <span class="text-blue-600">So gio tang ca:</span>
+              <span class="text-blue-600">Số giờ tăng ca:</span>
               <strong class="ml-1">{{ formatMinutes(overtimeCatalog.requested_minutes) }}</strong>
             </div>
           </div>
           <p class="mt-2">
-            Tang ca la thoi gian lam viec ngoai khung hanh chinh duoc cau hinh OT. Tang ca khong dung de bu cho ngay nghi thieu cong.
+            Tăng ca là thời gian làm việc ngoài khung hành chính được cấu hình OT. Tăng ca không dùng để bù cho ngày nghỉ thiếu công.
           </p>
           <p v-if="!overtimeCatalog.start_time || !overtimeCatalog.end_time" class="mt-2 text-red-600">
-            Ca lam hien tai chua cau hinh khung tang ca. Vui long lien he HR cap nhat danh muc cham cong.
+            Ca làm hiện tại chưa cấu hình khung tăng ca. Vui lòng liên hệ HR cập nhật danh mục chấm công.
           </p>
           <p v-if="requestForm.errors.start_at || requestForm.errors.end_at" class="mt-2 text-red-600">
             {{ requestForm.errors.start_at || requestForm.errors.end_at }}
@@ -329,14 +329,14 @@
           :disabled="requestForm.processing"
           @click="submitAttendanceRequest"
         >
-          {{ requestForm.processing ? 'Dang gui...' : 'Gui don' }}
+          {{ requestForm.processing ? 'Đang gửi...' : 'Gửi đơn' }}
         </button>
       </div>
     </div>
 
     <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="mb-4">
-        <h3 class="text-lg font-semibold text-gray-900">Bang cong ca nhan</h3>
+        <h3 class="text-lg font-semibold text-gray-900">Bảng công cá nhân</h3>
       </div>
 
       <DataTable
@@ -346,7 +346,7 @@
         :row-class="attendanceRowClass"
         paginate
         :default-per-page="10"
-        empty-message="Chua co du lieu cham cong."
+        empty-message="Chưa có dữ liệu chấm công."
       >
         <template #cell-work_date="{ item }">
           {{ formatDate(item.work_date) }}
@@ -393,10 +393,10 @@
             class="inline-flex max-w-[190px] rounded-full px-3 py-1 text-xs font-semibold transition hover:ring-2 hover:ring-blue-200"
             @click="openLinkedRequestDetail(item)"
           >
-            <span class="truncate">{{ item.request_presence_label || 'Xem don' }}</span>
+            <span class="truncate">{{ item.request_presence_label || 'Xem đơn' }}</span>
           </button>
           <span v-else class="inline-flex max-w-[170px] rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-            <span class="truncate">Khong co don</span>
+            <span class="truncate">Không có đơn</span>
           </span>
         </template>
       </DataTable>
@@ -404,8 +404,8 @@
 
     <div class="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="mb-4">
-        <h3 class="text-lg font-semibold text-gray-900">Don cham cong da gui</h3>
-        <p class="mt-1 text-sm text-gray-500">Theo doi cac don ban da gui va trang thai duyet hien tai.</p>
+        <h3 class="text-lg font-semibold text-gray-900">Đơn chấm công đã gửi</h3>
+        <p class="mt-1 text-sm text-gray-500">Theo dõi các đơn bạn đã gửi và trạng thái duyệt hiện tại.</p>
       </div>
 
       <DataTable
@@ -416,7 +416,7 @@
         paginate
         :default-per-page="5"
         :per-page-options="[5, 10, 20]"
-        empty-message="Ban chua gui don cham cong nao."
+        empty-message="Bạn chưa gửi đơn chấm công nào."
       >
         <template #cell-request_type_label="{ item }">
           {{ item.request_type_label || requestTypeLabel(item.request_type) }}
@@ -437,44 +437,44 @@
 
     <Modal :show="!!selectedSubmittedRequest" @close="closeSubmittedRequestDetail">
       <div v-if="selectedSubmittedRequest" class="p-6">
-        <h3 class="mb-4 text-lg font-semibold text-gray-900">Chi tiet don da gui</h3>
+        <h3 class="mb-4 text-lg font-semibold text-gray-900">Chi tiết đơn đã gửi</h3>
         <div class="grid grid-cols-1 gap-3 text-sm text-gray-700 md:grid-cols-2">
-          <div><span class="font-medium text-gray-900">Loai don:</span> {{ selectedSubmittedRequest.request_type_label || '-' }}</div>
-          <div><span class="font-medium text-gray-900">Trang thai:</span> {{ selectedSubmittedRequest.status_label || '-' }}</div>
-          <div><span class="font-medium text-gray-900">Ngay ap dung:</span> {{ formatDate(selectedSubmittedRequest.request_date) }}</div>
-          <div><span class="font-medium text-gray-900">Khoang thoi gian:</span> {{ selectedSubmittedRequest.period || '-' }}</div>
-          <div><span class="font-medium text-gray-900">Gui luc:</span> {{ formatDateTime(selectedSubmittedRequest.submitted_at) }}</div>
-          <div><span class="font-medium text-gray-900">Nguoi duyet:</span> {{ selectedSubmittedRequest.reviewed_by_name || '-' }}</div>
-          <div><span class="font-medium text-gray-900">Duyet luc:</span> {{ formatDateTime(selectedSubmittedRequest.reviewed_at) }}</div>
-          <div class="md:col-span-2"><span class="font-medium text-gray-900">Ly do:</span> {{ selectedSubmittedRequest.reason || '-' }}</div>
-          <div class="md:col-span-2"><span class="font-medium text-gray-900">Ghi chu duyet:</span> {{ selectedSubmittedRequest.review_note || '-' }}</div>
+          <div><span class="font-medium text-gray-900">Loại đơn:</span> {{ selectedSubmittedRequest.request_type_label || '-' }}</div>
+          <div><span class="font-medium text-gray-900">Trạng thái:</span> {{ selectedSubmittedRequest.status_label || '-' }}</div>
+          <div><span class="font-medium text-gray-900">Ngày áp dụng:</span> {{ formatDate(selectedSubmittedRequest.request_date) }}</div>
+          <div><span class="font-medium text-gray-900">Khoảng thời gian:</span> {{ selectedSubmittedRequest.period || '-' }}</div>
+          <div><span class="font-medium text-gray-900">Gửi lúc:</span> {{ formatDateTime(selectedSubmittedRequest.submitted_at) }}</div>
+          <div><span class="font-medium text-gray-900">Người duyệt:</span> {{ selectedSubmittedRequest.reviewed_by_name || '-' }}</div>
+          <div><span class="font-medium text-gray-900">Duyệt lúc:</span> {{ formatDateTime(selectedSubmittedRequest.reviewed_at) }}</div>
+          <div class="md:col-span-2"><span class="font-medium text-gray-900">Lý do:</span> {{ selectedSubmittedRequest.reason || '-' }}</div>
+          <div class="md:col-span-2"><span class="font-medium text-gray-900">Ghi chú duyệt:</span> {{ selectedSubmittedRequest.review_note || '-' }}</div>
         </div>
 
         <div v-if="selectedSubmittedRequest.target_type === 'attendance'" class="mt-4 rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
-          <div class="mb-2 font-semibold text-gray-900">Thong tin don nghi/cham cong</div>
+          <div class="mb-2 font-semibold text-gray-900">Thông tin đơn nghỉ/chấm công</div>
           <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div><span class="font-medium text-gray-900">Tu ngay:</span> {{ formatDate(selectedSubmittedRequest.from_date) }}</div>
-            <div><span class="font-medium text-gray-900">Den ngay:</span> {{ formatDate(selectedSubmittedRequest.to_date) }}</div>
-            <div><span class="font-medium text-gray-900">Tu gio:</span> {{ selectedSubmittedRequest.from_time || '-' }}</div>
-            <div><span class="font-medium text-gray-900">Den gio:</span> {{ selectedSubmittedRequest.to_time || '-' }}</div>
-            <div><span class="font-medium text-gray-900">Loai nghi:</span> {{ selectedSubmittedRequest.leave_type_name || selectedSubmittedRequest.leave_type || '-' }}</div>
-            <div><span class="font-medium text-gray-900">Thoi luong:</span> {{ leaveDurationLabel(selectedSubmittedRequest) }}</div>
+            <div><span class="font-medium text-gray-900">Từ ngày:</span> {{ formatDate(selectedSubmittedRequest.from_date) }}</div>
+            <div><span class="font-medium text-gray-900">Đến ngày:</span> {{ formatDate(selectedSubmittedRequest.to_date) }}</div>
+            <div><span class="font-medium text-gray-900">Từ giờ:</span> {{ selectedSubmittedRequest.from_time || '-' }}</div>
+            <div><span class="font-medium text-gray-900">Đến giờ:</span> {{ selectedSubmittedRequest.to_time || '-' }}</div>
+            <div><span class="font-medium text-gray-900">Loại nghỉ:</span> {{ selectedSubmittedRequest.leave_type_name || selectedSubmittedRequest.leave_type || '-' }}</div>
+            <div><span class="font-medium text-gray-900">Thời lượng:</span> {{ leaveDurationLabel(selectedSubmittedRequest) }}</div>
             <div v-if="selectedSubmittedRequest.business_trip_location">
-              <span class="font-medium text-gray-900">Dia diem cong tac:</span> {{ selectedSubmittedRequest.business_trip_location }}
+              <span class="font-medium text-gray-900">Địa điểm công tác:</span> {{ selectedSubmittedRequest.business_trip_location }}
             </div>
             <div v-if="selectedSubmittedRequest.make_up_related_leave_date">
-              <span class="font-medium text-gray-900">Ngay nghi can bu:</span> {{ formatDate(selectedSubmittedRequest.make_up_related_leave_date) }}
+              <span class="font-medium text-gray-900">Ngày nghỉ cần bù:</span> {{ formatDate(selectedSubmittedRequest.make_up_related_leave_date) }}
             </div>
             <div v-if="selectedSubmittedRequest.leave_days !== null && selectedSubmittedRequest.leave_days !== undefined">
-              <span class="font-medium text-gray-900">So ngay nghi:</span> {{ formatWorkUnits(selectedSubmittedRequest.leave_days) }} ngay
+              <span class="font-medium text-gray-900">Số ngày nghỉ:</span> {{ formatWorkUnits(selectedSubmittedRequest.leave_days) }} ngày
             </div>
             <div v-if="selectedSubmittedRequest.requested_status">
-              <span class="font-medium text-gray-900">Trang thai de nghi:</span> {{ selectedSubmittedRequest.requested_status }}
+              <span class="font-medium text-gray-900">Trạng thái đề nghị:</span> {{ selectedSubmittedRequest.requested_status }}
             </div>
           </div>
 
           <div v-if="selectedSubmittedRequest.request_type === 'leave'" class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
-            <div class="font-medium text-amber-900">Minh chung</div>
+            <div class="font-medium text-amber-900">Minh chứng</div>
             <div v-if="selectedSubmittedRequest.attachment_url" class="mt-1">
               <a
                 :href="selectedSubmittedRequest.attachment_url"
@@ -482,25 +482,25 @@
                 rel="noopener noreferrer"
                 class="text-sm font-semibold text-blue-700 underline underline-offset-2"
               >
-                Xem tep dinh kem
+                Xem tệp đính kèm
               </a>
             </div>
             <div v-else-if="selectedSubmittedRequest.leave_type_requires_attachment" class="mt-1 text-sm text-rose-700">
-              Loai nghi nay yeu cau minh chung nhung don hien khong co tep dinh kem.
+              Loại nghỉ này yêu cầu minh chứng nhưng đơn hiện không có tệp đính kèm.
             </div>
             <div v-else class="mt-1 text-sm text-gray-500">
-              Loai nghi nay khong yeu cau minh chung.
+              Loại nghỉ này không yêu cầu minh chứng.
             </div>
           </div>
         </div>
 
         <div v-if="selectedSubmittedRequest.target_type === 'overtime'" class="mt-4 rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
-          <div class="mb-2 font-semibold text-gray-900">Thong tin tang ca</div>
+          <div class="mb-2 font-semibold text-gray-900">Thông tin tăng ca</div>
           <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div><span class="font-medium text-gray-900">Bat dau:</span> {{ formatDateTime(selectedSubmittedRequest.overtime_start_at) }}</div>
-            <div><span class="font-medium text-gray-900">Ket thuc:</span> {{ formatDateTime(selectedSubmittedRequest.overtime_end_at) }}</div>
-            <div><span class="font-medium text-gray-900">Phut de nghi:</span> {{ formatMinutes(selectedSubmittedRequest.requested_minutes) }}</div>
-            <div><span class="font-medium text-gray-900">Phut duyet:</span> {{ formatMinutes(selectedSubmittedRequest.approved_minutes) }}</div>
+            <div><span class="font-medium text-gray-900">Bắt đầu:</span> {{ formatDateTime(selectedSubmittedRequest.overtime_start_at) }}</div>
+            <div><span class="font-medium text-gray-900">Kết thúc:</span> {{ formatDateTime(selectedSubmittedRequest.overtime_end_at) }}</div>
+            <div><span class="font-medium text-gray-900">Phút đề nghị:</span> {{ formatMinutes(selectedSubmittedRequest.requested_minutes) }}</div>
+            <div><span class="font-medium text-gray-900">Phút duyệt:</span> {{ formatMinutes(selectedSubmittedRequest.approved_minutes) }}</div>
           </div>
         </div>
 
@@ -511,10 +511,10 @@
             class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
             @click="cancelSubmittedRequest(selectedSubmittedRequest)"
           >
-            Huy don
+            Hủy đơn
           </button>
           <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700" @click="closeSubmittedRequestDetail">
-            Dong
+            Đóng
           </button>
         </div>
       </div>
@@ -584,42 +584,42 @@ const requestForm = useForm({
 })
 
 const columns = [
-  { label: 'Ngay cong', key: 'work_date' },
+  { label: 'Ngày công', key: 'work_date' },
   { label: 'Check in', key: 'check_in_at' },
   { label: 'Check out', key: 'check_out_at' },
-  { label: 'Gio lam', key: 'worked_minutes', align: 'text-center' },
-  { label: 'Di muon', key: 'late_minutes', align: 'text-center' },
-  { label: 'Ve som', key: 'early_leave_minutes', align: 'text-center' },
-  { label: 'Tang ca', key: 'overtime_minutes', align: 'text-center' },
-  { label: 'Ket qua cong', key: 'attendance_status', align: 'text-center' },
-  { label: 'Trang thai ngay', key: 'day_status', align: 'text-center' },
-  { label: 'Duyet', key: 'approval_status', align: 'text-center' },
-  { label: 'Don lien quan', key: 'request_presence_label', align: 'text-center' },
+  { label: 'Giờ làm', key: 'worked_minutes', align: 'text-center' },
+  { label: 'Đi muộn', key: 'late_minutes', align: 'text-center' },
+  { label: 'Về sớm', key: 'early_leave_minutes', align: 'text-center' },
+  { label: 'Tăng ca', key: 'overtime_minutes', align: 'text-center' },
+  { label: 'Kết quả công', key: 'attendance_status', align: 'text-center' },
+  { label: 'Trạng thái ngày', key: 'day_status', align: 'text-center' },
+  { label: 'Duyệt', key: 'approval_status', align: 'text-center' },
+  { label: 'Đơn liên quan', key: 'request_presence_label', align: 'text-center' },
 ]
 
 const requestColumns = [
-  { label: 'Loai don', key: 'request_type_label' },
-  { label: 'Ngay ap dung', key: 'request_date' },
-  { label: 'Khoang thoi gian', key: 'period' },
-  { label: 'Trang thai', key: 'status_label', align: 'text-center' },
-  { label: 'Nguoi duyet', key: 'reviewed_by_name' },
-  { label: 'Ghi chu duyet', key: 'review_note' },
-  { label: 'Gui luc', key: 'submitted_at' },
+  { label: 'Loại đơn', key: 'request_type_label' },
+  { label: 'Ngày áp dụng', key: 'request_date' },
+  { label: 'Khoảng thời gian', key: 'period' },
+  { label: 'Trạng thái', key: 'status_label', align: 'text-center' },
+  { label: 'Người duyệt', key: 'reviewed_by_name' },
+  { label: 'Ghi chú duyệt', key: 'review_note' },
+  { label: 'Gửi lúc', key: 'submitted_at' },
 ]
 
 const requestActions = [
   {
-    label: 'Chi tiet',
+    label: 'Chi tiết',
     buttonProps: {
-      title: 'Xem chi tiet don da gui',
+      title: 'Xem chi tiết đơn đã gửi',
       class: 'border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 shadow-sm hover:border-blue-300 hover:bg-blue-100 hover:text-blue-800',
     },
     onClick: (item) => openSubmittedRequestDetail(item),
   },
   {
-    label: 'Huy',
+    label: 'Hủy',
     buttonProps: {
-      title: 'Huy don dang cho duyet',
+      title: 'Hủy đơn đang chờ duyệt',
       class: 'border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-sm hover:border-rose-300 hover:bg-rose-100 hover:text-rose-800',
     },
     hidden: (item) => !canCancelSubmittedRequest(item),
@@ -629,9 +629,9 @@ const requestActions = [
 
 const recordActions = [
   {
-    label: 'Tao don',
+    label: 'Tạo đơn',
     buttonProps: {
-      title: 'Tao don tu dong cho dong cong nay',
+      title: 'Tạo đơn tự động cho dòng công này',
       class: 'border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-800',
     },
     hidden: (item) => !suggestedRequestTypeForRecord(item),
@@ -640,14 +640,14 @@ const recordActions = [
 ]
 
 const summaryCards = computed(() => [
-  { label: 'Ngay cong hop le', value: formatWorkUnits(props.summary.approved_work_units ?? props.summary.total_work_units ?? 0) },
+  { label: 'Ngày công hợp lệ', value: formatWorkUnits(props.summary.approved_work_units ?? props.summary.total_work_units ?? 0) },
   {
-    label: 'Cong can bo sung / xac minh',
+    label: 'Công cần bổ sung / xác minh',
     value: props.summary.action_required_records ?? props.summary.pending_records ?? 0,
     hint: verificationHint.value,
   },
-  { label: 'Don cua toi cho duyet', value: props.summary.pending_request_records ?? 0 },
-  { label: 'Gio lam thuc te da duyet', value: formatMinutes(props.summary.approved_actual_worked_minutes ?? props.summary.approved_worked_minutes ?? 0) },
+  { label: 'Đơn của tôi chờ duyệt', value: props.summary.pending_request_records ?? 0 },
+  { label: 'Giờ làm thực tế đã duyệt', value: formatMinutes(props.summary.approved_actual_worked_minutes ?? props.summary.approved_worked_minutes ?? 0) },
 ])
 
 const verificationHint = computed(() => {
@@ -655,12 +655,12 @@ const verificationHint = computed(() => {
   const missingAttendance = props.summary.needs_verification_missing_attendance_records ?? props.summary.missing_attendance_records ?? 0
   const timeViolation = props.summary.needs_verification_time_violation_records ?? 0
 
-  return `Thieu check: ${missingCheck}, vang: ${missingAttendance}, gio cong: ${timeViolation}`
+  return `Thiếu check: ${missingCheck}, vắng: ${missingAttendance}, giờ công: ${timeViolation}`
 })
 
 const currentPeriodLabel = computed(() => {
   const date = parsePeriodValue(filterForm.period)
-  if (!date) return `Thang ${filterForm.month} / ${filterForm.year}`
+  if (!date) return `Tháng ${filterForm.month} / ${filterForm.year}`
 
   return new Intl.DateTimeFormat('vi-VN', {
     month: 'long',
@@ -718,51 +718,51 @@ const smartRecommendations = computed(() => {
     .slice(0, 3)
 })
 const overtimeWindowLabel = computed(() => {
-  if (!overtimeCatalog.value.start_time || !overtimeCatalog.value.end_time) return 'Chua cau hinh'
+  if (!overtimeCatalog.value.start_time || !overtimeCatalog.value.end_time) return 'Chưa cấu hình'
   return `${overtimeCatalog.value.start_time} - ${overtimeCatalog.value.end_time}`
 })
 const showSingleDate = computed(() => ['forgot_check', 'late_early', 'make_up'].includes(requestForm.request_type))
 const showDateRange = computed(() => ['leave', 'business_trip'].includes(requestForm.request_type))
 const showTimeRange = computed(() => ['forgot_check', 'late_early', 'business_trip', 'make_up'].includes(requestForm.request_type))
 const singleDateLabel = computed(() => {
-  if (requestForm.request_type === 'forgot_check') return 'Ngay quen cham cong'
-  if (requestForm.request_type === 'late_early') return 'Ngay vi pham'
-  if (requestForm.request_type === 'make_up') return 'Ngay lam bu'
-  return 'Ngay ap dung'
+  if (requestForm.request_type === 'forgot_check') return 'Ngày quên chấm công'
+  if (requestForm.request_type === 'late_early') return 'Ngày vi phạm'
+  if (requestForm.request_type === 'make_up') return 'Ngày làm bù'
+  return 'Ngày áp dụng'
 })
-const fromDateLabel = computed(() => requestForm.request_type === 'business_trip' ? 'Ngay bat dau cong tac' : 'Ngay bat dau nghi')
-const toDateLabel = computed(() => requestForm.request_type === 'business_trip' ? 'Ngay ket thuc cong tac' : 'Ngay ket thuc nghi')
+const fromDateLabel = computed(() => requestForm.request_type === 'business_trip' ? 'Ngày bắt đầu công tác' : 'Ngày bắt đầu nghỉ')
+const toDateLabel = computed(() => requestForm.request_type === 'business_trip' ? 'Ngày kết thúc công tác' : 'Ngày kết thúc nghỉ')
 const fromTimeLabel = computed(() => {
-  if (requestForm.request_type === 'make_up') return 'Bat dau lam bu'
-  if (requestForm.request_type === 'forgot_check') return 'Gio check-in neu quen'
-  if (requestForm.request_type === 'business_trip') return 'Bat dau cong tac'
-  if (requestForm.request_type === 'late_early') return requestForm.requested_status === 'early_leave' ? 'Bat dau ve som' : 'Bat dau di muon'
-  return 'Tu gio'
+  if (requestForm.request_type === 'make_up') return 'Bắt đầu làm bù'
+  if (requestForm.request_type === 'forgot_check') return 'Giờ check-in nếu quên'
+  if (requestForm.request_type === 'business_trip') return 'Bắt đầu công tác'
+  if (requestForm.request_type === 'late_early') return requestForm.requested_status === 'early_leave' ? 'Bắt đầu về sớm' : 'Bắt đầu đi muộn'
+  return 'Từ giờ'
 })
 const toTimeLabel = computed(() => {
-  if (requestForm.request_type === 'make_up') return 'Ket thuc lam bu'
-  if (requestForm.request_type === 'forgot_check') return 'Gio check-out neu quen'
-  if (requestForm.request_type === 'business_trip') return 'Ket thuc cong tac'
-  if (requestForm.request_type === 'late_early') return requestForm.requested_status === 'early_leave' ? 'Ket thuc ve som' : 'Ket thuc di muon'
-  return 'Den gio'
+  if (requestForm.request_type === 'make_up') return 'Kết thúc làm bù'
+  if (requestForm.request_type === 'forgot_check') return 'Giờ check-out nếu quên'
+  if (requestForm.request_type === 'business_trip') return 'Kết thúc công tác'
+  if (requestForm.request_type === 'late_early') return requestForm.requested_status === 'early_leave' ? 'Kết thúc về sớm' : 'Kết thúc đi muộn'
+  return 'Đến giờ'
 })
 const singleDateHint = computed(() => {
-  if (requestForm.request_type === 'forgot_check') return 'Chi ap dung cho ngay da xay ra'
+  if (requestForm.request_type === 'forgot_check') return 'Chỉ áp dụng cho ngày đã xảy ra'
   return ''
 })
 const dateRangeHint = computed(() => {
-  if (requestForm.request_type === 'leave') return 'Co the dang ky cho hom nay hoac ngay toi'
+  if (requestForm.request_type === 'leave') return 'Có thể đăng ký cho hôm nay hoặc ngày tới'
   return ''
 })
 const reasonLabel = computed(() => {
-  if (requestForm.request_type === 'business_trip') return 'Noi dung cong tac'
-  if (requestForm.request_type === 'overtime') return 'Ly do tang ca'
-  return 'Ly do'
+  if (requestForm.request_type === 'business_trip') return 'Nội dung công tác'
+  if (requestForm.request_type === 'overtime') return 'Lý do tăng ca'
+  return 'Lý do'
 })
 const reasonPlaceholder = computed(() => {
-  if (requestForm.request_type === 'business_trip') return 'Nhap noi dung cong tac'
-  if (requestForm.request_type === 'overtime') return 'Nhap ly do dang ky tang ca'
-  return 'Nhap ly do chi tiet'
+  if (requestForm.request_type === 'business_trip') return 'Nhập nội dung công tác'
+  if (requestForm.request_type === 'overtime') return 'Nhập lý do đăng ký tăng ca'
+  return 'Nhập lý do chi tiết'
 })
 
 const datePickerConfig = {
@@ -818,12 +818,12 @@ const dateTimePickerConfig = {
 }
 
 const REQUEST_TYPE_LABELS = {
-  leave: 'Xin nghi phep',
-  late_early: 'Xin di muon / ve som',
-  forgot_check: 'Xin quen cham cong',
-  business_trip: 'Xin cong tac',
-  make_up: 'Xin lam bu',
-  overtime: 'Dang ky tang ca',
+  leave: 'Xin nghỉ phép',
+  late_early: 'Xin đi muộn / về sớm',
+  forgot_check: 'Xin quên chấm công',
+  business_trip: 'Xin công tác',
+  make_up: 'Xin làm bù',
+  overtime: 'Đăng ký tăng ca',
 }
 
 watch(() => requestForm.request_type, (type) => {
@@ -1076,7 +1076,7 @@ function requestLinkTitle(item) {
     item?.request_reason,
   ].filter(Boolean)
 
-  return parts.join(' - ') || 'Xem don lien quan'
+  return parts.join(' - ') || 'Xem đơn liên quan'
 }
 
 function formatDate(value) {
@@ -1091,12 +1091,12 @@ function formatDateTime(value) {
 
 function formatMinutes(value) {
   const minutes = Number(value) || 0
-  if (minutes <= 0) return '0 phut'
+  if (minutes <= 0) return '0 phút'
   const hours = Math.floor(minutes / 60)
   const remainMinutes = minutes % 60
-  if (hours <= 0) return `${remainMinutes} phut`
-  if (remainMinutes === 0) return `${hours} gio`
-  return `${hours} gio ${remainMinutes} phut`
+  if (hours <= 0) return `${remainMinutes} phút`
+  if (remainMinutes === 0) return `${hours} giờ`
+  return `${hours} giờ ${remainMinutes} phút`
 }
 
 function suggestedRequestTypeForRecord(item) {
@@ -1138,51 +1138,51 @@ function preferredLateEarlyStatus(item) {
 
 function smartRecommendationTitle(item, requestType) {
   if (requestType === 'forgot_check') {
-    return hasMissingCheck(item) ? 'Ngay nay dang thieu check, nen tao don quen cham cong' : 'Tao don quen cham cong'
+    return hasMissingCheck(item) ? 'Ngày này đang thiếu check, nên tạo đơn quên chấm công' : 'Tạo đơn quên chấm công'
   }
 
   if (requestType === 'late_early') {
-    return item?.violation_status === 'early_leave' ? 'Ngay nay bi ve som, nen tao don giai trinh' : 'Ngay nay co vi pham gio, nen tao don giai trinh'
+    return item?.violation_status === 'early_leave' ? 'Ngày này bị về sớm, nên tạo đơn giải trình' : 'Ngày này có vi phạm giờ, nên tạo đơn giải trình'
   }
 
   if (requestType === 'make_up') {
-    return 'Ngay nay dang thieu cong, co the dung lam bu'
+    return 'Ngày này đang thiếu công, có thể dùng làm bù'
   }
 
-  return 'Co goi y de xu ly nhanh'
+  return 'Có gợi ý để xử lý nhanh'
 }
 
 function smartRecommendationDescription(item, requestType) {
   if (requestType === 'forgot_check') {
     return item?.missing_check_in
-      ? `Thieu check-in ngay ${formatDate(item?.work_date)}. Form se dien ngay vi pham va gio vao ca du kien.`
-      : `Thieu check-out ngay ${formatDate(item?.work_date)}. Form se dien ngay vi pham va gio ra ca du kien.`
+      ? `Thiếu check-in ngày ${formatDate(item?.work_date)}. Form sẽ điền ngày vi phạm và giờ vào ca dự kiến.`
+      : `Thiếu check-out ngày ${formatDate(item?.work_date)}. Form sẽ điền ngày vi phạm và giờ ra ca dự kiến.`
   }
 
   if (requestType === 'late_early') {
     if (item?.violation_status === 'early_leave') {
-      return `Ve som ${formatMinutes(item?.early_leave_minutes)} ngay ${formatDate(item?.work_date)}. Form se dien san ngay va khung gio can giai trinh.`
+      return `Về sớm ${formatMinutes(item?.early_leave_minutes)} ngày ${formatDate(item?.work_date)}. Form sẽ điền sẵn ngày và khung giờ cần giải trình.`
     }
 
     if (item?.violation_status === 'late_early') {
-      return `Co ca di muon ${formatMinutes(item?.late_minutes)} va ve som ${formatMinutes(item?.early_leave_minutes)} ngay ${formatDate(item?.work_date)}. Form se chon vi pham chinh truoc.`
+      return `Có cả đi muộn ${formatMinutes(item?.late_minutes)} và về sớm ${formatMinutes(item?.early_leave_minutes)} ngày ${formatDate(item?.work_date)}. Form sẽ chọn vi phạm chính trước.`
     }
 
-    return `Di muon ${formatMinutes(item?.late_minutes)} ngay ${formatDate(item?.work_date)}. Form se dien san ngay va khung gio can giai trinh.`
+    return `Đi muộn ${formatMinutes(item?.late_minutes)} ngày ${formatDate(item?.work_date)}. Form sẽ điền sẵn ngày và khung giờ cần giải trình.`
   }
 
   if (requestType === 'make_up') {
     const quota = makeUpQuotaMap.value[item?.work_date]
     const remainingLabel = quota ? formatMinutes(quota.remaining_minutes) : null
-    return `Ngay nay moi dat ${formatWorkUnits(item?.work_unit)} cong.${remainingLabel ? ` Con thieu ${remainingLabel}.` : ''} Form se gan san ngay can bu de ban dang ky lam bu nhanh.`
+    return `Ngày này mới đạt ${formatWorkUnits(item?.work_unit)} công.${remainingLabel ? ` Còn thiếu ${remainingLabel}.` : ''} Form sẽ gán sẵn ngày cần bù để bạn đăng ký làm bù nhanh.`
   }
 
-  return 'He thong de xuat don phu hop nhat voi ngay cong nay.'
+  return 'Hệ thống đề xuất đơn phù hợp nhất với ngày công này.'
 }
 
 function smartRecommendationDetails(item, requestType) {
   const details = [
-    `Ngay: ${formatDate(item?.work_date)}`,
+    `Ngày: ${formatDate(item?.work_date)}`,
   ]
 
   if (item?.shift_name) {
@@ -1190,13 +1190,13 @@ function smartRecommendationDetails(item, requestType) {
   }
 
   if (item?.shift_start_time || item?.shift_end_time) {
-    details.push(`Gio ca: ${[item?.shift_start_time, item?.shift_end_time].filter(Boolean).join(' - ')}`)
+    details.push(`Giờ ca: ${[item?.shift_start_time, item?.shift_end_time].filter(Boolean).join(' - ')}`)
   }
 
   if (requestType === 'forgot_check') {
-    details.push(item?.missing_check_in ? 'Thieu check-in' : 'Thieu check-out')
+    details.push(item?.missing_check_in ? 'Thiếu check-in' : 'Thiếu check-out')
     const suggestedTime = item?.missing_check_in ? suggestedCheckInTime(item) : suggestedCheckOutTime(item)
-    if (suggestedTime) details.push(`Gio de xuat: ${suggestedTime}`)
+    if (suggestedTime) details.push(`Giờ đề xuất: ${suggestedTime}`)
   }
 
   if (requestType === 'late_early') {
@@ -1204,22 +1204,22 @@ function smartRecommendationDetails(item, requestType) {
     const range = suggestedLateEarlyRange(item, status)
 
     if (Number(item?.late_minutes || 0) > 0) {
-      details.push(`Di muon: ${formatMinutes(item.late_minutes)}`)
+      details.push(`Đi muộn: ${formatMinutes(item.late_minutes)}`)
     }
 
     if (Number(item?.early_leave_minutes || 0) > 0) {
-      details.push(`Ve som: ${formatMinutes(item.early_leave_minutes)}`)
+      details.push(`Về sớm: ${formatMinutes(item.early_leave_minutes)}`)
     }
 
     if (range.from && range.to) {
-      details.push(`Khung gio: ${range.from} - ${range.to}`)
+      details.push(`Khung giờ: ${range.from} - ${range.to}`)
     }
   }
 
   if (requestType === 'make_up') {
     const quota = makeUpQuotaMap.value[item?.work_date]
     if (quota) {
-      details.push(`Con thieu: ${formatMinutes(quota.remaining_minutes)}`)
+      details.push(`Còn thiếu: ${formatMinutes(quota.remaining_minutes)}`)
     }
   }
 
@@ -1231,28 +1231,28 @@ function buildDefaultReason(item, requestType) {
 
   if (requestType === 'forgot_check') {
     return item?.missing_check_in
-      ? `Giai trinh bo sung check-in ngay ${dateText}.`
-      : `Giai trinh bo sung check-out ngay ${dateText}.`
+      ? `Giải trình bổ sung check-in ngày ${dateText}.`
+      : `Giải trình bổ sung check-out ngày ${dateText}.`
   }
 
   if (requestType === 'late_early') {
     if (preferredLateEarlyStatus(item) === 'early_leave') {
-      return `Giai trinh ve som ngay ${dateText}, ve som ${formatMinutes(item?.early_leave_minutes)}.`
+      return `Giải trình về sớm ngày ${dateText}, về sớm ${formatMinutes(item?.early_leave_minutes)}.`
     }
 
-    return `Giai trinh di muon ngay ${dateText}, di muon ${formatMinutes(item?.late_minutes)}.`
+    return `Giải trình đi muộn ngày ${dateText}, đi muộn ${formatMinutes(item?.late_minutes)}.`
   }
 
   if (requestType === 'make_up') {
-    return `Dang ky lam bu cho ngay ${dateText}.`
+    return `Đăng ký làm bù cho ngày ${dateText}.`
   }
 
   if (requestType === 'overtime') {
-    return `Dang ky tang ca cho ngay ${dateText}.`
+    return `Đăng ký tăng ca cho ngày ${dateText}.`
   }
 
   if (requestType === 'leave') {
-    return `Dang ky nghi cho ngay ${dateText}.`
+    return `Đăng ký nghỉ cho ngày ${dateText}.`
   }
 
   return ''
@@ -1319,10 +1319,10 @@ function formatWorkUnits(value) {
 
 function leaveDurationLabel(item) {
   if (!item?.leave_duration_type) return '-'
-  if (item.leave_duration_type === 'full_day') return 'Ca ngay'
-  if (item.leave_duration_type === 'half_day') return 'Nua ngay'
+  if (item.leave_duration_type === 'full_day') return 'Cả ngày'
+  if (item.leave_duration_type === 'half_day') return 'Nửa ngày'
   if (item.leave_duration_type === 'hourly') {
-    return `Theo gio${item.leave_hours ? ` (${formatWorkUnits(item.leave_hours)} gio)` : ''}`
+    return `Theo giờ${item.leave_hours ? ` (${formatWorkUnits(item.leave_hours)} giờ)` : ''}`
   }
 
   return item.leave_duration_type
@@ -1340,37 +1340,37 @@ function formatAttendanceStatus(item) {
   const resolvedUnit = Number(item?.work_unit)
 
   if (item?.day_status === 'day_off') {
-    return 'Nghi theo phan ca'
+    return 'Nghỉ theo phân ca'
   }
 
   if (item?.day_status === 'holiday_paid') {
-    return 'Le co luong'
+    return 'Lễ có lương'
   }
 
   if (hasMissingCheck(item)) {
-    return 'Chua tinh cong'
+    return 'Chưa tính công'
   }
 
   if (item?.approval_status === 'rejected') {
-    return 'Khong duyet cong'
+    return 'Không duyệt công'
   }
 
   if (resolvedUnit === 1) {
-    return 'Du cong'
+    return 'Đủ công'
   }
 
   if (resolvedUnit === 0.5) {
-    return 'Nua cong'
+    return 'Nửa công'
   }
 
   if (!Number.isNaN(resolvedUnit) && resolvedUnit === 0) {
-    return 'Khong cong'
+    return 'Không công'
   }
 
   const labels = {
-    on_time: 'Dung gio',
-    late: 'Tre',
-    absent: 'Vang',
+    on_time: 'Đúng giờ',
+    late: 'Trễ',
+    absent: 'Vắng',
   }
   return labels[item?.attendance_status] || '-'
 }
@@ -1379,36 +1379,36 @@ function formatDayStatus(item) {
   const value = typeof item === 'string' ? item : item?.day_status
 
   if (value === 'unpaid_leave' && item?.violation_status === 'missing_attendance') {
-    return 'Vang mat'
+    return 'Vắng mặt'
   }
 
   const labels = {
-    present: 'Di lam',
-    late: 'Di muon',
-    early_leave: 'Ve som',
-    leave: 'Nghi phep',
-    unpaid_leave: 'Nghi khong luong',
-    holiday_paid: 'Le co luong',
-    day_off: 'Nghi theo phan ca',
-    business_trip: 'Cong tac',
-    missing_check_in: 'Thieu check in',
-    missing_check_out: 'Thieu check out',
-    absent: 'Vang mat',
+    present: 'Đi làm',
+    late: 'Đi muộn',
+    early_leave: 'Về sớm',
+    leave: 'Nghỉ phép',
+    unpaid_leave: 'Nghỉ không lương',
+    holiday_paid: 'Lễ có lương',
+    day_off: 'Nghỉ theo phân ca',
+    business_trip: 'Công tác',
+    missing_check_in: 'Thiếu check-in',
+    missing_check_out: 'Thiếu check-out',
+    absent: 'Vắng mặt',
   }
   return labels[value] || '-'
 }
 
 function formatApprovalStatus(value) {
   if (value === 'needs_verification') {
-    return 'Can xac minh'
+    return 'Cần xác minh'
   }
 
   const labels = {
-    pending: 'Cho duyet',
-    not_required: 'Khong can duyet',
-    approved: 'Da duyet',
-    rejected: 'Tu choi',
-    cancelled: 'Da huy',
+    pending: 'Chờ duyệt',
+    not_required: 'Không cần duyệt',
+    approved: 'Đã duyệt',
+    rejected: 'Từ chối',
+    cancelled: 'Đã hủy',
   }
   return labels[value] || '-'
 }

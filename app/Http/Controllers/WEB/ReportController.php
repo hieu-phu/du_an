@@ -105,16 +105,16 @@ class ReportController extends Controller
             ],
             'departments' => Department::query()->orderBy('name')->get(['id', 'name']),
             'statusOptions' => [
-                ['value' => 'planning', 'label' => 'Ke hoach'],
-                ['value' => 'in_progress', 'label' => 'Dang trien khai'],
-                ['value' => 'on_hold', 'label' => 'Tam dung'],
-                ['value' => 'completed', 'label' => 'Hoan thanh'],
+                ['value' => 'planning', 'label' => 'Kế hoạch'],
+                ['value' => 'in_progress', 'label' => 'Đang triển khai'],
+                ['value' => 'on_hold', 'label' => 'Tạm dừng'],
+                ['value' => 'completed', 'label' => 'Hoàn thành'],
             ],
             'employeeByDepartment' => $employeeByDepartment,
             'projectByStatus' => $projectByStatus,
             'projectProgress' => $projectProgress,
             'attendanceMonthly' => $attendanceMonthly,
-            'scopeLabel' => $canViewCompanyData ? 'Du lieu toan bo' : 'Du lieu cap duoi',
+            'scopeLabel' => $canViewCompanyData ? 'Dữ liệu toàn bộ' : 'Dữ liệu cấp dưới',
             'canViewAll' => $canViewCompanyData,
             'canViewProjectReports' => $canViewProjectReports,
         ];
@@ -137,7 +137,7 @@ class ReportController extends Controller
             ->map(function ($profiles) {
                 $first = $profiles->first();
                 return [
-                    'department_name' => $first?->department?->name ?? 'Chua gan phong ban',
+                    'department_name' => $first?->department?->name ?? 'Chưa gán phòng ban',
                     'employee_count' => $profiles->count(),
                 ];
             })
@@ -156,10 +156,10 @@ class ReportController extends Controller
             ->pluck('total', 'status');
 
         $statusMap = [
-            'planning' => 'Ke hoach',
-            'in_progress' => 'Dang trien khai',
-            'on_hold' => 'Tam dung',
-            'completed' => 'Hoan thanh',
+            'planning' => 'Kế hoạch',
+            'in_progress' => 'Đang triển khai',
+            'on_hold' => 'Tạm dừng',
+            'completed' => 'Hoàn thành',
         ];
 
         return collect($statusMap)->map(function (string $label, string $status) use ($counts) {
@@ -261,10 +261,10 @@ class ReportController extends Controller
     private function projectStatusLabel(string $status): string
     {
         return match ($status) {
-            'planning' => 'Ke hoach',
-            'in_progress' => 'Dang trien khai',
-            'on_hold' => 'Tam dung',
-            'completed' => 'Hoan thanh',
+            'planning' => 'Kế hoạch',
+            'in_progress' => 'Đang triển khai',
+            'on_hold' => 'Tạm dừng',
+            'completed' => 'Hoàn thành',
             default => '-',
         };
     }
@@ -308,3 +308,4 @@ class ReportController extends Controller
         return strcasecmp((string) ($user?->email ?? ''), self::SYSTEM_OWNER_EMAIL) === 0;
     }
 }
+

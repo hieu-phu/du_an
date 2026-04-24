@@ -40,10 +40,10 @@ class UserApprovalController extends Controller
         try {
             $this->userApprovalService->approve($approvalRequest, $validated['review_note'] ?? null);
 
-            return redirect()->back()->with('success', 'Da duyet yeu cau thanh cong.');
+            return redirect()->back()->with('success', 'Da duyệt yêu cầu thanh cong.');
         } catch (\Exception $e) {
             return back()->withErrors([
-                'error' => 'Khong the duyet yeu cau: ' . $e->getMessage(),
+                'error' => 'Không thể duyệt yêu cầu: ' . $e->getMessage(),
             ]);
         }
     }
@@ -59,10 +59,10 @@ class UserApprovalController extends Controller
         try {
             $this->userApprovalService->reject($approvalRequest, $validated['review_note'] ?? null);
 
-            return redirect()->back()->with('success', 'Da tu choi yeu cau.');
+            return redirect()->back()->with('success', 'Da từ chối yêu cầu.');
         } catch (\Exception $e) {
             return back()->withErrors([
-                'error' => 'Khong the tu choi yeu cau: ' . $e->getMessage(),
+                'error' => 'Không thể từ chối yêu cầu: ' . $e->getMessage(),
             ]);
         }
     }
@@ -78,11 +78,12 @@ class UserApprovalController extends Controller
         try {
             $this->userApprovalService->cancel($approvalRequest, $request->user(), $validated['review_note'] ?? null);
 
-            return redirect()->back()->with('success', 'Da huy yeu cau.');
+            return redirect()->back()->with('success', 'Đã hủy yêu cầu.');
         } catch (\Exception $e) {
             return back()->withErrors([
-                'error' => 'Khong the huy yeu cau: ' . $e->getMessage(),
+                'error' => 'Không thể huy yêu cầu: ' . $e->getMessage(),
             ]);
         }
     }
 }
+

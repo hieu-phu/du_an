@@ -142,7 +142,7 @@ class LeaveManagementService extends BaseService
                 foreach ($leaveTypes as $leaveType) {
                     $balance = $this->ensureBalance((int) $profile->id, (int) $leaveType->id, $year);
                     $balance->update($this->automaticBalancePayload($profile, $leaveType, $year));
-                    $this->recordTransaction($balance->fresh(), null, 'grant', 0, $actor, 'Dong bo/cap phep hang loat tu han muc loai nghi');
+                    $this->recordTransaction($balance->fresh(), null, 'grant', 0, $actor, 'Đồng bộ/cấp phép hàng loạt từ hạn mức loại nghỉ');
                     $count++;
                 }
             }
@@ -159,13 +159,13 @@ class LeaveManagementService extends BaseService
             $days = (float) ($payload['days'] ?? 0);
 
             if (abs($days) <= 0) {
-                throw ValidationException::withMessages(['days' => 'So ngay dieu chinh phai khac 0.']);
+                throw ValidationException::withMessages(['days' => 'Số ngày điều chỉnh phải khác 0.']);
             }
 
             $balance->adjusted_days = (float) $balance->adjusted_days + $days;
             $balance->save();
 
-            $this->recordTransaction($balance->fresh(), null, 'adjust', $days, $actor, trim((string) ($payload['note'] ?? 'Dieu chinh quy phep')));
+            $this->recordTransaction($balance->fresh(), null, 'adjust', $days, $actor, trim((string) ($payload['note'] ?? 'Điều chỉnh quỹ phép')));
             $this->audit('leave', 'adjust_leave_balance', "Adjust leave balance #{$balance->id}", 'employee_leave_balances', $balance->id);
 
             return $balance->fresh(['employeeProfile.user', 'leaveType']);
@@ -182,13 +182,13 @@ class LeaveManagementService extends BaseService
 
         if ($balance->available_days < $days) {
             throw ValidationException::withMessages([
-                'leave_type_id' => 'So du phep khong du de gui don.',
+                'leave_type_id' => 'Số dư phép không đủ để gửi đơn.',
             ]);
         }
 
         $balance->pending_days = (float) $balance->pending_days + $days;
         $balance->save();
-        $this->recordTransaction($balance->fresh(), $attendanceRequestId, 'pending', $days, $actor, 'Giu phep cho don cho duyet');
+        $this->recordTransaction($balance->fresh(), $attendanceRequestId, 'pending', $days, $actor, 'Giữ phép cho đơn chờ duyệt');
     }
 
     public function finalizeRequest(User $actor, \App\Models\AttendanceRequest $request, string $decision): void
@@ -212,13 +212,13 @@ class LeaveManagementService extends BaseService
         if ($decision === 'approved') {
             $balance->used_days = (float) $balance->used_days + $days;
             $type = 'approve';
-            $note = 'Duyet don nghi phep';
+            $note = 'Duyệt đơn nghỉ phép';
         } elseif ($decision === 'cancelled') {
             $type = 'reject';
-            $note = 'Hoan phep do huy don';
+            $note = 'Hoàn phép do hủy đơn';
         } else {
             $type = 'reject';
-            $note = 'Hoan phep do tu choi don';
+            $note = 'Hoàn phép do từ chối đơn';
         }
 
         $balance->save();
@@ -397,3 +397,5 @@ class LeaveManagementService extends BaseService
         ]);
     }
 }
+
+

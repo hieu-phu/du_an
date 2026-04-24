@@ -59,7 +59,7 @@ class RegisteredUserController extends Controller
             $this->firstLoginOtpService->storePendingLogin(
                 $request,
                 $user,
-                'Email va mat khau',
+                'Email va mật khẩu',
                 route('dashboard', absolute: false)
             );
 
@@ -68,9 +68,10 @@ class RegisteredUserController extends Controller
             return redirect()->route('login.otp.view');
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\DB::rollBack();
-            \Illuminate\Support\Facades\Log::error('Lỗi đăng ký người dùng: ' . $e->getMessage());
+            \Illuminate\Support\Facades\Log::error('Lá»—i Ä‘Äƒng ký người dùng: ' . $e->getMessage());
 
-            return back()->with('error', 'Có lỗi xảy ra trong quá trình đăng ký. Vui lòng thử lại sau.');
+            return back()->with('error', 'CÃ³ lá»—i xáº£y ra trong quá trÃ¬nh Ä‘Äƒng ký. Vui lòng thử láº¡i sau.');
         }
     }
 }
+

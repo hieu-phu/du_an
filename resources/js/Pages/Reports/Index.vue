@@ -1,37 +1,37 @@
 <template>
-  <AdminLayout title="Bao cao tong hop">
-    <PageBreadcrumb title="Bao cao tong hop" :items="[{ text: 'Bao cao', link: null }]" />
+  <AdminLayout title="Báo cáo tổng hợp">
+    <PageBreadcrumb title="Báo cáo tổng hợp" :items="[{ text: 'Báo cáo', link: null }]" />
 
     <div class="mb-6 rounded-xl border border-gray-200 bg-white p-4">
       <div class="grid grid-cols-1 gap-3 md:grid-cols-5">
         <div>
-          <label class="mb-1 block text-sm font-medium text-gray-700">Thang</label>
+          <label class="mb-1 block text-sm font-medium text-gray-700">Tháng</label>
           <select v-model="form.month" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-            <option v-for="m in 12" :key="m" :value="m">Thang {{ m }}</option>
+            <option v-for="m in 12" :key="m" :value="m">Tháng {{ m }}</option>
           </select>
         </div>
         <div>
-          <label class="mb-1 block text-sm font-medium text-gray-700">Nam</label>
+          <label class="mb-1 block text-sm font-medium text-gray-700">Năm</label>
           <input v-model.number="form.year" type="number" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
         </div>
         <div v-if="canViewAll">
-          <label class="mb-1 block text-sm font-medium text-gray-700">Phong ban</label>
+          <label class="mb-1 block text-sm font-medium text-gray-700">Phòng ban</label>
           <select v-model="form.department_id" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-            <option value="">Tat ca</option>
+            <option value="">Tất cả</option>
             <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
           </select>
         </div>
         <div v-if="canViewProjectReports">
-          <label class="mb-1 block text-sm font-medium text-gray-700">Trang thai du an</label>
+          <label class="mb-1 block text-sm font-medium text-gray-700">Trạng thái dự án</label>
           <select v-model="form.project_status" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-            <option value="">Tat ca</option>
+            <option value="">Tất cả</option>
             <option v-for="s in statusOptions" :key="s.value" :value="s.value">{{ s.label }}</option>
           </select>
         </div>
         <div class="flex items-end gap-2">
-          <button @click="applyFilters" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">Xem bao cao</button>
-          <a :href="exportExcelUrl" class="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">Xuat Excel</a>
-          <a :href="exportPdfUrl" class="rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700">Xuat PDF</a>
+          <button @click="applyFilters" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">Xem báo cáo</button>
+          <a :href="exportExcelUrl" class="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">Xuất Excel</a>
+          <a :href="exportPdfUrl" class="rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700">Xuất PDF</a>
         </div>
       </div>
       <div class="mt-2 text-xs text-gray-500">{{ scopeLabel }}</div>
@@ -39,12 +39,12 @@
 
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <div class="rounded-xl border border-gray-200 bg-white p-4">
-        <h3 class="mb-3 text-base font-semibold text-gray-900">Bao cao nhan su theo phong ban</h3>
+        <h3 class="mb-3 text-base font-semibold text-gray-900">Báo cáo nhân sự theo phòng ban</h3>
         <table class="min-w-full divide-y divide-gray-200 text-sm">
           <thead class="bg-gray-50">
             <tr>
-              <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Phong ban</th>
-              <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">So nhan su</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Phòng ban</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Số nhân sự</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
@@ -52,18 +52,18 @@
               <td class="px-3 py-2">{{ item.department_name }}</td>
               <td class="px-3 py-2 font-semibold">{{ item.employee_count }}</td>
             </tr>
-            <tr v-if="!employeeByDepartment.length"><td colspan="2" class="px-3 py-4 text-center text-gray-500">Khong co du lieu</td></tr>
+            <tr v-if="!employeeByDepartment.length"><td colspan="2" class="px-3 py-4 text-center text-gray-500">Không có dữ liệu</td></tr>
           </tbody>
         </table>
       </div>
 
       <div v-if="canViewProjectReports" class="rounded-xl border border-gray-200 bg-white p-4">
-        <h3 class="mb-3 text-base font-semibold text-gray-900">Bao cao du an theo trang thai</h3>
+        <h3 class="mb-3 text-base font-semibold text-gray-900">Báo cáo dự án theo trạng thái</h3>
         <table class="min-w-full divide-y divide-gray-200 text-sm">
           <thead class="bg-gray-50">
             <tr>
-              <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Trang thai</th>
-              <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">So luong</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Trạng thái</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Số lượng</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
@@ -77,14 +77,14 @@
     </div>
 
     <div v-if="canViewProjectReports" class="mt-4 rounded-xl border border-gray-200 bg-white p-4">
-      <h3 class="mb-3 text-base font-semibold text-gray-900">Bao cao tien do du an</h3>
+      <h3 class="mb-3 text-base font-semibold text-gray-900">Báo cáo tiến độ dự án</h3>
       <table class="min-w-full divide-y divide-gray-200 text-sm">
         <thead class="bg-gray-50">
           <tr>
-            <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Du an</th>
-            <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Trang thai</th>
-            <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Tien do</th>
-            <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Dau viec</th>
+            <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Dự án</th>
+            <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Trạng thái</th>
+            <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Tiến độ</th>
+            <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Đầu việc</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
@@ -94,22 +94,22 @@
             <td class="px-3 py-2 font-semibold">{{ item.progress_percent }}%</td>
             <td class="px-3 py-2">{{ item.completed_tasks }}/{{ item.total_tasks }}</td>
           </tr>
-          <tr v-if="!projectProgress.length"><td colspan="4" class="px-3 py-4 text-center text-gray-500">Khong co du lieu</td></tr>
+          <tr v-if="!projectProgress.length"><td colspan="4" class="px-3 py-4 text-center text-gray-500">Không có dữ liệu</td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="mt-4 rounded-xl border border-gray-200 bg-white p-4">
-      <h3 class="mb-3 text-base font-semibold text-gray-900">Bao cao cham cong thang</h3>
+      <h3 class="mb-3 text-base font-semibold text-gray-900">Báo cáo chấm công tháng</h3>
       <div class="grid grid-cols-2 gap-3 md:grid-cols-8">
-        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Tong ban ghi</div><div class="mt-1 text-lg font-semibold">{{ attendanceMonthly.total_records || 0 }}</div></div>
-        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Dung gio</div><div class="mt-1 text-lg font-semibold text-emerald-700">{{ attendanceMonthly.on_time_records || 0 }}</div></div>
-        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Di muon</div><div class="mt-1 text-lg font-semibold text-amber-700">{{ attendanceMonthly.late_records || 0 }}</div></div>
-        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Ve som</div><div class="mt-1 text-lg font-semibold text-orange-700">{{ attendanceMonthly.early_leave_records || 0 }}</div></div>
-        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Nghi phep</div><div class="mt-1 text-lg font-semibold text-sky-700">{{ attendanceMonthly.leave_records || 0 }}</div></div>
-        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Nghi khong phep</div><div class="mt-1 text-lg font-semibold text-rose-700">{{ attendanceMonthly.unpaid_leave_records || 0 }}</div></div>
-        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Vang mat</div><div class="mt-1 text-lg font-semibold text-slate-700">{{ attendanceMonthly.absent_records || 0 }}</div></div>
-        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Tong gio lam</div><div class="mt-1 text-sm font-semibold">{{ workedHoursLabel }}</div></div>
+        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Tổng bản ghi</div><div class="mt-1 text-lg font-semibold">{{ attendanceMonthly.total_records || 0 }}</div></div>
+        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Đúng giờ</div><div class="mt-1 text-lg font-semibold text-emerald-700">{{ attendanceMonthly.on_time_records || 0 }}</div></div>
+        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Đi muộn</div><div class="mt-1 text-lg font-semibold text-amber-700">{{ attendanceMonthly.late_records || 0 }}</div></div>
+        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Về sớm</div><div class="mt-1 text-lg font-semibold text-orange-700">{{ attendanceMonthly.early_leave_records || 0 }}</div></div>
+        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Nghỉ phép</div><div class="mt-1 text-lg font-semibold text-sky-700">{{ attendanceMonthly.leave_records || 0 }}</div></div>
+        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Nghỉ không phép</div><div class="mt-1 text-lg font-semibold text-rose-700">{{ attendanceMonthly.unpaid_leave_records || 0 }}</div></div>
+        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Vắng mặt</div><div class="mt-1 text-lg font-semibold text-slate-700">{{ attendanceMonthly.absent_records || 0 }}</div></div>
+        <div class="rounded-lg border border-gray-100 bg-gray-50 p-3"><div class="text-xs text-gray-500">Tổng giờ làm</div><div class="mt-1 text-sm font-semibold">{{ workedHoursLabel }}</div></div>
       </div>
     </div>
   </AdminLayout>
@@ -155,7 +155,7 @@ const workedHoursLabel = computed(() => {
   const minutes = Number(props.attendanceMonthly?.worked_minutes || 0)
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
-  return `${h} gio ${m} phut`
+  return `${h} giờ ${m} phút`
 })
 
 const applyFilters = () => {

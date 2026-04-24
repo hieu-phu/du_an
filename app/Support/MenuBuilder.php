@@ -26,82 +26,82 @@ class MenuBuilder
                         ? self::item('Dashboard', '/dashboard', 'GridIcon', true, ['general', 'system'])
                         : null,
                     $can(PositionCapability::VIEW_OWN_PROFILE)
-                        ? self::item('Ho so ca nhan', '/my-profile', 'UserCircleIcon')
+                        ? self::item('Hồ sơ cá nhân', '/my-profile', 'UserCircleIcon')
                         : null,
                     $can(PositionCapability::VIEW_FEEDBACKS)
-                        ? self::item('Phan hoi noi bo', '/feedbacks', 'Message2Line', false, [], ['/feedbacks'])
+                        ? self::item('Phản hồi nội bộ', '/feedbacks', 'Message2Line', false, [], ['/feedbacks'])
                         : null,
                     $can(PositionCapability::VIEW_OWN_SALARY)
-                        ? self::item('Bang luong ca nhan', '/my-salary', 'MoneyIcon', false, [], ['/my-salary'])
+                        ? self::item('Bảng lương cá nhân', '/my-salary', 'MoneyIcon', false, [], ['/my-salary'])
                         : null,
                     $can(PositionCapability::VIEW_ALL_SALARY)
-                        ? self::item('Bang luong cong ty', '/salary/company', 'MoneyIcon2', false, [], ['/salary/company'])
+                        ? self::item('Bảng lương công ty', '/salary/company', 'MoneyIcon2', false, [], ['/salary/company'])
                         : null,
                 ])),
             ],
             [
-                'title' => 'Co cau to chuc',
+                'title' => 'Cơ cấu tổ chức',
                 'items' => array_values(array_filter([
                     $can(PositionCapability::MANAGE_EMPLOYEES) || $canAccessUserApprovals
-                        ? self::item('Nhan su', $can(PositionCapability::MANAGE_EMPLOYEES) ? '/users/employees' : '/users/approvals', 'UserGroupIcon', false, [], [
+                        ? self::item('Nhân sự', $can(PositionCapability::MANAGE_EMPLOYEES) ? '/users/employees' : '/users/approvals', 'UserGroupIcon', false, [], [
                             '/users/employees',
                             '/users/employee-requests',
                             '/users/approvals',
                         ])
                         : null,
                     $can(PositionCapability::MANAGE_DEPARTMENTS) || $canAccessDepartmentApprovals
-                        ? self::item('Phong ban', $can(PositionCapability::MANAGE_DEPARTMENTS) ? '/departments' : '/departments/approvals', 'BuildingIcon', false, [], [
+                        ? self::item('Phòng ban', $can(PositionCapability::MANAGE_DEPARTMENTS) ? '/departments' : '/departments/approvals', 'BuildingIcon', false, [], [
                             '/departments',
                             '/departments/approvals',
                         ])
                         : null,
                     $can(PositionCapability::MANAGE_POSITIONS)
-                        ? self::item('Chuc vu', '/positions', 'BriefcaseIcon', false, ['organization'])
+                        ? self::item('Chức vụ', '/positions', 'BriefcaseIcon', false, ['organization'])
                         : null,
                 ])),
             ],
             [
-                'title' => 'Cham cong',
+                'title' => 'Chấm công',
                 'items' => array_values(array_filter([
                     $can(PositionCapability::VIEW_OWN_ATTENDANCE)
-                        ? self::item('Cong cua toi', '/my-attendance', 'ClockIcon', false, [], ['/my-attendance'])
+                        ? self::item('Công của tôi', '/my-attendance', 'ClockIcon', false, [], ['/my-attendance'])
                         : null,
                     $can(PositionCapability::VIEW_OWN_ATTENDANCE)
-                        ? self::item('Nghi phep cua toi', '/my-leave', 'Calendar2Line', false, [], ['/my-leave'])
+                        ? self::item('Nghỉ phép của tôi', '/my-leave', 'Calendar2Line', false, [], ['/my-leave'])
                         : null,
                     ($can(PositionCapability::APPROVE_ATTENDANCE) || $can(PositionCapability::APPROVE_LEAVE))
-                        ? self::item('Duyet cong', '/attendance/approvals', 'CheckCircleIcon', false, [], ['/attendance/approvals'])
+                        ? self::item('Duyệt công', '/attendance/approvals', 'CheckCircleIcon', false, [], ['/attendance/approvals'])
                         : null,
                     $can(PositionCapability::APPROVE_ATTENDANCE)
-                        ? self::item('Danh muc cham cong', '/attendance/catalogs', 'Calendar2Line')
+                        ? self::item('Danh mục chấm công', '/attendance/catalogs', 'Calendar2Line')
                         : null,
                     $can(PositionCapability::MANAGE_LEAVE_POLICY)
-                        ? self::item('Quan ly nghi phep', '/leave-management', 'Calendar2Line', false, [], ['/leave-management'])
+                        ? self::item('Quản lý nghỉ phép', '/leave-management', 'Calendar2Line', false, [], ['/leave-management'])
                         : null,
                 ])),
             ],
             [
-                'title' => 'Du an',
+                'title' => 'Dự án',
                 'items' => array_values(array_filter([
                     $canViewAllProjects
-                        ? self::item('Danh sach du an', '/projects', 'BoxIcon', false, [], ['/projects'])
+                        ? self::item('Danh sách dự án', '/projects', 'BoxIcon', false, [], ['/projects'])
                         : null,
                     !$canViewAllProjects && $can(PositionCapability::VIEW_OWN_PROJECTS)
-                        ? self::item('Du an cua toi', '/my-projects', 'BoxIcon', false, [], ['/my-projects'])
+                        ? self::item('Dự án của tôi', '/my-projects', 'BoxIcon', false, [], ['/my-projects'])
                         : null,
                 ])),
             ],
             [
-                'title' => 'Bao cao',
+                'title' => 'Báo cáo',
                 'items' => array_values(array_filter([
                     ($can(PositionCapability::VIEW_REPORTS) || $can(PositionCapability::EXPORT_REPORTS))
-                        ? self::item('Bao cao tong hop', '/reports', 'PieChartIcon', false, [], ['/reports'])
+                        ? self::item('Báo cáo tổng hợp', '/reports', 'PieChartIcon', false, [], ['/reports'])
                         : null,
                     $can(PositionCapability::VIEW_ALL_ATTENDANCE)
-                        ? self::item('Bao cao cham cong', '/attendance/reports', 'BarChartIcon', false, [], ['/attendance/reports'])
+                        ? self::item('Báo cáo chấm công', '/attendance/reports', 'BarChartIcon', false, [], ['/attendance/reports'])
                         : null,
                     $can(PositionCapability::VIEW_ACTIVITY_LOGS)
-                        ? self::item('Truy vet hoat dong', '/activity-logs', 'ListCheckIcon', false, [], ['/activity-logs'])
+                        ? self::item('Truy vết hoạt động', '/activity-logs', 'ListCheckIcon', false, [], ['/activity-logs'])
                         : null,
                 ])),
             ],
@@ -132,3 +132,5 @@ class MenuBuilder
         ];
     }
 }
+
+

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <header class="sticky top-0 z-40 border-b border-gray-200 bg-white/90 backdrop-blur dark:border-gray-800 dark:bg-gray-900/90">
     <div class="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3 px-4 py-3 md:px-6">
       <div class="flex min-w-0 items-center gap-3">
@@ -23,7 +23,7 @@
             {{ currentTitle }}
           </div>
           <div class="truncate text-xs text-gray-500 dark:text-gray-400">
-            Khung giao dien dung chung cho toan bo he thong
+            Khung giao dien dung chung cho toan bo hệ thống
           </div>
         </div>
       </div>
@@ -49,7 +49,7 @@ import UserMenu from './header/UserMenu.vue'
 const page = usePage()
 const { toggleSidebar, toggleMobileSidebar, isMobileOpen } = useSidebar()
 
-const currentTitle = computed(() => page.props.title || page.component?.split('/').at(-1) || 'He thong')
+const currentTitle = computed(() => page.props.title || page.component?.split('/').at(-1) || 'Hệ thống')
 
 const handleToggle = () => {
   if (window.innerWidth >= 1024) {
@@ -60,3 +60,4 @@ const handleToggle = () => {
   toggleMobileSidebar()
 }
 </script>
+

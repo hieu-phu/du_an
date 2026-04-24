@@ -5,11 +5,15 @@ namespace App\Http\Controllers\WEB;
 use App\Http\Controllers\Controller;
 use App\Models\EmployeeProfile;
 use App\Models\Project;
+use App\Models\ProjectAttachment;
+use App\Models\ProjectDetailComment;
 use App\Models\ProjectDetailLog;
 use App\Models\ProjectImplementationDetail;
 use App\Models\ProjectMember;
 use App\Models\ProjectProgressHistory;
 use App\Models\ProjectRole;
+use App\Models\User;
+use App\Services\NotificationService;
 use App\Support\AccessMatrix;
 use App\Support\PositionCapability;
 use Illuminate\Database\Eloquent\Builder;
@@ -18,15 +22,56 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class ProjectController extends Controller
 {
     private const STATUSES = ['planning', 'in_progress', 'on_hold', 'completed'];
     private const DETAIL_STATUSES = ['planned', 'in_progress', 'completed', 'cancelled'];
+    private const PROJECT_ROLE_PERMISSIONS = [
+        'add_project_member',
+        'update_project_member_role',
+        'remove_project_member',
+        'create_implementation_detail',
+        'update_implementation_detail',
+        'delete_implementation_detail',
+        'toggle_implementation_detail_lock',
+        'edit_implementation_schedule',
+        'update_implementation_status',
+        'upload_project_attachment',
+        'upload_implementation_attachment',
+        'delete_project_attachment',
+    ];
+    private const LEGACY_PROJECT_ROLE_PERMISSION_ALIASES = [
+        'manage_members' => [
+            'add_project_member',
+            'update_project_member_role',
+            'remove_project_member',
+        ],
+        'manage_implementation_details' => [
+            'create_implementation_detail',
+            'update_implementation_detail',
+            'delete_implementation_detail',
+            'toggle_implementation_detail_lock',
+            'edit_implementation_schedule',
+        ],
+        'manage_attachments' => [
+            'upload_project_attachment',
+            'upload_implementation_attachment',
+            'delete_project_attachment',
+        ],
+    ];
+
+    public function __construct(
+        private readonly NotificationService $notificationService
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -58,11 +103,11 @@ class ProjectController extends Controller
                 'updated_by' => $request->user()?->id,
             ]);
 
-            $this->syncMembers($project, $validated['members'] ?? []);
-            $this->recordStatusHistory($project, null, $validated['status'], $request->user()?->id, 'Tao moi du an');
+            $this->syncMembers($project, $validated['members'] ?? [], $request->user());
+            $this->recordStatusHistory($project, null, $validated['status'], $request->user()?->id, 'Tạo mới dự án');
         });
 
-        return redirect()->back()->with('success', 'Da tao du an moi thanh cong.');
+        return redirect()->back()->with('success', 'Đã tạo dự án mới thành công.');
     }
 
     public function update(Request $request, Project $project): RedirectResponse
@@ -71,7 +116,7 @@ class ProjectController extends Controller
 
         if ($project->is_locked) {
             return redirect()->back()->withErrors([
-                'project' => 'Du an dang bi khoa, khong the cap nhat.',
+                'project' => 'Dự án đang bị khóa, không thể cập nhật.',
             ]);
         }
 
@@ -88,14 +133,16 @@ class ProjectController extends Controller
                 'updated_by' => $request->user()?->id,
             ]);
 
-            $this->syncMembers($project->fresh(), $validated['members'] ?? []);
+            $freshProject = $project->fresh();
+            $this->syncMembers($freshProject, $validated['members'] ?? [], $request->user());
 
             if ($oldStatus !== $validated['status']) {
-                $this->recordStatusHistory($project, $oldStatus, $validated['status'], $request->user()?->id, 'Cap nhat trang thai du an');
+                $this->recordStatusHistory($project, $oldStatus, $validated['status'], $request->user()?->id, 'Cập nhật trạng thái dự án');
+                $this->notifyProjectMembersAboutStatusChange($freshProject, $oldStatus, $validated['status'], $request->user());
             }
         });
 
-        return redirect()->back()->with('success', 'Da cap nhat du an thanh cong.');
+        return redirect()->back()->with('success', 'Đã cập nhật dự án thành công.');
     }
 
     public function toggleLock(Request $request, Project $project): RedirectResponse
@@ -112,17 +159,17 @@ class ProjectController extends Controller
         ]);
 
         return redirect()->back()->with('success', $isLocked
-            ? 'Da mo khoa du an thanh cong.'
-            : 'Da khoa du an thanh cong.');
+            ? 'Đã mở khóa dự án thành công.'
+            : 'Đã khóa dự án thành công.');
     }
 
     public function addMember(Request $request, Project $project): RedirectResponse
     {
-        abort_unless($this->canManageProjectMembers($request->user()), 403);
+        abort_unless($this->canAddProjectMember($request->user(), $project), 403);
 
         if ($project->is_locked) {
             return redirect()->back()->withErrors([
-                'project' => 'Du an dang bi khoa, khong the thay doi thanh vien.',
+                'project' => 'Dự án đang bị khóa, không thể thay đổi thành viên.',
             ]);
         }
 
@@ -140,6 +187,7 @@ class ProjectController extends Controller
                 ->first();
 
             if ($member) {
+                $wasActive = (bool) $member->is_active;
                 $member->update([
                     'project_role_id' => $role->id,
                     'joined_at' => $validated['joined_at'] ?? $member->joined_at ?? $project->start_date,
@@ -147,7 +195,8 @@ class ProjectController extends Controller
                     'is_active' => true,
                 ]);
             } else {
-                ProjectMember::query()->create([
+                $wasActive = false;
+                $member = ProjectMember::query()->create([
                     'project_id' => $project->id,
                     'employee_profile_id' => (int) $validated['employee_profile_id'],
                     'project_role_id' => $role->id,
@@ -159,14 +208,18 @@ class ProjectController extends Controller
             $project->update([
                 'updated_by' => $request->user()?->id,
             ]);
+
+            if (!$wasActive) {
+                $this->notifyProjectMemberAssigned($project, $member->fresh(['employeeProfile.user', 'role']), $request->user());
+            }
         });
 
-        return redirect()->back()->with('success', 'Da them nhan su vao du an.');
+        return redirect()->back()->with('success', 'Đã thêm nhân sự vào dự án.');
     }
 
     public function updateMemberRole(Request $request, Project $project, ProjectMember $projectMember): RedirectResponse
     {
-        abort_unless($this->canManageProjectMembers($request->user()), 403);
+        abort_unless($this->canUpdateProjectMemberRole($request->user(), $project), 403);
 
         if ($projectMember->project_id !== $project->id) {
             abort(404);
@@ -174,7 +227,7 @@ class ProjectController extends Controller
 
         if ($project->is_locked) {
             return redirect()->back()->withErrors([
-                'project' => 'Du an dang bi khoa, khong the thay doi thanh vien.',
+                'project' => 'Dự án đang bị khóa, không thể thay đổi thành viên.',
             ]);
         }
 
@@ -196,12 +249,12 @@ class ProjectController extends Controller
             ]);
         });
 
-        return redirect()->back()->with('success', 'Da cap nhat vai tro nhan su trong du an.');
+        return redirect()->back()->with('success', 'Đã cập nhật vai trò nhân sự trong dự án.');
     }
 
     public function removeMember(Request $request, Project $project, ProjectMember $projectMember): RedirectResponse
     {
-        abort_unless($this->canManageProjectMembers($request->user()), 403);
+        abort_unless($this->canRemoveProjectMember($request->user(), $project), 403);
 
         if ($projectMember->project_id !== $project->id) {
             abort(404);
@@ -209,7 +262,7 @@ class ProjectController extends Controller
 
         if ($project->is_locked) {
             return redirect()->back()->withErrors([
-                'project' => 'Du an dang bi khoa, khong the thay doi thanh vien.',
+                'project' => 'Dự án đang bị khóa, không thể thay đổi thành viên.',
             ]);
         }
 
@@ -222,7 +275,7 @@ class ProjectController extends Controller
             'updated_by' => $request->user()?->id,
         ]);
 
-        return redirect()->back()->with('success', 'Da loai nhan su khoi du an.');
+        return redirect()->back()->with('success', 'Đã loại nhân sự khỏi dự án.');
     }
 
     public function addRole(Request $request, Project $project): RedirectResponse
@@ -231,16 +284,18 @@ class ProjectController extends Controller
 
         if ($project->is_locked) {
             return redirect()->back()->withErrors([
-                'project' => 'Du an dang bi khoa, khong the thay doi vai tro.',
+                'project' => 'Dự án đang bị khóa, không thể thay đổi vai trò.',
             ]);
         }
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:1000'],
+            'permissions' => ['nullable', 'array'],
+            'permissions.*' => ['string', Rule::in($this->validProjectRolePermissions())],
         ], [
-            'name.required' => 'Ten vai tro la bat buoc.',
-            'name.max' => 'Ten vai tro khong duoc qua 100 ky tu.',
+            'name.required' => 'Tên vai trò là bắt buộc.',
+            'name.max' => 'Tên vai trò không được quá 100 ký tự.',
         ]);
 
         $roleName = trim((string) $validated['name']);
@@ -252,7 +307,7 @@ class ProjectController extends Controller
 
         if ($exists) {
             return redirect()->back()->withErrors([
-                'role' => 'Vai tro nay da ton tai trong du an.',
+                'role' => 'Vai trò này đã tồn tại trong dự án.',
             ]);
         }
 
@@ -260,13 +315,44 @@ class ProjectController extends Controller
             'project_id' => $project->id,
             'name' => $roleName,
             'description' => $validated['description'] ?? null,
+            'permissions' => $this->normalizeProjectRolePermissions($validated['permissions'] ?? []),
         ]);
 
         $project->update([
             'updated_by' => $request->user()?->id,
         ]);
 
-        return redirect()->back()->with('success', 'Da them vai tro du an.');
+        return redirect()->back()->with('success', 'Đã thêm vai trò dự án.');
+    }
+
+    public function updateRole(Request $request, Project $project, ProjectRole $projectRole): RedirectResponse
+    {
+        abort_unless($this->canManageProjectRoles($request->user()), 403);
+
+        if ($projectRole->project_id !== $project->id) {
+            abort(404);
+        }
+
+        if ($project->is_locked) {
+            return redirect()->back()->withErrors([
+                'project' => 'Dá»± Ã¡n Ä‘ang bá»‹ khÃ³a, khÃ´ng thá»ƒ thay Ä‘á»•i vai trÃ².',
+            ]);
+        }
+
+        $validated = $request->validate([
+            'permissions' => ['nullable', 'array'],
+            'permissions.*' => ['string', Rule::in($this->validProjectRolePermissions())],
+        ]);
+
+        $projectRole->update([
+            'permissions' => $this->normalizeProjectRolePermissions($validated['permissions'] ?? []),
+        ]);
+
+        $project->update([
+            'updated_by' => $request->user()?->id,
+        ]);
+
+        return redirect()->back()->with('success', 'ÄÃ£ cáº­p nháº­t quyá»n vai trÃ² dá»± Ã¡n.');
     }
 
     public function removeRole(Request $request, Project $project, ProjectRole $projectRole): RedirectResponse
@@ -279,7 +365,7 @@ class ProjectController extends Controller
 
         if ($project->is_locked) {
             return redirect()->back()->withErrors([
-                'project' => 'Du an dang bi khoa, khong the thay doi vai tro.',
+                'project' => 'Dự án đang bị khóa, không thể thay đổi vai trò.',
             ]);
         }
 
@@ -291,7 +377,7 @@ class ProjectController extends Controller
 
         if ($isInUse) {
             return redirect()->back()->withErrors([
-                'role' => 'Khong the xoa vai tro dang duoc gan cho thanh vien.',
+                'role' => 'Không thể xóa vai trò đang được gán cho thành viên.',
             ]);
         }
 
@@ -301,16 +387,16 @@ class ProjectController extends Controller
             'updated_by' => $request->user()?->id,
         ]);
 
-        return redirect()->back()->with('success', 'Da xoa vai tro du an.');
+        return redirect()->back()->with('success', 'Đã xóa vai trò dự án.');
     }
 
     public function storeImplementationDetail(Request $request, Project $project): RedirectResponse
     {
-        abort_unless($this->canManageImplementationDetails($request->user()), 403);
+        abort_unless($this->canCreateImplementationDetail($request->user(), $project), 403);
 
         if ($project->is_locked) {
             return redirect()->back()->withErrors([
-                'project' => 'Du an dang bi khoa, khong the them dau viec.',
+                'project' => 'Dự án đang bị khóa, không thể thêm đầu việc.',
             ]);
         }
 
@@ -322,9 +408,9 @@ class ProjectController extends Controller
             'detail_status' => ['nullable', Rule::in(self::DETAIL_STATUSES)],
             'progress_percent' => ['nullable', 'integer', 'min:0', 'max:100'],
         ], [
-            'content.required' => 'Noi dung cong viec la bat buoc.',
-            'execution_date.required' => 'Ngay thuc hien la bat buoc.',
-            'duration_days.required' => 'So ngay thuc hien la bat buoc.',
+            'content.required' => 'Nội dung công việc là bắt buộc.',
+            'execution_date.required' => 'Ngày thực hiện là bắt buộc.',
+            'duration_days.required' => 'Số ngày thực hiện là bắt buộc.',
         ]);
 
         $assigneeId = $validated['assigned_to'] ?? null;
@@ -366,14 +452,15 @@ class ProjectController extends Controller
         ], $request->user()?->id);
 
         $project->update(['updated_by' => $request->user()?->id]);
-        $this->recordImplementationProgressHistory($project, $oldProgress, $request->user()?->id, 'Them dau viec trien khai');
+        $this->recordImplementationProgressHistory($project, $oldProgress, $request->user()?->id, 'Thêm đầu việc triển khai');
+        $this->notifyImplementationDetailAssigned($detail->fresh(['project', 'assignee.user']), $request->user());
 
-        return redirect()->back()->with('success', 'Da them dau viec trien khai.');
+        return redirect()->back()->with('success', 'Đã thêm đầu việc triển khai.');
     }
 
     public function updateImplementationDetail(Request $request, Project $project, ProjectImplementationDetail $implementationDetail): RedirectResponse
     {
-        abort_unless($this->canManageImplementationDetails($request->user()), 403);
+        abort_unless($this->canUpdateImplementationDetail($request->user(), $project), 403);
 
         if ($implementationDetail->project_id !== $project->id) {
             abort(404);
@@ -381,11 +468,11 @@ class ProjectController extends Controller
 
         if ($project->is_locked || $implementationDetail->is_locked) {
             return redirect()->back()->withErrors([
-                'detail' => 'Dau viec dang bi khoa, khong the cap nhat.',
+                'detail' => 'Đầu việc đang bị khóa, không thể cập nhật.',
             ]);
         }
 
-        $canEditImplementationSchedule = $this->canEditImplementationSchedule($request->user());
+        $canEditImplementationSchedule = $this->canEditImplementationSchedule($request->user(), $project);
 
         $validated = $request->validate([
             'content' => ['required', 'string', 'max:2000'],
@@ -401,7 +488,7 @@ class ProjectController extends Controller
             || (int) $validated['duration_days'] !== (int) $implementationDetail->duration_days
         )) {
             return redirect()->back()->withErrors([
-                'detail' => 'Chi nguoi co quyen dieu chinh lich trien khai moi duoc thay doi thoi gian thuc hien.',
+                'detail' => 'Chỉ người có quyền điều chỉnh lịch triển khai mới được thay đổi thời gian thực hiện.',
             ]);
         }
 
@@ -452,9 +539,15 @@ class ProjectController extends Controller
         $this->logDiffToDetailLogs($implementationDetail, $before, $after, $request->user()?->id);
 
         $project->update(['updated_by' => $request->user()?->id]);
-        $this->recordImplementationProgressHistory($project, $oldProgress, $request->user()?->id, 'Cap nhat dau viec trien khai');
+        $this->recordImplementationProgressHistory($project, $oldProgress, $request->user()?->id, 'Cập nhật đầu việc triển khai');
+        $freshDetail = $implementationDetail->fresh(['project', 'assignee.user']);
+        if ((int) ($before['assigned_to'] ?? 0) !== (int) ($after['assigned_to'] ?? 0)) {
+            $this->notifyImplementationDetailAssigned($freshDetail, $request->user());
+        } elseif ($before !== $after) {
+            $this->notifyImplementationDetailUpdated($freshDetail, $request->user(), 'Đầu việc của bạn đã được cập nhật.');
+        }
 
-        return redirect()->back()->with('success', 'Da cap nhat dau viec trien khai.');
+        return redirect()->back()->with('success', 'Đã cập nhật đầu việc triển khai.');
     }
 
     public function updateImplementationDetailStatus(Request $request, Project $project, ProjectImplementationDetail $implementationDetail): RedirectResponse
@@ -469,7 +562,7 @@ class ProjectController extends Controller
 
         if ($project->is_locked || $implementationDetail->is_locked) {
             return redirect()->back()->withErrors([
-                'detail' => 'Dau viec dang bi khoa, khong the cap nhat trang thai.',
+                'detail' => 'Đầu việc đang bị khóa, không thể cập nhật trạng thái.',
             ]);
         }
 
@@ -500,14 +593,25 @@ class ProjectController extends Controller
         ];
 
         $this->logDiffToDetailLogs($implementationDetail, $before, $after, $request->user()?->id);
-        $this->recordImplementationProgressHistory($project, $oldProgress, $request->user()?->id, 'Cap nhat trang thai dau viec');
+        $this->recordImplementationProgressHistory($project, $oldProgress, $request->user()?->id, 'Cập nhật trạng thái đầu việc');
+        if ($before !== $after) {
+            $this->notifyImplementationDetailUpdated(
+                $implementationDetail->fresh(['project', 'assignee.user']),
+                $request->user(),
+                sprintf(
+                    'Trạng thái đầu việc đã đổi sang "%s" với tiến độ %d%%.',
+                    $this->implementationStatusLabel($implementationDetail->detail_status),
+                    (int) $implementationDetail->progress_percent
+                )
+            );
+        }
 
-        return redirect()->back()->with('success', 'Da cap nhat trang thai dau viec.');
+        return redirect()->back()->with('success', 'Đã cập nhật trạng thái đầu việc.');
     }
 
     public function toggleImplementationDetailLock(Request $request, Project $project, ProjectImplementationDetail $implementationDetail): RedirectResponse
     {
-        abort_unless($this->canManageImplementationDetails($request->user()), 403);
+        abort_unless($this->canToggleImplementationDetailLock($request->user(), $project), 403);
 
         if ($implementationDetail->project_id !== $project->id) {
             abort(404);
@@ -515,7 +619,7 @@ class ProjectController extends Controller
 
         if ($project->is_locked) {
             return redirect()->back()->withErrors([
-                'project' => 'Du an dang bi khoa, khong the thay doi trang thai khoa dau viec.',
+                'project' => 'Dự án đang bị khóa, không thể thay đổi trạng thái khóa đầu việc.',
             ]);
         }
 
@@ -527,16 +631,16 @@ class ProjectController extends Controller
         ]);
         $after = ['is_locked' => (bool) $implementationDetail->is_locked];
         $this->logDiffToDetailLogs($implementationDetail, $before, $after, $request->user()?->id);
-        $this->recordImplementationProgressHistory($project, $oldProgress, $request->user()?->id, 'Thay doi khoa dau viec');
+        $this->recordImplementationProgressHistory($project, $oldProgress, $request->user()?->id, 'Thay đổi khóa đầu việc');
 
         return redirect()->back()->with('success', $implementationDetail->is_locked
-            ? 'Da khoa dau viec.'
-            : 'Da mo khoa dau viec.');
+            ? 'Đã khóa đầu việc.'
+            : 'Đã mở khóa đầu việc.');
     }
 
     public function destroyImplementationDetail(Request $request, Project $project, ProjectImplementationDetail $implementationDetail): RedirectResponse
     {
-        abort_unless($this->canManageImplementationDetails($request->user()), 403);
+        abort_unless($this->canDeleteImplementationDetail($request->user(), $project), 403);
 
         if ($implementationDetail->project_id !== $project->id) {
             abort(404);
@@ -544,7 +648,7 @@ class ProjectController extends Controller
 
         if ($project->is_locked || $implementationDetail->is_locked) {
             return redirect()->back()->withErrors([
-                'detail' => 'Dau viec dang bi khoa, khong the xoa.',
+                'detail' => 'Đầu việc đang bị khóa, không thể xóa.',
             ]);
         }
 
@@ -556,9 +660,138 @@ class ProjectController extends Controller
         $implementationDetail->delete();
 
         $project->update(['updated_by' => $request->user()?->id]);
-        $this->recordImplementationProgressHistory($project, $oldProgress, $request->user()?->id, 'Xoa dau viec trien khai');
+        $this->recordImplementationProgressHistory($project, $oldProgress, $request->user()?->id, 'Xóa đầu việc triển khai');
 
-        return redirect()->back()->with('success', 'Da xoa dau viec trien khai.');
+        return redirect()->back()->with('success', 'Đã xóa đầu việc triển khai.');
+    }
+
+    public function uploadAttachment(Request $request, Project $project): RedirectResponse
+    {
+        abort_unless($this->canUploadProjectAttachment($request->user(), $project), 403);
+
+        if ($project->is_locked) {
+            return redirect()->back()->withErrors([
+                'attachments' => 'Dự án đang bị khóa, không thể tải tệp đính kèm.',
+            ]);
+        }
+
+        $this->storeAttachments($request, $project);
+
+        $project->update(['updated_by' => $request->user()?->id]);
+
+        return redirect()->back()->with('success', 'Đã tải tệp đính kèm lên dự án.');
+    }
+
+    public function uploadImplementationDetailAttachment(Request $request, Project $project, ProjectImplementationDetail $implementationDetail): RedirectResponse
+    {
+        if ($implementationDetail->project_id !== $project->id) {
+            abort(404);
+        }
+
+        abort_unless($this->canUploadImplementationAttachment($request->user(), $implementationDetail), 403);
+
+        if ($project->is_locked || $implementationDetail->is_locked) {
+            return redirect()->back()->withErrors([
+                'attachments' => 'Đầu việc đang bị khóa, không thể tải tệp đính kèm.',
+            ]);
+        }
+
+        $this->storeAttachments($request, $project, $implementationDetail);
+
+        $project->update(['updated_by' => $request->user()?->id]);
+        $implementationDetail->update(['updated_by' => $request->user()?->id]);
+
+        return redirect()->back()->with('success', 'Đã tải tệp đính kèm lên đầu việc.');
+    }
+
+    public function storeImplementationDetailComment(Request $request, Project $project, ProjectImplementationDetail $implementationDetail): RedirectResponse
+    {
+        $this->ensureImplementationDetailBelongsToProject($project, $implementationDetail);
+
+        abort_unless($this->canCommentOnImplementationDetail($request->user(), $project, $implementationDetail), 403);
+
+        if ($project->is_locked || $implementationDetail->is_locked) {
+            return redirect()->back()->withErrors([
+                'comment' => 'Dự án hoặc đầu việc đang bị khóa, không thể thêm bình luận.',
+            ]);
+        }
+
+        $validated = $request->validate([
+            'content' => ['required', 'string', 'max:2000'],
+        ], [
+            'content.required' => 'Nội dung bình luận là bắt buộc.',
+            'content.max' => 'Nội dung bình luận không được vượt quá 2000 ký tự.',
+        ]);
+
+        $comment = ProjectDetailComment::query()->create([
+            'project_id' => $project->id,
+            'implementation_detail_id' => $implementationDetail->id,
+            'user_id' => $request->user()?->id,
+            'content' => trim((string) $validated['content']),
+        ]);
+
+        $this->notifyImplementationDetailCommented(
+            $implementationDetail->fresh(['project', 'assignee.user']),
+            $comment->fresh(['author:id,name']),
+            $request->user()
+        );
+
+        return redirect()->back()->with('success', 'Đã gửi bình luận cho đầu việc.');
+    }
+
+    public function destroyImplementationDetailComment(
+        Request $request,
+        Project $project,
+        ProjectImplementationDetail $implementationDetail,
+        ProjectDetailComment $comment
+    ): RedirectResponse {
+        $this->ensureImplementationDetailBelongsToProject($project, $implementationDetail);
+        $this->ensureImplementationCommentBelongsToDetail($project, $implementationDetail, $comment);
+
+        abort_unless($this->canDeleteImplementationComment($request->user(), $project, $comment), 403);
+
+        if ($project->is_locked || $implementationDetail->is_locked) {
+            return redirect()->back()->withErrors([
+                'comment' => 'Dự án hoặc đầu việc đang bị khóa, không thể xóa bình luận.',
+            ]);
+        }
+
+        $comment->delete();
+
+        return redirect()->back()->with('success', 'Đã xóa bình luận.');
+    }
+
+    public function downloadAttachment(Request $request, Project $project, ProjectAttachment $attachment): StreamedResponse
+    {
+        $this->ensureAttachmentBelongsToProject($project, $attachment);
+
+        abort_unless($this->canViewProjectAttachment($request->user(), $project), 403);
+
+        if (!Storage::disk($attachment->disk)->exists($attachment->path)) {
+            abort(404);
+        }
+
+        return Storage::disk($attachment->disk)->download($attachment->path, $attachment->original_name);
+    }
+
+    public function destroyAttachment(Request $request, Project $project, ProjectAttachment $attachment): RedirectResponse
+    {
+        $this->ensureAttachmentBelongsToProject($project, $attachment);
+
+        abort_unless($this->canDeleteProjectAttachment($request->user(), $project, $attachment), 403);
+
+        if ($project->is_locked || $attachment->implementationDetail?->is_locked) {
+            return redirect()->back()->withErrors([
+                'attachments' => 'Dự án hoặc đầu việc đang bị khóa, không thể xóa tệp đính kèm.',
+            ]);
+        }
+
+        Storage::disk($attachment->disk)->delete($attachment->path);
+        $attachment->delete();
+
+        $project->update(['updated_by' => $request->user()?->id]);
+
+        return redirect()->back()->with('success', 'Đã xóa tệp đính kèm.');
     }
 
     private function renderProjectsPage(Request $request, string $scope): Response
@@ -612,10 +845,19 @@ class ProjectController extends Controller
                         ->orderBy('id');
                 },
                 'roles:id,project_id,name',
+                'attachments' => fn ($relation) => $relation
+                    ->whereNull('implementation_detail_id')
+                    ->with(['uploader:id,name', 'implementationDetail:id,is_locked'])
+                    ->latest('id'),
                 'progressHistories' => fn ($relation) => $relation->with('changer:id,name')->latest('changed_at')->limit(30),
                 'implementationDetails' => fn ($relation) => $relation
                     ->with([
                         'assignee.user:id,name',
+                        'attachments.uploader:id,name',
+                        'attachments.implementationDetail:id,is_locked',
+                        'comments' => fn ($commentRelation) => $commentRelation
+                            ->with('author:id,name')
+                            ->orderBy('id'),
                         'logs.updatedBy:id,name',
                     ])
                     ->orderByDesc('id'),
@@ -643,7 +885,7 @@ class ProjectController extends Controller
                 'employee_code' => $profile->employee_code,
                 'name' => $profile->user?->name,
                 'position_name' => $profile->position?->name,
-                'label' => trim(($profile->employee_code ? ($profile->employee_code . ' - ') : '') . ($profile->user?->name ?? 'Nhan su')),
+                'label' => trim(($profile->employee_code ? ($profile->employee_code . ' - ') : '') . ($profile->user?->name ?? 'Nhân sự')),
             ])
             ->values();
 
@@ -679,6 +921,7 @@ class ProjectController extends Controller
         $canManageMembers = $this->canManageProjectMembers($pageUser);
         $canManageProjectRoles = $this->canManageProjectRoles($pageUser);
         $canManageImplementationDetails = $this->canManageImplementationDetails($pageUser);
+        $canUploadProjectAttachments = $this->canManageProjects($pageUser) || $this->canManageProjectMembers($pageUser);
 
         return Inertia::render('Projects/Index', [
             'projects' => $projects,
@@ -691,18 +934,20 @@ class ProjectController extends Controller
                 'to' => $projectsPaginator->lastItem(),
             ],
             'scope' => $scope,
-            'title' => $scope === 'mine' ? 'Du an cua toi' : 'Danh sach du an',
+            'title' => $scope === 'mine' ? 'Dự án của tôi' : 'Danh sách dự án',
             'filters' => $filters,
             'status_options' => collect(self::STATUSES)
                 ->map(fn (string $status) => ['value' => $status, 'label' => $this->statusLabel($status)])
                 ->values(),
             'employee_options' => $employeeOptions,
             'project_role_options' => $this->projectRoleOptions(),
+            'project_role_permission_options' => $this->projectRolePermissionOptions(),
             'employee_project_overview' => $employeeProjectOverview,
             'can_manage_projects' => $canManageProjects,
             'can_manage_members' => $canManageMembers,
             'can_manage_project_roles' => $canManageProjectRoles,
             'can_manage_implementation_details' => $canManageImplementationDetails,
+            'can_upload_project_attachments' => $canUploadProjectAttachments,
             'can_edit_implementation_schedule' => $this->canEditImplementationSchedule($pageUser),
             'implementation_status_options' => collect(self::DETAIL_STATUSES)
                 ->map(fn (string $status) => ['value' => $status, 'label' => $this->implementationStatusLabel($status)])
@@ -752,19 +997,19 @@ class ProjectController extends Controller
             'members.*.role_name' => ['required', 'string', 'max:100'],
             'members.*.joined_at' => ['nullable', 'date'],
         ], [
-            'name.required' => 'Ten du an la bat buoc.',
-            'name.unique' => 'Da ton tai du an cung ten va ngay bat dau.',
-            'start_date.required' => 'Ngay bat dau la bat buoc.',
-            'status.required' => 'Trang thai la bat buoc.',
-            'status.in' => 'Trang thai khong hop le.',
-            'members.*.employee_profile_id.required' => 'Vui long chon nhan su tham gia.',
-            'members.*.employee_profile_id.distinct' => 'Nhan su bi trung trong danh sach.',
-            'members.*.employee_profile_id.exists' => 'Nhan su khong hop le.',
-            'members.*.role_name.required' => 'Vai tro trong du an la bat buoc.',
+            'name.required' => 'Tên dự án là bắt buộc.',
+            'name.unique' => 'Đã tồn tại dự án cùng tên và ngày bắt đầu.',
+            'start_date.required' => 'Ngày bắt đầu là bắt buộc.',
+            'status.required' => 'Trạng thái là bắt buộc.',
+            'status.in' => 'Trạng thái không hợp lệ.',
+            'members.*.employee_profile_id.required' => 'Vui lòng chọn nhân sự tham gia.',
+            'members.*.employee_profile_id.distinct' => 'Nhân sự bị trùng trong danh sách.',
+            'members.*.employee_profile_id.exists' => 'Nhân sự không hợp lệ.',
+            'members.*.role_name.required' => 'Vai trò trong dự án là bắt buộc.',
         ]);
     }
 
-    private function syncMembers(Project $project, array $members): void
+    private function syncMembers(Project $project, array $members, ?User $actor = null): void
     {
         $existingMembers = ProjectMember::query()
             ->where('project_id', $project->id)
@@ -787,6 +1032,7 @@ class ProjectController extends Controller
 
             $record = $existingMembers->get($profileId);
             if ($record) {
+                $wasActive = (bool) $record->is_active;
                 $record->update([
                     'project_role_id' => $projectRole->id,
                     'joined_at' => $member['joined_at'] ?? $record->joined_at ?? $project->start_date,
@@ -794,16 +1040,22 @@ class ProjectController extends Controller
                     'is_active' => true,
                 ]);
 
+                if (!$wasActive) {
+                    $this->notifyProjectMemberAssigned($project, $record->fresh(['employeeProfile.user', 'role']), $actor);
+                }
+
                 continue;
             }
 
-            ProjectMember::query()->create([
+            $createdMember = ProjectMember::query()->create([
                 'project_id' => $project->id,
                 'employee_profile_id' => $profileId,
                 'project_role_id' => $projectRole->id,
                 'joined_at' => $member['joined_at'] ?? $project->start_date,
                 'is_active' => true,
             ]);
+
+            $this->notifyProjectMemberAssigned($project, $createdMember->fresh(['employeeProfile.user', 'role']), $actor);
         }
 
         ProjectMember::query()
@@ -830,7 +1082,7 @@ class ProjectController extends Controller
         }
 
         throw ValidationException::withMessages([
-            'role_name' => 'Vai tro khong hop le. Vui long chon vai tro da duoc tao boi quan tri du an.',
+            'role_name' => 'Vai trò không hợp lệ. Vui lòng chọn vai trò đã được tạo bởi quản trị dự án.',
         ]);
     }
 
@@ -842,8 +1094,249 @@ class ProjectController extends Controller
             'new_progress' => $this->statusToProgress($newStatus),
             'changed_at' => now(),
             'changed_by' => $changedBy,
-            'note' => $note ?: sprintf('Trang thai: %s -> %s', $this->statusLabel($oldStatus), $this->statusLabel($newStatus)),
+            'note' => $note ?: sprintf('Trạng thái: %s -> %s', $this->statusLabel($oldStatus), $this->statusLabel($newStatus)),
         ]);
+    }
+
+    private function notifyProjectMemberAssigned(Project $project, ?ProjectMember $member, ?User $actor = null): void
+    {
+        $recipientId = $member?->employeeProfile?->user_id;
+        if (!$recipientId) {
+            return;
+        }
+
+        $roleName = $member?->role?->name;
+        $message = $roleName
+            ? sprintf('Bạn đã được phân công vào dự án "%s" với vai trò "%s".', $project->name, $roleName)
+            : sprintf('Bạn đã được phân công vào dự án "%s".', $project->name);
+
+        $this->sendProjectNotification(
+            [$recipientId],
+            'Bạn được phân công vào dự án',
+            $message,
+            [
+                'project_id' => $project->id,
+                'project_name' => $project->name,
+                'project_role' => $roleName,
+                'action_url' => '/my-projects',
+            ],
+            '/my-projects',
+            $actor?->id,
+            Project::class,
+            $project->id
+        );
+    }
+
+    private function notifyProjectMembersAboutStatusChange(Project $project, ?string $oldStatus, string $newStatus, ?User $actor = null): void
+    {
+        $recipientIds = ProjectMember::query()
+            ->where('project_id', $project->id)
+            ->where('is_active', true)
+            ->with('employeeProfile:id,user_id')
+            ->get()
+            ->pluck('employeeProfile.user_id')
+            ->filter()
+            ->when($actor, fn ($ids) => $ids->reject(fn ($id) => (int) $id === (int) $actor->id))
+            ->unique()
+            ->values()
+            ->all();
+
+        $this->sendProjectNotification(
+            $recipientIds,
+            'Trạng thái dự án đã thay đổi',
+            sprintf(
+                'Dự án "%s" đã đổi trạng thái từ "%s" sang "%s".',
+                $project->name,
+                $this->statusLabel($oldStatus),
+                $this->statusLabel($newStatus)
+            ),
+            [
+                'project_id' => $project->id,
+                'project_name' => $project->name,
+                'old_status' => $oldStatus,
+                'old_status_label' => $this->statusLabel($oldStatus),
+                'new_status' => $newStatus,
+                'new_status_label' => $this->statusLabel($newStatus),
+                'action_url' => '/my-projects',
+            ],
+            '/my-projects',
+            $actor?->id,
+            Project::class,
+            $project->id
+        );
+    }
+
+    private function notifyImplementationDetailAssigned(?ProjectImplementationDetail $detail, ?User $actor = null): void
+    {
+        $recipientId = $detail?->assignee?->user_id;
+        if (!$detail || !$recipientId) {
+            return;
+        }
+
+        $projectName = $detail->project?->name ?: 'dự án';
+
+        $this->sendProjectNotification(
+            [$recipientId],
+            'Bạn được giao đầu việc mới',
+            sprintf('Bạn được giao đầu việc "%s" trong dự án "%s".', $detail->content, $projectName),
+            [
+                'project_id' => $detail->project_id,
+                'implementation_detail_id' => $detail->id,
+                'project_name' => $projectName,
+                'content' => $detail->content,
+                'status' => $detail->detail_status,
+                'status_label' => $this->implementationStatusLabel($detail->detail_status),
+                'progress_percent' => (int) ($detail->progress_percent ?? 0),
+                'action_url' => '/my-projects',
+            ],
+            '/my-projects',
+            $actor?->id,
+            ProjectImplementationDetail::class,
+            $detail->id
+        );
+    }
+
+    private function notifyImplementationDetailUpdated(?ProjectImplementationDetail $detail, ?User $actor = null, ?string $message = null): void
+    {
+        if (!$detail) {
+            return;
+        }
+
+        $projectName = $detail->project?->name ?: 'dự án';
+        $recipientIds = $this->implementationDetailStakeholderIds($detail, $actor);
+
+        $this->sendProjectNotification(
+            $recipientIds,
+            'Đầu việc dự án đã được cập nhật',
+            $message ?: sprintf('Đầu việc "%s" trong dự án "%s" đã được cập nhật.', $detail->content, $projectName),
+            [
+                'project_id' => $detail->project_id,
+                'implementation_detail_id' => $detail->id,
+                'project_name' => $projectName,
+                'content' => $detail->content,
+                'status' => $detail->detail_status,
+                'status_label' => $this->implementationStatusLabel($detail->detail_status),
+                'progress_percent' => (int) ($detail->progress_percent ?? 0),
+                'action_url' => '/my-projects',
+            ],
+            '/my-projects',
+            $actor?->id,
+            ProjectImplementationDetail::class,
+            $detail->id
+        );
+    }
+
+    private function implementationDetailStakeholderIds(ProjectImplementationDetail $detail, ?User $actor = null): array
+    {
+        $detail->loadMissing(['project', 'assignee']);
+
+        return collect([
+            $detail->assignee?->user_id,
+            $detail->project?->created_by,
+            $detail->project?->updated_by,
+        ])
+            ->filter()
+            ->when($actor, fn ($ids) => $ids->reject(fn ($id) => (int) $id === (int) $actor->id))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Gửi thông báo dự án an toàn để lỗi broadcast không làm hỏng thao tác chính.
+     */
+    private function notifyImplementationDetailCommented(
+        ?ProjectImplementationDetail $detail,
+        ?ProjectDetailComment $comment,
+        ?User $actor = null
+    ): void {
+        if (!$detail || !$comment) {
+            return;
+        }
+
+        $projectName = $detail->project?->name ?: 'dự án';
+        $authorName = $comment->author?->name ?: ($actor?->name ?: 'Một thành viên');
+
+        $this->sendProjectNotification(
+            $this->implementationDetailCommentRecipientIds($detail, $actor),
+            'Đầu việc có bình luận mới',
+            sprintf('%s đã bình luận trong đầu việc "%s".', $authorName, Str::limit($detail->content, 80)),
+            [
+                'project_id' => $detail->project_id,
+                'implementation_detail_id' => $detail->id,
+                'project_name' => $projectName,
+                'content' => $detail->content,
+                'comment_id' => $comment->id,
+                'comment_content' => $comment->content,
+                'comment_author_name' => $authorName,
+                'action_url' => '/my-projects',
+            ],
+            '/my-projects',
+            $actor?->id,
+            ProjectDetailComment::class,
+            $comment->id
+        );
+    }
+
+    private function implementationDetailCommentRecipientIds(ProjectImplementationDetail $detail, ?User $actor = null): array
+    {
+        $commentAuthorIds = ProjectDetailComment::query()
+            ->where('implementation_detail_id', $detail->id)
+            ->pluck('user_id');
+
+        return $commentAuthorIds
+            ->merge($this->implementationDetailStakeholderIds($detail, $actor))
+            ->filter()
+            ->when($actor, fn ($ids) => $ids->reject(fn ($id) => (int) $id === (int) $actor->id))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function sendProjectNotification(
+        array $recipientIds,
+        string $title,
+        string $message,
+        array $data,
+        string $url,
+        ?int $actorId,
+        string $referenceType,
+        int $referenceId,
+    ): void {
+        $recipientIds = collect($recipientIds)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if (empty($recipientIds)) {
+            return;
+        }
+
+        try {
+            $this->notificationService->createForUsers(
+                $recipientIds,
+                $title,
+                $message,
+                $data,
+                $url,
+                $this->currentNotificationSubdomain(),
+                'project',
+                $actorId,
+                $referenceType,
+                $referenceId
+            );
+        } catch (Throwable $exception) {
+            report($exception);
+        }
+    }
+
+    private function currentNotificationSubdomain(): string
+    {
+        $host = request()->getHost();
+        $parts = explode('.', $host);
+
+        return count($parts) >= 3 ? $parts[0] : 'main';
     }
 
     private function transformProject(Project $project, $pageUser): array
@@ -865,11 +1358,23 @@ class ProjectController extends Controller
             ],
             'is_delayed' => $progressSummary['delayed_tasks'] > 0,
             'delay_warning' => $progressSummary['delayed_tasks'] > 0
-                ? sprintf('Du an co %d dau viec cham tien do.', $progressSummary['delayed_tasks'])
+                ? sprintf('Dự án có %d đầu việc chậm tiến độ.', $progressSummary['delayed_tasks'])
                 : null,
             'start_date' => optional($project->start_date)->format('Y-m-d'),
             'description' => $project->description,
             'is_locked' => (bool) $project->is_locked,
+            'can_manage_members' => $this->canManageProjectMembers($pageUser, $project),
+            'can_add_member' => $this->canAddProjectMember($pageUser, $project),
+            'can_update_member_role' => $this->canUpdateProjectMemberRole($pageUser, $project),
+            'can_remove_member' => $this->canRemoveProjectMember($pageUser, $project),
+            'can_manage_project_roles' => $this->canManageProjectRoles($pageUser),
+            'can_manage_implementation_details' => $this->canManageImplementationDetails($pageUser, $project),
+            'can_create_implementation_detail' => $this->canCreateImplementationDetail($pageUser, $project),
+            'can_update_implementation_detail' => $this->canUpdateImplementationDetail($pageUser, $project),
+            'can_delete_implementation_detail' => $this->canDeleteImplementationDetail($pageUser, $project),
+            'can_toggle_implementation_detail_lock' => $this->canToggleImplementationDetailLock($pageUser, $project),
+            'can_upload_project_attachments' => $this->canUploadProjectAttachment($pageUser, $project),
+            'can_edit_implementation_schedule' => $this->canEditImplementationSchedule($pageUser, $project),
             'active_members_count' => (int) ($project->active_members_count ?? 0),
             'members' => $project->members->map(fn (ProjectMember $member) => [
                 'id' => $member->id,
@@ -883,8 +1388,12 @@ class ProjectController extends Controller
             'roles' => $project->roles->map(fn (ProjectRole $role) => [
                 'id' => $role->id,
                 'name' => $role->name,
+                'permissions' => $this->normalizeProjectRolePermissions($role->permissions ?? []),
             ])->values(),
             'role_options' => $this->projectRoleOptions($project),
+            'attachments' => $project->attachments
+                ->map(fn (ProjectAttachment $attachment) => $this->transformAttachment($attachment, $project, $pageUser))
+                ->values(),
             'status_histories' => $project->progressHistories->map(fn (ProjectProgressHistory $history) => [
                 'id' => $history->id,
                 'old_progress' => (int) $history->old_progress,
@@ -893,7 +1402,7 @@ class ProjectController extends Controller
                 'changed_by_name' => $history->changer?->name,
                 'note' => $history->note,
             ])->values(),
-            'implementation_details' => $visibleImplementationDetails->map(function (ProjectImplementationDetail $detail) use ($pageUser) {
+            'implementation_details' => $visibleImplementationDetails->map(function (ProjectImplementationDetail $detail) use ($pageUser, $project) {
                 $canUpdateStatus = $this->canUpdateImplementationStatus($pageUser, $detail);
 
                 return [
@@ -904,13 +1413,44 @@ class ProjectController extends Controller
                     'assigned_code' => $detail->assignee?->employee_code,
                     'execution_date' => optional($detail->execution_date)->format('Y-m-d'),
                     'duration_days' => (int) $detail->duration_days,
-                    'expected_end_date' => optional($detail->expected_end_date)->format('Y-m-d'),
+                    'expected_end_date' => $this->expectedEndDateForDetail($detail),
                     'actual_end_date' => optional($detail->actual_end_date)->format('Y-m-d'),
                     'detail_status' => $detail->detail_status,
                     'detail_status_label' => $this->implementationStatusLabel($detail->detail_status),
-                    'progress_percent' => (int) ($detail->progress_percent ?? 0),
+                    'progress_percent' => $this->normalizedDetailProgress($detail),
                     'is_locked' => (bool) $detail->is_locked,
+                    'is_delayed' => $this->isImplementationDetailDelayed($detail),
+                    'delay_days' => $this->implementationDetailDelayDays($detail),
                     'can_update_status' => $canUpdateStatus && !$detail->is_locked,
+                    'can_update_detail' => $this->canUpdateImplementationDetail($pageUser, $project)
+                        && !$project->is_locked
+                        && !$detail->is_locked,
+                    'can_delete_detail' => $this->canDeleteImplementationDetail($pageUser, $project)
+                        && !$project->is_locked
+                        && !$detail->is_locked,
+                    'can_toggle_lock' => $this->canToggleImplementationDetailLock($pageUser, $project)
+                        && !$project->is_locked,
+                    'can_comment' => $this->canCommentOnImplementationDetail($pageUser, $project, $detail)
+                        && !$project->is_locked
+                        && !$detail->is_locked,
+                    'can_upload_attachment' => $this->canUploadImplementationAttachment($pageUser, $detail)
+                        && !$project->is_locked
+                        && !$detail->is_locked,
+                    'attachments' => $detail->attachments
+                        ->map(fn (ProjectAttachment $attachment) => $this->transformAttachment($attachment, $project, $pageUser))
+                        ->values(),
+                    'comments' => $detail->comments
+                        ->map(fn (ProjectDetailComment $comment) => [
+                            'id' => $comment->id,
+                            'content' => $comment->content,
+                            'author_id' => $comment->user_id,
+                            'author_name' => $comment->author?->name,
+                            'created_at' => optional($comment->created_at)->format('Y-m-d H:i:s'),
+                            'can_delete' => $this->canDeleteImplementationComment($pageUser, $project, $comment)
+                                && !$project->is_locked
+                                && !$detail->is_locked,
+                        ])
+                        ->values(),
                     'logs' => $detail->logs
                         ->sortByDesc('id')
                         ->take(20)
@@ -927,6 +1467,81 @@ class ProjectController extends Controller
                 ];
             })->values(),
         ];
+    }
+
+    private function storeAttachments(Request $request, Project $project, ?ProjectImplementationDetail $implementationDetail = null): void
+    {
+        $validated = $request->validate([
+            'files' => ['required', 'array', 'min:1', 'max:10'],
+            'files.*' => ['required', 'file', 'max:10240', 'mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx,xls,xlsx,csv,txt,ppt,pptx,zip,rar'],
+        ], [
+            'files.required' => 'Vui lòng chọn ít nhất một tệp đính kèm.',
+            'files.array' => 'Dữ liệu tệp đính kèm không hợp lệ.',
+            'files.max' => 'Chỉ được tải tối đa 10 tệp mỗi lần.',
+            'files.*.required' => 'Tệp đính kèm là bắt buộc.',
+            'files.*.file' => 'Tệp đính kèm không hợp lệ.',
+            'files.*.max' => 'Mỗi tệp đính kèm không được vượt quá 10 MB.',
+            'files.*.mimes' => 'Tệp đính kèm chỉ hỗ trợ hình ảnh, PDF, Word, Excel, PowerPoint, TXT, CSV, ZIP hoặc RAR.',
+        ]);
+
+        $storedPaths = [];
+
+        try {
+            DB::transaction(function () use ($request, $project, $implementationDetail, $validated, &$storedPaths): void {
+                foreach ($validated['files'] as $file) {
+                    $path = $file->store(
+                        sprintf('project-attachments/%d%s', $project->id, $implementationDetail ? ('/details/' . $implementationDetail->id) : ''),
+                        'local'
+                    );
+                    $storedPaths[] = $path;
+
+                    ProjectAttachment::query()->create([
+                        'project_id' => $project->id,
+                        'implementation_detail_id' => $implementationDetail?->id,
+                        'uploaded_by' => $request->user()?->id,
+                        'disk' => 'local',
+                        'path' => $path,
+                        'original_name' => $file->getClientOriginalName(),
+                        'mime_type' => $file->getClientMimeType(),
+                        'size' => (int) $file->getSize(),
+                    ]);
+                }
+            });
+        } catch (Throwable $exception) {
+            Storage::disk('local')->delete($storedPaths);
+
+            throw $exception;
+        }
+    }
+
+    private function transformAttachment(ProjectAttachment $attachment, Project $project, $pageUser): array
+    {
+        return [
+            'id' => $attachment->id,
+            'original_name' => $attachment->original_name,
+            'mime_type' => $attachment->mime_type,
+            'size' => (int) $attachment->size,
+            'size_label' => $this->formatFileSize((int) $attachment->size),
+            'uploaded_by_name' => $attachment->uploader?->name,
+            'created_at' => optional($attachment->created_at)->format('Y-m-d H:i:s'),
+            'download_url' => route('projects.attachments.download', [$project, $attachment]),
+            'can_delete' => $this->canDeleteProjectAttachment($pageUser, $project, $attachment)
+                && !$project->is_locked
+                && !$attachment->implementationDetail?->is_locked,
+        ];
+    }
+
+    private function formatFileSize(int $bytes): string
+    {
+        if ($bytes < 1024) {
+            return $bytes . ' B';
+        }
+
+        if ($bytes < 1024 * 1024) {
+            return round($bytes / 1024, 1) . ' KB';
+        }
+
+        return round($bytes / 1024 / 1024, 1) . ' MB';
     }
 
     private function projectRoleOptions(?Project $project = null): array
@@ -955,18 +1570,19 @@ class ProjectController extends Controller
 
     private function visibleImplementationDetails(Project $project, $user)
     {
-        if ($this->canManageImplementationDetails($user)) {
+        if (
+            $this->canManageImplementationDetails($user, $project)
+            || $this->canManageProjects($user)
+            || $this->canViewAllProjects($user)
+        ) {
             return $project->implementationDetails;
         }
 
-        $profileId = $user?->employeeProfile?->id;
-        if (!$profileId) {
+        if (!$this->isActiveProjectMember($user, $project)) {
             return collect();
         }
 
-        return $project->implementationDetails
-            ->where('assigned_to', (int) $profileId)
-            ->values();
+        return $project->implementationDetails->values();
     }
 
     private function ensureEmployeeIsProjectMember(Project $project, int $employeeProfileId): void
@@ -979,7 +1595,7 @@ class ProjectController extends Controller
 
         if (!$isMember) {
             throw ValidationException::withMessages([
-                'assigned_to' => 'Nhan su duoc giao phai la thanh vien dang hoat dong cua du an.',
+                'assigned_to' => 'Nhân sự được giao phải là thành viên đang hoạt động của dự án.',
             ]);
         }
     }
@@ -991,11 +1607,23 @@ class ProjectController extends Controller
             ->toDateString();
     }
 
+    private function expectedEndDateForDetail(ProjectImplementationDetail $detail): ?string
+    {
+        if (!$detail->execution_date) {
+            return optional($detail->expected_end_date)->format('Y-m-d');
+        }
+
+        return $this->calculateExpectedEndDate(
+            $detail->execution_date->toDateString(),
+            max(1, (int) $detail->duration_days)
+        );
+    }
+
     private function normalizeProgressByStatus(int $progressPercent, string $status): int
     {
         $progress = max(0, min(100, $progressPercent));
 
-        if ($status === 'planned' && $progress > 0) {
+        if ($status === 'planned' || $status === 'cancelled') {
             return 0;
         }
 
@@ -1003,7 +1631,44 @@ class ProjectController extends Controller
             return 100;
         }
 
+        if ($status === 'in_progress') {
+            return max(1, min(99, $progress));
+        }
+
         return $progress;
+    }
+
+    private function normalizedDetailProgress(ProjectImplementationDetail $detail): int
+    {
+        return $this->normalizeProgressByStatus(
+            (int) ($detail->progress_percent ?? 0),
+            (string) $detail->detail_status
+        );
+    }
+
+    private function isImplementationDetailDelayed(ProjectImplementationDetail $detail): bool
+    {
+        if ($detail->detail_status === 'completed' || $detail->detail_status === 'cancelled') {
+            return false;
+        }
+
+        $expectedEndDate = $this->expectedEndDateForDetail($detail);
+        if (!$expectedEndDate) {
+            return false;
+        }
+
+        return Carbon::parse($expectedEndDate)->startOfDay()->lt(now()->startOfDay());
+    }
+
+    private function implementationDetailDelayDays(ProjectImplementationDetail $detail): int
+    {
+        if (!$this->isImplementationDetailDelayed($detail)) {
+            return 0;
+        }
+
+        return (int) Carbon::parse($this->expectedEndDateForDetail($detail))
+            ->startOfDay()
+            ->diffInDays(now()->startOfDay());
     }
 
     private function currentProjectProgressPercent(Project $project): int
@@ -1028,7 +1693,7 @@ class ProjectController extends Controller
             'new_progress' => $newProgress,
             'changed_at' => now(),
             'changed_by' => $changedBy,
-            'note' => sprintf('%s: %d%% -> %d%% (theo trong so so ngay dau viec)', $action, $oldProgress, $newProgress),
+            'note' => sprintf('%s: %d%% -> %d%% (theo trọng số số ngày đầu việc)', $action, $oldProgress, $newProgress),
         ]);
     }
 
@@ -1043,19 +1708,8 @@ class ProjectController extends Controller
             ->filter(fn (ProjectImplementationDetail $detail) => $detail->detail_status === 'completed')
             ->count();
         $incompleteTasks = max(0, $totalTasks - $completedTasks);
-        $today = now()->startOfDay();
         $delayedTasks = (int) $activeDetails
-            ->filter(function (ProjectImplementationDetail $detail) use ($today) {
-                if ($detail->detail_status === 'completed') {
-                    return false;
-                }
-
-                if (!$detail->expected_end_date) {
-                    return false;
-                }
-
-                return Carbon::parse($detail->expected_end_date)->startOfDay()->lt($today);
-            })
+            ->filter(fn (ProjectImplementationDetail $detail) => $this->isImplementationDetailDelayed($detail))
             ->count();
 
         if ($activeDetails->isEmpty()) {
@@ -1069,11 +1723,10 @@ class ProjectController extends Controller
         }
 
         $totalDuration = (int) $activeDetails->sum(fn (ProjectImplementationDetail $detail) => max(1, (int) $detail->duration_days));
-        $completedDuration = (int) $activeDetails
-            ->filter(fn (ProjectImplementationDetail $detail) => $detail->detail_status === 'completed')
-            ->sum(fn (ProjectImplementationDetail $detail) => max(1, (int) $detail->duration_days));
+        $weightedProgress = (float) $activeDetails
+            ->sum(fn (ProjectImplementationDetail $detail) => max(1, (int) $detail->duration_days) * $this->normalizedDetailProgress($detail));
         $progressPercent = $totalDuration > 0
-            ? (int) round(($completedDuration / $totalDuration) * 100)
+            ? (int) round($weightedProgress / $totalDuration)
             : 0;
 
         return [
@@ -1120,10 +1773,10 @@ class ProjectController extends Controller
     private function implementationStatusLabel(?string $status): string
     {
         return match ($status) {
-            'planned' => 'Chua lam',
-            'in_progress' => 'Dang lam',
-            'completed' => 'Hoan thanh',
-            'cancelled' => 'Tam dung',
+            'planned' => 'Chưa làm',
+            'in_progress' => 'Đang làm',
+            'completed' => 'Hoàn thành',
+            'cancelled' => 'Tạm dừng',
             default => '-',
         };
     }
@@ -1131,15 +1784,15 @@ class ProjectController extends Controller
     private function detailLogFieldLabel(?string $field): string
     {
         return match ($field) {
-            'content' => 'Noi dung',
-            'assigned_to' => 'Nhan su',
-            'execution_date' => 'Ngay thuc hien',
-            'duration_days' => 'So ngay',
-            'expected_end_date' => 'Ngay hoan thanh du kien',
-            'detail_status' => 'Trang thai',
-            'progress_percent' => 'Tien do',
-            'is_locked' => 'Khoa dau viec',
-            'deleted' => 'Xoa dau viec',
+            'content' => 'Nội dung',
+            'assigned_to' => 'Nhân sự',
+            'execution_date' => 'Ngày thực hiện',
+            'duration_days' => 'Số ngày',
+            'expected_end_date' => 'Ngày hoàn thành dự kiến',
+            'detail_status' => 'Trạng thái',
+            'progress_percent' => 'Tiến độ',
+            'is_locked' => 'Khóa đầu việc',
+            'deleted' => 'Xóa đầu việc',
             default => $field ?? '-',
         };
     }
@@ -1158,10 +1811,10 @@ class ProjectController extends Controller
     private function statusLabel(?string $status): string
     {
         return match ($status) {
-            'planning' => 'Ke hoach',
-            'in_progress' => 'Dang trien khai',
-            'on_hold' => 'Tam dung',
-            'completed' => 'Hoan thanh',
+            'planning' => 'Kế hoạch',
+            'in_progress' => 'Đang triển khai',
+            'on_hold' => 'Tạm dừng',
+            'completed' => 'Hoàn thành',
             default => '-',
         };
     }
@@ -1188,13 +1841,186 @@ class ProjectController extends Controller
         return $user->hasPositionCapability(PositionCapability::MANAGE_PROJECTS);
     }
 
-    private function canManageProjectMembers($user): bool
+    private function projectRolePermissionOptions(): array
     {
+        return [
+            [
+                'key' => 'members',
+                'label' => 'Nhân sự dự án',
+                'permissions' => [
+                    ['value' => 'add_project_member', 'label' => 'Thêm nhân sự', 'description' => 'Đưa nhân sự mới vào dự án.'],
+                    ['value' => 'update_project_member_role', 'label' => 'Đổi vai trò nhân sự', 'description' => 'Cập nhật vai trò của thành viên hiện có.'],
+                    ['value' => 'remove_project_member', 'label' => 'Loại nhân sự', 'description' => 'Cho thành viên rời khỏi dự án.'],
+                ],
+            ],
+            [
+                'key' => 'implementation',
+                'label' => 'Đầu việc triển khai',
+                'permissions' => [
+                    ['value' => 'create_implementation_detail', 'label' => 'Tạo đầu việc', 'description' => 'Thêm đầu việc triển khai mới.'],
+                    ['value' => 'update_implementation_detail', 'label' => 'Sửa đầu việc', 'description' => 'Sửa nội dung và phân công đầu việc.'],
+                    ['value' => 'delete_implementation_detail', 'label' => 'Xóa đầu việc', 'description' => 'Xóa đầu việc chưa bị khóa.'],
+                    ['value' => 'toggle_implementation_detail_lock', 'label' => 'Khóa/mở khóa đầu việc', 'description' => 'Chặn hoặc mở lại chỉnh sửa đầu việc.'],
+                    ['value' => 'edit_implementation_schedule', 'label' => 'Điều chỉnh lịch', 'description' => 'Sửa ngày thực hiện và số ngày thực hiện.'],
+                    ['value' => 'update_implementation_status', 'label' => 'Cập nhật tiến độ', 'description' => 'Cập nhật trạng thái và phần trăm tiến độ.'],
+                ],
+            ],
+            [
+                'key' => 'attachments',
+                'label' => 'Tệp đính kèm',
+                'permissions' => [
+                    ['value' => 'upload_project_attachment', 'label' => 'Tải tệp dự án', 'description' => 'Tải tệp chung lên dự án.'],
+                    ['value' => 'upload_implementation_attachment', 'label' => 'Tải tệp đầu việc', 'description' => 'Tải tệp vào từng đầu việc.'],
+                    ['value' => 'delete_project_attachment', 'label' => 'Xóa tệp', 'description' => 'Xóa tệp đính kèm của dự án hoặc đầu việc.'],
+                ],
+            ],
+        ];
+
+        return [
+            [
+                'value' => 'manage_members',
+                'label' => 'Quản lý thành viên',
+                'description' => 'Thêm, đổi vai trò hoặc loại nhân sự khỏi riêng dự án này.',
+            ],
+            [
+                'value' => 'manage_implementation_details',
+                'label' => 'Quản lý đầu việc',
+                'description' => 'Tạo, sửa, khóa hoặc xóa đầu việc triển khai trong dự án.',
+            ],
+            [
+                'value' => 'update_implementation_status',
+                'label' => 'Cập nhật tiến độ',
+                'description' => 'Cập nhật trạng thái và phần trăm tiến độ của các đầu việc trong dự án.',
+            ],
+            [
+                'value' => 'manage_attachments',
+                'label' => 'Quản lý tệp dự án',
+                'description' => 'Tải lên hoặc xóa tệp đính kèm của dự án.',
+            ],
+        ];
+    }
+
+    private function normalizeProjectRolePermissions(array $permissions): array
+    {
+        return collect($permissions)
+            ->flatMap(function ($permission) {
+                if (!is_string($permission)) {
+                    return [];
+                }
+
+                return self::LEGACY_PROJECT_ROLE_PERMISSION_ALIASES[$permission] ?? [$permission];
+            })
+            ->filter(fn ($permission) => in_array($permission, self::PROJECT_ROLE_PERMISSIONS, true))
+            ->unique()
+            ->values()
+            ->all();
+
+        return collect($permissions)
+            ->filter(fn ($permission) => is_string($permission) && in_array($permission, self::PROJECT_ROLE_PERMISSIONS, true))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function validProjectRolePermissions(): array
+    {
+        return array_values(array_unique([
+            ...self::PROJECT_ROLE_PERMISSIONS,
+            ...array_keys(self::LEGACY_PROJECT_ROLE_PERMISSION_ALIASES),
+        ]));
+    }
+
+    private function projectRolePermissionLookupValues(string $permission): array
+    {
+        $values = [$permission];
+
+        foreach (self::LEGACY_PROJECT_ROLE_PERMISSION_ALIASES as $legacyPermission => $expandedPermissions) {
+            if (in_array($permission, $expandedPermissions, true)) {
+                $values[] = $legacyPermission;
+            }
+        }
+
+        return array_values(array_unique($values));
+    }
+
+    private function userHasProjectRolePermission($user, ?Project $project, string $permission): bool
+    {
+        if (!$user || !$project || !in_array($permission, self::PROJECT_ROLE_PERMISSIONS, true)) {
+            return false;
+        }
+
+        $profileId = $user->employeeProfile?->id;
+        if (!$profileId) {
+            return false;
+        }
+
+        return ProjectMember::query()
+            ->where('project_id', $project->id)
+            ->where('employee_profile_id', (int) $profileId)
+            ->where('is_active', true)
+            ->whereHas('role', function (Builder $builder) use ($permission): void {
+                $builder->where(function (Builder $query) use ($permission): void {
+                    foreach ($this->projectRolePermissionLookupValues($permission) as $lookupValue) {
+                        $query->orWhereJsonContains('permissions', $lookupValue);
+                    }
+                });
+            })
+            ->exists();
+
+        if (!$user || !$project || !in_array($permission, self::PROJECT_ROLE_PERMISSIONS, true)) {
+            return false;
+        }
+
+        $profileId = $user->employeeProfile?->id;
+        if (!$profileId) {
+            return false;
+        }
+
+        return ProjectMember::query()
+            ->where('project_id', $project->id)
+            ->where('employee_profile_id', (int) $profileId)
+            ->where('is_active', true)
+            ->whereHas('role', function (Builder $builder) use ($permission): void {
+                $builder->whereJsonContains('permissions', $permission);
+            })
+            ->exists();
+    }
+
+    private function hasSystemProjectMemberManagement($user): bool
+    {
+        return (bool) $user?->hasPositionCapability(PositionCapability::MANAGE_PROJECT_MEMBERS);
+    }
+
+    private function canAddProjectMember($user, ?Project $project = null): bool
+    {
+        return $this->hasSystemProjectMemberManagement($user)
+            || $this->userHasProjectRolePermission($user, $project, 'add_project_member');
+    }
+
+    private function canUpdateProjectMemberRole($user, ?Project $project = null): bool
+    {
+        return $this->hasSystemProjectMemberManagement($user)
+            || $this->userHasProjectRolePermission($user, $project, 'update_project_member_role');
+    }
+
+    private function canRemoveProjectMember($user, ?Project $project = null): bool
+    {
+        return $this->hasSystemProjectMemberManagement($user)
+            || $this->userHasProjectRolePermission($user, $project, 'remove_project_member');
+    }
+
+    private function canManageProjectMembers($user, ?Project $project = null): bool
+    {
+        return $this->canAddProjectMember($user, $project)
+            || $this->canUpdateProjectMemberRole($user, $project)
+            || $this->canRemoveProjectMember($user, $project);
+
         if (!$user) {
             return false;
         }
 
-        return $user->hasPositionCapability(PositionCapability::MANAGE_PROJECT_MEMBERS);
+        return $user->hasPositionCapability(PositionCapability::MANAGE_PROJECT_MEMBERS)
+            || $this->userHasProjectRolePermission($user, $project, 'manage_members');
     }
 
     private function canManageProjectRoles($user): bool
@@ -1206,9 +2032,39 @@ class ProjectController extends Controller
         return $user->hasPositionCapability(PositionCapability::MANAGE_PROJECT_ROLES);
     }
 
-    private function canManageImplementationDetails($user): bool
+    private function canCreateImplementationDetail($user, ?Project $project = null): bool
     {
-        return $this->canManageProjectMembers($user);
+        return $this->hasSystemProjectMemberManagement($user)
+            || $this->userHasProjectRolePermission($user, $project, 'create_implementation_detail');
+    }
+
+    private function canUpdateImplementationDetail($user, ?Project $project = null): bool
+    {
+        return $this->hasSystemProjectMemberManagement($user)
+            || $this->userHasProjectRolePermission($user, $project, 'update_implementation_detail');
+    }
+
+    private function canDeleteImplementationDetail($user, ?Project $project = null): bool
+    {
+        return $this->hasSystemProjectMemberManagement($user)
+            || $this->userHasProjectRolePermission($user, $project, 'delete_implementation_detail');
+    }
+
+    private function canToggleImplementationDetailLock($user, ?Project $project = null): bool
+    {
+        return $this->hasSystemProjectMemberManagement($user)
+            || $this->userHasProjectRolePermission($user, $project, 'toggle_implementation_detail_lock');
+    }
+
+    private function canManageImplementationDetails($user, ?Project $project = null): bool
+    {
+        return $this->canCreateImplementationDetail($user, $project)
+            || $this->canUpdateImplementationDetail($user, $project)
+            || $this->canDeleteImplementationDetail($user, $project)
+            || $this->canToggleImplementationDetailLock($user, $project);
+
+        return $this->canManageProjectMembers($user)
+            || $this->userHasProjectRolePermission($user, $project, 'manage_implementation_details');
     }
 
     private function canViewOwnProjects($user): bool
@@ -1227,7 +2083,26 @@ class ProjectController extends Controller
 
     private function canUpdateImplementationStatus($user, ProjectImplementationDetail $detail): bool
     {
-        if ($this->canManageImplementationDetails($user)) {
+        $project = $detail->project;
+
+        if ($this->hasSystemProjectMemberManagement($user)
+            || $this->userHasProjectRolePermission($user, $project, 'update_implementation_status')) {
+            return true;
+        }
+
+        if (!$user?->hasPositionCapability(PositionCapability::UPDATE_PROJECT_TASK_STATUS)) {
+            return false;
+        }
+
+        $profileId = $user?->employeeProfile?->id;
+        if (!$profileId) {
+            return false;
+        }
+
+        return (int) $detail->assigned_to === (int) $profileId;
+
+        if ($this->canManageImplementationDetails($user, $project)
+            || $this->userHasProjectRolePermission($user, $project, 'update_implementation_status')) {
             return true;
         }
 
@@ -1243,8 +2118,138 @@ class ProjectController extends Controller
         return (int) $detail->assigned_to === (int) $profileId;
     }
 
-    private function canEditImplementationSchedule($user): bool
+    private function canUploadProjectAttachment($user, Project $project): bool
     {
-        return (bool) $user?->hasPositionCapability(PositionCapability::MANAGE_PROJECTS);
+        return $this->canManageProjects($user)
+            || $this->hasSystemProjectMemberManagement($user)
+            || $this->userHasProjectRolePermission($user, $project, 'upload_project_attachment');
+
+        return $this->canManageProjects($user)
+            || $this->canManageProjectMembers($user, $project)
+            || $this->userHasProjectRolePermission($user, $project, 'manage_attachments');
+    }
+
+    private function canUploadImplementationAttachment($user, ProjectImplementationDetail $detail): bool
+    {
+        if ($this->hasSystemProjectMemberManagement($user)
+            || $this->userHasProjectRolePermission($user, $detail->project, 'upload_implementation_attachment')) {
+            return true;
+        }
+
+        $profileId = $user?->employeeProfile?->id;
+
+        return (bool) $user?->hasPositionCapability(PositionCapability::UPDATE_PROJECT_TASK_STATUS)
+            && $profileId
+            && (int) $detail->assigned_to === (int) $profileId;
+
+        return $this->canManageImplementationDetails($user, $detail->project) || $this->canUpdateImplementationStatus($user, $detail);
+    }
+
+    private function canCommentOnImplementationDetail($user, Project $project, ProjectImplementationDetail $detail): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ($this->canManageProjects($user) || $this->canManageImplementationDetails($user, $project)) {
+            return true;
+        }
+
+        return $this->isActiveProjectMember($user, $project);
+    }
+
+    private function canViewProjectAttachment($user, Project $project): bool
+    {
+        if ($this->canViewAllProjects($user) || $this->canManageProjects($user) || $this->canManageProjectMembers($user, $project)) {
+            return true;
+        }
+
+        return $this->isActiveProjectMember($user, $project);
+    }
+
+    private function canDeleteProjectAttachment($user, Project $project, ProjectAttachment $attachment): bool
+    {
+        if ($this->canManageProjects($user)
+            || $this->hasSystemProjectMemberManagement($user)
+            || $this->userHasProjectRolePermission($user, $project, 'delete_project_attachment')) {
+            return true;
+        }
+
+        return $user && (int) $attachment->uploaded_by === (int) $user->id && $this->canViewProjectAttachment($user, $project);
+
+        if ($this->canManageProjects($user)
+            || $this->canManageProjectMembers($user, $project)
+            || $this->userHasProjectRolePermission($user, $project, 'manage_attachments')) {
+            return true;
+        }
+
+        return $user && (int) $attachment->uploaded_by === (int) $user->id && $this->canViewProjectAttachment($user, $project);
+    }
+
+    private function canDeleteImplementationComment($user, Project $project, ProjectDetailComment $comment): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ($this->canManageProjects($user) || $this->canManageImplementationDetails($user, $project)) {
+            return true;
+        }
+
+        return (int) $comment->user_id === (int) $user->id
+            && $this->isActiveProjectMember($user, $project);
+    }
+
+    private function isActiveProjectMember($user, Project $project): bool
+    {
+        $profileId = $user?->employeeProfile?->id;
+        if (!$profileId) {
+            return false;
+        }
+
+        return ProjectMember::query()
+            ->where('project_id', $project->id)
+            ->where('employee_profile_id', (int) $profileId)
+            ->where('is_active', true)
+            ->exists();
+    }
+
+    private function ensureAttachmentBelongsToProject(Project $project, ProjectAttachment $attachment): void
+    {
+        if ((int) $attachment->project_id !== (int) $project->id) {
+            abort(404);
+        }
+    }
+
+    private function ensureImplementationDetailBelongsToProject(Project $project, ProjectImplementationDetail $implementationDetail): void
+    {
+        if ((int) $implementationDetail->project_id !== (int) $project->id) {
+            abort(404);
+        }
+    }
+
+    private function ensureImplementationCommentBelongsToDetail(
+        Project $project,
+        ProjectImplementationDetail $implementationDetail,
+        ProjectDetailComment $comment
+    ): void {
+        if (
+            (int) $comment->project_id !== (int) $project->id
+            || (int) $comment->implementation_detail_id !== (int) $implementationDetail->id
+        ) {
+            abort(404);
+        }
+    }
+
+    private function canEditImplementationSchedule($user, ?Project $project = null): bool
+    {
+        return (bool) $user?->hasPositionCapability(PositionCapability::MANAGE_PROJECTS)
+            || $this->hasSystemProjectMemberManagement($user)
+            || $this->userHasProjectRolePermission($user, $project, 'edit_implementation_schedule');
+
+        return (bool) $user?->hasPositionCapability(PositionCapability::MANAGE_PROJECTS)
+            || $this->userHasProjectRolePermission($user, $project, 'manage_implementation_details');
     }
 }
+
+

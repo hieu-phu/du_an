@@ -1,25 +1,25 @@
-<?php
+﻿<?php
 $currency = $profile['currency'] ?? 'VND';
 $money = fn ($value) => number_format((float) ($value ?? 0), 0, ',', '.') . ' ' . $currency;
 $number = fn ($value, $decimals = 2) => number_format((float) ($value ?? 0), $decimals, ',', '.');
 $minutes = fn ($value) => ((int) ($value ?? 0)) . ' phut';
 $statusLabel = fn (?string $status) => match ($status) {
-    'approved' => 'Da duyet',
-    'rejected' => 'Tu choi',
-    default => 'Cho duyet',
+    'approved' => 'Da duyệt',
+    'rejected' => 'Từ chối',
+    default => 'Cho duyệt',
 };
 $dayLabel = fn (?string $status) => match ($status) {
     'present' => 'Di lam',
-    'late' => 'Di muon',
-    'early_leave' => 'Ve som',
-    'leave' => 'Nghi phep',
-    'unpaid_leave' => 'Nghi khong luong',
-    'holiday_paid' => 'Le co luong',
+    'late' => 'Đi muộn',
+    'early_leave' => 'Về sớm',
+    'leave' => 'Nghỉ phép',
+    'unpaid_leave' => 'Nghỉ không lương',
+    'holiday_paid' => 'Le có lương',
     'business_trip' => 'Cong tac',
     'missing_check_in' => 'Thieu check in',
     'missing_check_out' => 'Thieu check out',
     'absent' => 'Vang',
-    default => 'Khong xac dinh',
+    default => 'Không xác định',
 };
 ?>
 <!DOCTYPE html>
@@ -60,13 +60,13 @@ $dayLabel = fn (?string $status) => match ($status) {
 <body>
 <div class="header">
     <div class="net-box">
-        <div class="net-label">So du sau doi tru</div>
+        <div class="net-label">Số dư sau doi tru</div>
         <div class="net-value"><?= e($money($summary['net_amount'] ?? 0)) ?></div>
     </div>
     <div class="brand">HRM System</div>
     <div class="title">Phieu luong ca nhan</div>
-    <div class="period">Ky luong: Thang <?= e(sprintf('%02d/%04d', $filters['month'], $filters['year'])) ?></div>
-    <div class="period">Trang thai ky: <?= e($periodStatus['status_label'] ?? '-') ?></div>
+    <div class="period">Kỳ lương: Thang <?= e(sprintf('%02d/%04d', $filters['month'], $filters['year'])) ?></div>
+    <div class="period">Trạng thái ky: <?= e($periodStatus['status_label'] ?? '-') ?></div>
 </div>
 
 <div class="section">
@@ -74,11 +74,11 @@ $dayLabel = fn (?string $status) => match ($status) {
         <tr>
             <td>
                 <div class="card">
-                    <div class="section-title">Nhan vien</div>
+                    <div class="section-title">Nhân viên</div>
                     <div><span class="muted">Ma NV:</span> <span class="strong"><?= e($profile['employee_code'] ?? '-') ?></span></div>
-                    <div><span class="muted">Ho ten:</span> <span class="strong"><?= e($profile['name'] ?? '-') ?></span></div>
-                    <div><span class="muted">Phong ban:</span> <?= e($profile['department'] ?? '-') ?></div>
-                    <div><span class="muted">Chuc vu:</span> <?= e($profile['position'] ?? '-') ?></div>
+                    <div><span class="muted">Họ tên:</span> <span class="strong"><?= e($profile['name'] ?? '-') ?></span></div>
+                    <div><span class="muted">Phòng ban:</span> <?= e($profile['department'] ?? '-') ?></div>
+                    <div><span class="muted">Chức vụ:</span> <?= e($profile['position'] ?? '-') ?></div>
                     <div><span class="muted">Loai HD:</span> <?= e($profile['employment_type'] ?? '-') ?></div>
                 </div>
             </td>
@@ -86,11 +86,11 @@ $dayLabel = fn (?string $status) => match ($status) {
                 <div class="card">
                     <div class="section-title">Thu nhap</div>
                     <table class="summary-table">
-                        <tr><td>Luong co ban</td><td><?= e($money($summary['base_salary'] ?? 0)) ?></td></tr>
+                        <tr><td>Lương cơ bản</td><td><?= e($money($summary['base_salary'] ?? 0)) ?></td></tr>
                         <tr><td>Thu nhap theo cong</td><td><?= e($money($summary['base_salary_amount'] ?? 0)) ?></td></tr>
                         <tr><td>Tien tang ca</td><td><?= e($money($summary['overtime_amount'] ?? 0)) ?></td></tr>
                         <tr><td>Phu cap</td><td><?= e($money($summary['allowance_amount'] ?? 0)) ?></td></tr>
-                        <tr><td>Tong thu nhap</td><td><?= e($money($summary['gross_amount'] ?? 0)) ?></td></tr>
+                        <tr><td>Tổng thu nhap</td><td><?= e($money($summary['gross_amount'] ?? 0)) ?></td></tr>
                     </table>
                 </div>
             </td>
@@ -98,9 +98,9 @@ $dayLabel = fn (?string $status) => match ($status) {
                 <div class="card">
                     <div class="section-title">Cong va khau tru</div>
                     <table class="summary-table">
-                        <tr><td>Cong duyet</td><td><?= e($number($summary['approved_work_units'] ?? 0)) ?> / <?= e($number($summary['expected_work_days'] ?? 0, 0)) ?></td></tr>
-                        <tr><td>Tang ca duyet</td><td><?= e($minutes($summary['approved_overtime_minutes'] ?? 0)) ?></td></tr>
-                        <tr><td>Tien cho duyet</td><td><?= e($money($summary['pending_amount'] ?? 0)) ?></td></tr>
+                        <tr><td>Cong duyệt</td><td><?= e($number($summary['approved_work_units'] ?? 0)) ?> / <?= e($number($summary['expected_work_days'] ?? 0, 0)) ?></td></tr>
+                        <tr><td>Tang ca duyệt</td><td><?= e($minutes($summary['approved_overtime_minutes'] ?? 0)) ?></td></tr>
+                        <tr><td>Tien cho duyệt</td><td><?= e($money($summary['pending_amount'] ?? 0)) ?></td></tr>
                         <tr><td>Khau tru thieu cong</td><td class="red"><?= e($money($summary['attendance_deduction_amount'] ?? 0)) ?></td></tr>
                         <tr><td>Khau tru khac</td><td class="red"><?= e($money($summary['manual_deduction_amount'] ?? 0)) ?></td></tr>
                     </table>
@@ -111,15 +111,15 @@ $dayLabel = fn (?string $status) => match ($status) {
 </div>
 
 <div class="section">
-    <h3 class="section-title">Tong hop tinh luong</h3>
+    <h3 class="section-title">Tổng hop tinh luong</h3>
     <table>
         <tbody>
             <tr>
                 <th>Don gia ngay</th>
                 <th>Don gia gio</th>
-                <th>Cong cho duyet</th>
+                <th>Cong cho duyệt</th>
                 <th>Cong chua tinh</th>
-                <th>So du sau doi tru</th>
+                <th>Số dư sau doi tru</th>
             </tr>
             <tr>
                 <td class="amount"><?= e($money($summary['daily_rate'] ?? 0)) ?></td>
@@ -134,7 +134,7 @@ $dayLabel = fn (?string $status) => match ($status) {
 
 <?php if (!empty($summary['warnings'])): ?>
     <div class="section">
-        <h3 class="section-title">Canh bao du lieu</h3>
+        <h3 class="section-title">Canh bao dữ liệu</h3>
         <table>
             <tbody>
                 <?php foreach ($summary['warnings'] as $warning): ?>
@@ -152,9 +152,9 @@ $dayLabel = fn (?string $status) => match ($status) {
             <thead>
                 <tr>
                     <th>Loai</th>
-                    <th>Noi dung</th>
-                    <th>Ghi chu</th>
-                    <th class="amount">So tien</th>
+                    <th>Nội dung</th>
+                    <th>Ghi chú</th>
+                    <th class="amount">Số tiền</th>
                 </tr>
             </thead>
             <tbody>
@@ -183,8 +183,8 @@ $dayLabel = fn (?string $status) => match ($status) {
                 <th class="amount">Tien cong</th>
                 <th>Tang ca</th>
                 <th class="amount">Tien OT</th>
-                <th>Trang thai</th>
-                <th>Duyet</th>
+                <th>Trạng thái</th>
+                <th>Duyệt</th>
             </tr>
         </thead>
         <tbody>
@@ -204,23 +204,23 @@ $dayLabel = fn (?string $status) => match ($status) {
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <td colspan="9">Khong co du lieu cong trong ky.</td>
+                    <td colspan="9">Không có dữ liệu cong trong ky.</td>
                 </tr>
             <?php endif; ?>
         </tbody>
     </table>
-    <p class="note">Phieu luong nay duoc tao tu du lieu cham cong va dieu chinh luong trong he thong tai thoi diem xuat PDF.</p>
+    <p class="note">Phieu luong nay duoc tao tu dữ liệu chấm công va điều chỉnh luong trong hệ thống tai thoi diem xuat PDF.</p>
 </div>
 
 <div class="section">
     <table class="signature">
         <tr>
             <td>
-                <div class="strong">Nhan vien</div>
+                <div class="strong">Nhân viên</div>
                 <div class="signature-line"><?= e($profile['name'] ?? 'Ky va ghi ro ho ten') ?></div>
             </td>
             <td>
-                <div class="strong">Phong nhan su</div>
+                <div class="strong">Phong nhân sự</div>
                 <div class="signature-line">Ky va ghi ro ho ten</div>
             </td>
         </tr>
@@ -228,3 +228,5 @@ $dayLabel = fn (?string $status) => match ($status) {
 </div>
 </body>
 </html>
+
+

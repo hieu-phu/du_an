@@ -115,6 +115,7 @@ CREATE TABLE project_roles (
     project_id BIGINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT NULL,
+    permissions JSON NULL,
     CONSTRAINT fk_project_roles_project FOREIGN KEY (project_id) REFERENCES projects(id),
     CONSTRAINT uk_project_roles UNIQUE (project_id, name)
 );

@@ -334,16 +334,16 @@
                                         <FormSelect
                                             v-model="overrideForm.capability_code"
                                             :options="capabilityOptionItems"
-                                            label="Quyen"
-                                            placeholder="Chon quyen"
+                                            label="Quyền"
+                                            placeholder="Chọn quyền"
                                             :searchable="true"
                                             :can-clear="true"
                                         />
                                         <FormSelect
                                             v-model="overrideForm.effect"
                                             :options="effectOptionItems"
-                                            label="Hieu luc"
-                                            placeholder="Chon hieu luc"
+                                            label="Hiệu lực"
+                                            placeholder="Chọn hiệu lực"
                                             :searchable="false"
                                             :can-clear="false"
                                         />
@@ -637,8 +637,8 @@ const capabilityOptionItems = computed(() =>
 )
 
 const effectOptionItems = [
-    { value: 'allow', label: 'Cho phep' },
-    { value: 'deny', label: 'Tu choi' },
+    { value: 'allow', label: 'Cho phép' },
+    { value: 'deny', label: 'Từ chối' },
 ]
 
 const formatNumber = (value) => new Intl.NumberFormat('vi-VN').format(Number(value))

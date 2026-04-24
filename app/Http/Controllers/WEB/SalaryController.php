@@ -127,7 +127,7 @@ class SalaryController extends Controller
         [$month, $year] = $this->resolvePeriod($request);
         $this->refreshSnapshots($request, $month, $year, true);
 
-        return redirect()->back()->with('success', 'Da chot ky luong va luu snapshot.');
+        return redirect()->back()->with('success', 'Đã chốt kỳ lương và lưu snapshot.');
     }
 
     public function unlockCompanyPeriod(Request $request): RedirectResponse
@@ -145,7 +145,7 @@ class SalaryController extends Controller
             ]);
         }
 
-        return redirect()->back()->with('success', 'Da mo khoa ky luong. Du lieu quay ve che do tinh dong.');
+        return redirect()->back()->with('success', 'Đã mở khóa kỳ lương. Dữ liệu quay về chế độ tính động.');
     }
 
     public function recalculateCompanyPeriod(Request $request): RedirectResponse
@@ -156,12 +156,12 @@ class SalaryController extends Controller
         $period = $this->payrollPeriod($month, $year);
 
         if (!$period || $period->status !== 'locked') {
-            return redirect()->back()->with('warning', 'Ky luong chua khoa. He thong dang tinh luong dong, khong can tinh lai snapshot.');
+            return redirect()->back()->with('warning', 'Kỳ lương chưa khóa. Hệ thống đang tính lương động, không cần tính lại snapshot.');
         }
 
         $this->refreshSnapshots($request, $month, $year, true);
 
-        return redirect()->back()->with('success', 'Da tinh lai snapshot ky luong.');
+        return redirect()->back()->with('success', 'Đã tính lại snapshot kỳ lương.');
     }
 
     public function storeAdjustment(Request $request): RedirectResponse
@@ -179,7 +179,7 @@ class SalaryController extends Controller
         ]);
 
         if ($this->lockedPayrollPeriod((int) $validated['month'], (int) $validated['year'])) {
-            return redirect()->back()->with('warning', 'Ky luong da khoa. Vui long mo khoa ky luong truoc khi them phu cap hoac khau tru.');
+            return redirect()->back()->with('warning', 'Kỳ lương đã khóa. Vui lòng mở khóa kỳ lương trước khi thêm phụ cấp hoặc khấu trừ.');
         }
 
         SalaryAdjustment::query()->create([
@@ -194,7 +194,7 @@ class SalaryController extends Controller
             'updated_by' => $request->user()->id,
         ]);
 
-        return redirect()->back()->with('success', 'Da luu khoan dieu chinh luong.');
+        return redirect()->back()->with('success', 'Đã lưu khoản điều chỉnh lương.');
     }
 
     public function destroyAdjustment(Request $request, SalaryAdjustment $salaryAdjustment): RedirectResponse
@@ -205,12 +205,12 @@ class SalaryController extends Controller
         $year = (int) $salaryAdjustment->year;
 
         if ($this->lockedPayrollPeriod($month, $year)) {
-            return redirect()->back()->with('warning', 'Ky luong da khoa. Vui long mo khoa ky luong truoc khi xoa phu cap hoac khau tru.');
+            return redirect()->back()->with('warning', 'Kỳ lương đã khóa. Vui lòng mở khóa kỳ lương trước khi xóa phụ cấp hoặc khấu trừ.');
         }
 
         $salaryAdjustment->delete();
 
-        return redirect()->back()->with('success', 'Da xoa khoan dieu chinh luong.');
+        return redirect()->back()->with('success', 'Đã xóa khoản điều chỉnh lương.');
     }
 
     private function buildMySalaryPayload(Request $request): array
@@ -268,7 +268,7 @@ class SalaryController extends Controller
             'months' => collect(range(1, 12))
                 ->map(fn (int $item) => [
                     'value' => $item,
-                    'label' => 'Thang ' . str_pad((string) $item, 2, '0', STR_PAD_LEFT),
+                    'label' => 'Tháng ' . str_pad((string) $item, 2, '0', STR_PAD_LEFT),
                 ])
                 ->values(),
             'years' => collect(range($now->year - 3, $now->year + 1))
@@ -689,7 +689,7 @@ class SalaryController extends Controller
             return [
                 'id' => null,
                 'status' => 'draft',
-                'status_label' => 'Nhap / tinh dong',
+                'status_label' => 'Nháp / tính động',
                 'month' => $month,
                 'year' => $year,
                 'is_locked' => false,
@@ -702,7 +702,7 @@ class SalaryController extends Controller
         return [
             'id' => $period->id,
             'status' => $period->status,
-            'status_label' => $period->status === 'locked' ? 'Da khoa snapshot' : 'Nhap / tinh dong',
+            'status_label' => $period->status === 'locked' ? 'Đã khóa snapshot' : 'Nháp / tính động',
             'month' => $month,
             'year' => $year,
             'is_locked' => $period->status === 'locked',
@@ -795,29 +795,29 @@ class SalaryController extends Controller
         $warnings = collect();
 
         if ($baseSalary <= 0) {
-            $warnings->push('Chua khai bao luong co ban.');
+            $warnings->push('Chưa khai báo lương cơ bản.');
         }
 
         if ($records->isEmpty()) {
-            $warnings->push('Chua co du lieu cham cong trong ky.');
+            $warnings->push('Chưa có dữ liệu chấm công trong kỳ.');
         }
 
         $missingCount = $records->filter(fn (AttendanceRecord $record) => (bool) $record->missing_check_in || (bool) $record->missing_check_out || ($record->check_in_at && !$record->check_out_at))->count();
         if ($missingCount > 0) {
-            $warnings->push('Co ' . $missingCount . ' ban ghi thieu check-in/check-out.');
+            $warnings->push('Có ' . $missingCount . ' bản ghi thiếu check-in/check-out.');
         }
 
         if ($pendingRecords->count() > 0) {
-            $warnings->push('Co ' . $pendingRecords->count() . ' ban ghi cho duyet.');
+            $warnings->push('Có ' . $pendingRecords->count() . ' bản ghi chờ duyệt.');
         }
 
         $rejectedCount = $records->where('approval_status', 'rejected')->count();
         if ($rejectedCount > 0) {
-            $warnings->push('Co ' . $rejectedCount . ' ban ghi bi tu choi.');
+            $warnings->push('Có ' . $rejectedCount . ' bản ghi bị từ chối.');
         }
 
         if ($approvedRecords->isEmpty() && $records->isNotEmpty()) {
-            $warnings->push('Chua co cong duyet hop le de tinh luong.');
+            $warnings->push('Chưa có công duyệt hợp lệ để tính lương.');
         }
 
         return $warnings->unique()->values();
@@ -987,8 +987,8 @@ class SalaryController extends Controller
             ->map(fn (array $holiday, string $date) => [
                 'id' => 'holiday-' . $date,
                 'work_date' => $date,
-                'shift_name' => $holiday['holiday_name'] ?? 'Ngay le',
-                'shift_time_range' => 'Nghi le co luong',
+                'shift_name' => $holiday['holiday_name'] ?? 'Ngày lễ',
+                'shift_time_range' => 'Nghỉ lễ có lương',
                 'shift_standard_minutes' => self::DEFAULT_FULL_DAY_MINUTES,
                 'shift_half_day_minutes' => self::DEFAULT_HALF_DAY_MINUTES,
                 'worked_minutes' => 0,
@@ -996,12 +996,12 @@ class SalaryController extends Controller
                 'payable_amount' => round($dailyRate, 2),
                 'overtime_minutes' => 0,
                 'overtime_multiplier' => self::OVERTIME_HOLIDAY_MULTIPLIER,
-                'overtime_type_label' => 'Ngay le',
+                'overtime_type_label' => 'Ngày lễ',
                 'overtime_amount' => 0.0,
                 'attendance_status' => 'on_time',
                 'day_status' => 'holiday_paid',
                 'approval_status' => 'approved',
-                'approval_note' => 'Ngay le co luong',
+                'approval_note' => 'Ngày lễ có lương',
             ])
             ->values();
     }
@@ -1144,14 +1144,14 @@ class SalaryController extends Controller
         $workDate = optional($record->work_date)?->format('Y-m-d');
 
         if ($workDate && isset($holidayMap[$workDate])) {
-            return 'Ngay le';
+            return 'Ngày lễ';
         }
 
         if ($workDate && Carbon::parse($workDate, self::TIMEZONE)->isWeekend()) {
-            return 'Ngay nghi tuan';
+            return 'Ngày nghỉ tuần';
         }
 
-        return 'Ngay thuong';
+        return 'Ngày thường';
     }
 
     private function resolveOvertimeAmount(AttendanceRecord $record, float $hourlyRate, array $holidayMap): float
@@ -1390,7 +1390,7 @@ class SalaryController extends Controller
     {
         $snapshot = $this->resolveShiftSnapshot($record);
 
-        return (string) ($snapshot['shift_name'] ?? $record->workShift?->shift_name ?? 'Ca mac dinh');
+        return (string) ($snapshot['shift_name'] ?? $record->workShift?->shift_name ?? 'Ca mặc định');
     }
 
     private function resolveShiftTimeRange(AttendanceRecord $record): string
@@ -1485,3 +1485,5 @@ class SalaryController extends Controller
         return ($hour * 60) + $minute;
     }
 }
+
+

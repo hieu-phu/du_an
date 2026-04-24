@@ -1,8 +1,8 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Bang luong cong ty</title>
+    <title>Bảng lương công ty</title>
 </head>
 <body>
     <table border="1" cellspacing="0" cellpadding="6">
@@ -10,9 +10,9 @@
             <th colspan="14">BANG LUONG CONG TY {{ sprintf('%02d/%04d', $filters['month'], $filters['year']) }}</th>
         </tr>
         <tr>
-            <td>Nhan su trong ky</td>
+            <td>Nhân sự trong ky</td>
             <td>{{ $summary['employee_count'] }}</td>
-            <td>Tong luong co ban</td>
+            <td>Tổng lương cơ bản</td>
             <td>{{ number_format((float) $summary['total_base_salary'], 0, ',', '.') }}</td>
             <td>Thu nhap phat sinh</td>
             <td>{{ number_format((float) $summary['total_base_salary_amount'], 0, ',', '.') }}</td>
@@ -20,9 +20,9 @@
             <td>{{ number_format((float) $summary['total_overtime_amount'], 0, ',', '.') }}</td>
             <td>Phu cap</td>
             <td>{{ number_format((float) ($summary['total_allowance_amount'] ?? 0), 0, ',', '.') }}</td>
-            <td>Tong khau tru tam tinh</td>
+            <td>Tổng khau tru tam tinh</td>
             <td>{{ number_format((float) ($summary['total_deduction_amount'] ?? 0), 0, ',', '.') }}</td>
-            <td>So du sau doi tru</td>
+            <td>Số dư sau doi tru</td>
             <td>{{ number_format((float) $summary['total_net_amount'], 0, ',', '.') }}</td>
         </tr>
     </table>
@@ -30,20 +30,20 @@
     <table border="1" cellspacing="0" cellpadding="6" style="margin-top: 16px;">
         <thead>
             <tr>
-                <th>Nhan su</th>
+                <th>Nhân sự</th>
                 <th>Ma NV</th>
-                <th>Phong ban</th>
-                <th>Chuc vu</th>
-                <th>Luong co ban</th>
-                <th>Cong duyet</th>
-                <th>OT duyet</th>
+                <th>Phòng ban</th>
+                <th>Chức vụ</th>
+                <th>Lương cơ bản</th>
+                <th>Cong duyệt</th>
+                <th>OT duyệt</th>
                 <th>Tien OT</th>
                 <th>Phu cap</th>
-                <th>Cho duyet</th>
+                <th>Cho duyệt</th>
                 <th>Khau tru thieu cong</th>
                 <th>Tru khac</th>
                 <th>Canh bao</th>
-                <th>So du sau doi tru</th>
+                <th>Số dư sau doi tru</th>
             </tr>
         </thead>
         <tbody>
@@ -66,10 +66,11 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="14">Khong co du lieu luong.</td>
+                    <td colspan="14">Không có dữ liệu luong.</td>
                 </tr>
             @endforelse
         </tbody>
     </table>
 </body>
 </html>
+

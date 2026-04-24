@@ -16,6 +16,11 @@ class ProjectRole extends Model
         'project_id',
         'name',
         'description',
+        'permissions',
+    ];
+
+    protected $casts = [
+        'permissions' => 'array',
     ];
 
     public function project(): BelongsTo

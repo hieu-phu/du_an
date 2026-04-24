@@ -26,7 +26,7 @@ class LeaveManagementController extends Controller
         $validated = $this->validateLeaveType($request);
         $this->leaveService->storeLeaveType($validated);
 
-        return back()->with('success', 'Da tao loai nghi phep.');
+        return back()->with('success', 'Đã tạo loại nghỉ phép.');
     }
 
     public function updateType(Request $request, LeaveType $leaveType)
@@ -34,14 +34,14 @@ class LeaveManagementController extends Controller
         $validated = $this->validateLeaveType($request, $leaveType);
         $this->leaveService->updateLeaveType($leaveType, $validated);
 
-        return back()->with('success', 'Da cap nhat loai nghi phep.');
+        return back()->with('success', 'Đã cập nhật loại nghỉ phép.');
     }
 
     public function toggleType(LeaveType $leaveType)
     {
         $this->leaveService->toggleLeaveType($leaveType);
 
-        return back()->with('success', 'Da doi trang thai loai nghi phep.');
+        return back()->with('success', 'Đã đổi trạng thái loại nghỉ phép.');
     }
 
     public function grantBalance(Request $request)
@@ -55,7 +55,7 @@ class LeaveManagementController extends Controller
 
         $this->leaveService->grantBalance($request->user(), $validated);
 
-        return back()->with('success', 'Da cap nhat quy phep nhan vien.');
+        return back()->with('success', 'Đã cập nhật quỹ phép nhân viên.');
     }
 
     public function grantBulk(Request $request)
@@ -68,7 +68,7 @@ class LeaveManagementController extends Controller
 
         $count = $this->leaveService->grantBulk($request->user(), $validated);
 
-        return back()->with('success', "Da dong bo {$count} dong so du phep.");
+        return back()->with('success', "Đã đồng bộ {$count} dòng số dư phép.");
     }
 
     public function adjustBalance(Request $request, EmployeeLeaveBalance $balance)
@@ -80,7 +80,7 @@ class LeaveManagementController extends Controller
 
         $this->leaveService->adjustBalance($request->user(), $balance, $validated);
 
-        return back()->with('success', 'Da dieu chinh quy phep.');
+        return back()->with('success', 'Đã điều chỉnh quỹ phép.');
     }
 
     private function validateLeaveType(Request $request, ?LeaveType $leaveType = null): array
@@ -104,3 +104,4 @@ class LeaveManagementController extends Controller
         ]);
     }
 }
+

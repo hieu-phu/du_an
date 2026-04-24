@@ -10,6 +10,7 @@ import InputDate from '@/components/forms/InputDate.vue'
 
 const props = defineProps({
   profile: { type: Object, required: true },
+  passwordChangeOtpPending: { type: Boolean, default: false },
 })
 
 const page = usePage()
@@ -31,6 +32,7 @@ const passwordForm = useForm({
   current_password: '',
   password: '',
   password_confirmation: '',
+  otp: '',
 })
 
 const avatarForm = useForm({
@@ -41,6 +43,7 @@ const avatarForm = useForm({
 const isEditProfileOpen = ref(false)
 const isChangePasswordOpen = ref(false)
 const isEmailChangeOpen = ref(false)
+const isPasswordOtpStep = ref(props.passwordChangeOtpPending)
 const avatarInput = ref(null)
 
 // ─── LOCATION DATA ──────────────────────────────────────────────────────────
@@ -102,6 +105,10 @@ watch(isEditProfileOpen, (isOpen) => {
     }
 })
 
+watch(() => props.passwordChangeOtpPending, (isPending) => {
+    isPasswordOtpStep.value = isPending
+})
+
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 const positionLabel = computed(() => {
   if (props.profile.position) return props.profile.position
@@ -126,24 +133,24 @@ const employmentTypeLabel = computed(() => ({
 
 const currentShiftLabel = computed(() => {
   const shift = props.profile.current_shift
-  if (!shift) return 'Chua duoc phan ca'
+  if (!shift) return 'Chưa được phân ca'
 
   const timeRange = shift.start_time && shift.end_time
     ? `${shift.start_time} - ${shift.end_time}${shift.is_overnight ? ' (+1)' : ''}`
-    : 'Chua co khung gio'
+    : 'Chưa có khung giờ'
 
   return `${shift.shift_name} | ${timeRange}`
 })
 
 const currentShiftHint = computed(() => {
   const shift = props.profile.current_shift
-  if (!shift) return 'Hien tai chua co ca lam ap dung cho tai khoan nay.'
+  if (!shift) return 'Hiện tại chưa có ca làm áp dụng cho tài khoản này.'
 
   if (shift.source === 'assignment') {
-    return `Dang lay theo phan ca${shift.effective_from ? ` tu ${shift.effective_from}` : ''}${shift.effective_to ? ` den ${shift.effective_to}` : ''}.`
+    return `Đang lấy theo phân ca${shift.effective_from ? ` từ ${shift.effective_from}` : ''}${shift.effective_to ? ` đến ${shift.effective_to}` : ''}.`
   }
 
-  return 'Dang hien theo ca mac dinh trong ho so nhan vien.'
+  return 'Đang hiển thị theo ca mặc định trong hồ sơ nhân viên.'
 })
 
 function formatCurrency(value) {
@@ -189,17 +196,81 @@ const saveProfile = () => {
   })
 }
 
-const changePassword = () => {
+const openChangePasswordModal = () => {
+  isPasswordOtpStep.value = props.passwordChangeOtpPending
+  passwordForm.clearErrors()
+
+  if (props.passwordChangeOtpPending) {
+    passwordForm.reset('otp')
+  } else {
+    passwordForm.reset()
+  }
+
+  isChangePasswordOpen.value = true
+}
+
+const closeChangePasswordModal = () => {
+  isChangePasswordOpen.value = false
+  passwordForm.clearErrors()
+
+  if (props.passwordChangeOtpPending) {
+    passwordForm.delete(route('password.change-otp.cancel'), {
+      preserveScroll: true,
+      onFinish: () => {
+        passwordForm.reset()
+        isPasswordOtpStep.value = false
+      },
+    })
+    return
+  }
+
+  passwordForm.reset()
+  isPasswordOtpStep.value = false
+}
+
+const requestPasswordOtp = () => {
   passwordForm.put(route('password.update'), {
     preserveScroll: true,
     onSuccess: () => {
+      isPasswordOtpStep.value = true
+      passwordForm.reset('current_password', 'password', 'password_confirmation', 'otp')
+      toast.info('Đã gửi mã OTP đến email của bạn.')
+    },
+    onError: (errors) => {
+      if (errors.current_password) toast.error(errors.current_password)
+      else if (errors.password) toast.error(errors.password)
+      else if (errors.otp) toast.error(errors.otp)
+      else toast.error('Không thể gửi mã OTP. Vui lòng kiểm tra lại thông tin.')
+    }
+  })
+}
+
+const verifyPasswordOtp = () => {
+  passwordForm.post(route('password.change-otp.verify'), {
+    preserveScroll: true,
+    onSuccess: () => {
       isChangePasswordOpen.value = false
+      isPasswordOtpStep.value = false
       passwordForm.reset()
       toast.success('Đã đổi mật khẩu thành công.')
     },
     onError: (errors) => {
-       if(errors.password) toast.error(errors.password)
-       else toast.error('Có lỗi xảy ra khi đổi mật khẩu.')
+      if (errors.otp) toast.error(errors.otp)
+      else toast.error('Không thể xác thực mã OTP.')
+    }
+  })
+}
+
+const resendPasswordOtp = () => {
+  passwordForm.post(route('password.change-otp.resend'), {
+    preserveScroll: true,
+    onSuccess: () => {
+      passwordForm.reset('otp')
+      toast.info('Đã gửi lại mã OTP mới.')
+    },
+    onError: (errors) => {
+      if (errors.otp) toast.error(errors.otp)
+      else toast.error('Không thể gửi lại mã OTP.')
     }
   })
 }
@@ -439,7 +510,7 @@ const triggerAvatarUpload = () => {
                       </div>
                    </div>
                    <button
-                      @click="isChangePasswordOpen = true"
+                       @click="openChangePasswordModal"
                       class="text-sm font-bold text-blue-600 hover:text-blue-700 transition"
                    >Đổi mật khẩu</button>
                 </div>
@@ -535,14 +606,18 @@ const triggerAvatarUpload = () => {
                   >Lưu thay đổi</button>
                </div>
             </form>
+
         </div>
     </Modal>
 
     <!-- ── MODAL: CHANGE PASSWORD ────────────────────────────────────────────── -->
-    <Modal :show="isChangePasswordOpen" @close="isChangePasswordOpen = false" max-width="md">
+    <Modal :show="isChangePasswordOpen" @close="closeChangePasswordModal" max-width="md">
         <div class="p-6">
             <h2 class="mb-4 text-xl font-bold text-gray-900">Đổi mật khẩu mới</h2>
-            <form @submit.prevent="changePassword" class="space-y-4">
+            <form v-if="!isPasswordOtpStep" @submit.prevent="requestPasswordOtp" class="space-y-4">
+               <p class="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-700">
+                  Hệ thống sẽ gửi mã OTP đến email <strong>{{ profile.email }}</strong> trước khi cập nhật mật khẩu.
+               </p>
                <div>
                   <label class="mb-1 block text-sm font-bold text-gray-700">Mật khẩu hiện tại</label>
                   <input
@@ -560,6 +635,7 @@ const triggerAvatarUpload = () => {
                     type="password"
                     class="w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none transition focus:border-blue-500"
                   />
+                  <div v-if="passwordForm.errors.password" class="mt-1 text-xs text-rose-500">{{ passwordForm.errors.password }}</div>
                </div>
 
                <div>
@@ -569,19 +645,64 @@ const triggerAvatarUpload = () => {
                     type="password"
                     class="w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none transition focus:border-blue-500"
                   />
+                  <div v-if="passwordForm.errors.password_confirmation" class="mt-1 text-xs text-rose-500">{{ passwordForm.errors.password_confirmation }}</div>
+               </div>
+
+               <div v-if="passwordForm.errors.otp" class="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                  {{ passwordForm.errors.otp }}
                </div>
 
                <div class="flex justify-end gap-3 pt-2">
                   <button
                     type="button"
-                    @click="isChangePasswordOpen = false"
+                    @click="closeChangePasswordModal"
                     class="rounded-xl border border-gray-300 px-5 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50"
                   >Hủy</button>
                   <button
                     type="submit"
                     :disabled="passwordForm.processing"
                     class="rounded-xl bg-indigo-600 px-8 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:opacity-50"
-                  >Cập nhật mật khẩu</button>
+                  >Gửi mã OTP</button>
+               </div>
+            </form>
+
+            <form v-else @submit.prevent="verifyPasswordOtp" class="space-y-4">
+               <p class="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                  Nhập mã OTP đã được gửi đến <strong>{{ profile.email }}</strong> để xác nhận đổi mật khẩu.
+               </p>
+
+               <div>
+                  <label class="mb-1 block text-sm font-bold text-gray-700">Mã OTP</label>
+                  <input
+                    v-model="passwordForm.otp"
+                    type="text"
+                    inputmode="numeric"
+                    maxlength="6"
+                    placeholder="123456"
+                    class="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-center text-lg tracking-[0.4em] outline-none transition focus:border-blue-500"
+                  />
+                  <div v-if="passwordForm.errors.otp" class="mt-1 text-xs text-rose-500">{{ passwordForm.errors.otp }}</div>
+               </div>
+
+               <div class="flex justify-between gap-3 pt-2">
+                  <button
+                    type="button"
+                    @click="resendPasswordOtp"
+                    :disabled="passwordForm.processing"
+                    class="rounded-xl border border-indigo-200 px-5 py-2.5 text-sm font-bold text-indigo-700 transition hover:bg-indigo-50 disabled:opacity-50"
+                  >Gửi lại OTP</button>
+                  <div class="flex gap-3">
+                    <button
+                      type="button"
+                      @click="closeChangePasswordModal"
+                      class="rounded-xl border border-gray-300 px-5 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50"
+                    >Hủy</button>
+                    <button
+                      type="submit"
+                      :disabled="passwordForm.processing || passwordForm.otp.length !== 6"
+                      class="rounded-xl bg-indigo-600 px-8 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                    >Xác nhận đổi mật khẩu</button>
+                  </div>
                </div>
             </form>
         </div>
@@ -605,4 +726,3 @@ const triggerAvatarUpload = () => {
   }
 }
 </style>
-

@@ -2,19 +2,19 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Bao cao tong hop</title>
+    <title>Báo cáo tổng hợp</title>
 </head>
 <body>
-    <h2>BAO CAO TONG HOP</h2>
-    <p>Pham vi: {{ $scopeLabel }}</p>
-    <p>Thang/Nam: {{ $filters['month'] }}/{{ $filters['year'] }}</p>
+    <h2>BÁO CÁO TỔNG HỢP</h2>
+    <p>Phạm vi: {{ $scopeLabel }}</p>
+    <p>Tháng/Năm: {{ $filters['month'] }}/{{ $filters['year'] }}</p>
 
-    <h3>1. Nhan su theo phong ban</h3>
+    <h3>1. Nhân sự theo phòng ban</h3>
     <table border="1" cellpadding="6" cellspacing="0">
         <thead>
             <tr>
-                <th>Phong ban</th>
-                <th>So nhan su</th>
+                <th>Phòng ban</th>
+                <th>Số nhân sự</th>
             </tr>
         </thead>
         <tbody>
@@ -24,17 +24,17 @@
                     <td>{{ $item['employee_count'] }}</td>
                 </tr>
             @empty
-                <tr><td colspan="2">Khong co du lieu.</td></tr>
+                <tr><td colspan="2">Không có dữ liệu.</td></tr>
             @endforelse
         </tbody>
     </table>
 
-    <h3>2. Du an theo trang thai</h3>
+    <h3>2. Dự án theo trạng thái</h3>
     <table border="1" cellpadding="6" cellspacing="0">
         <thead>
             <tr>
-                <th>Trang thai</th>
-                <th>So luong</th>
+                <th>Trạng thái</th>
+                <th>Số lượng</th>
             </tr>
         </thead>
         <tbody>
@@ -47,14 +47,14 @@
         </tbody>
     </table>
 
-    <h3>3. Tien do du an</h3>
+    <h3>3. Tiến độ dự án</h3>
     <table border="1" cellpadding="6" cellspacing="0">
         <thead>
             <tr>
-                <th>Du an</th>
-                <th>Trang thai</th>
-                <th>Tien do</th>
-                <th>Dau viec</th>
+                <th>Dự án</th>
+                <th>Trạng thái</th>
+                <th>Tiến độ</th>
+                <th>Đầu việc</th>
             </tr>
         </thead>
         <tbody>
@@ -66,19 +66,21 @@
                     <td>{{ $item['completed_tasks'] }}/{{ $item['total_tasks'] }}</td>
                 </tr>
             @empty
-                <tr><td colspan="4">Khong co du lieu.</td></tr>
+                <tr><td colspan="4">Không có dữ liệu.</td></tr>
             @endforelse
         </tbody>
     </table>
 
-    <h3>4. Cham cong thang</h3>
+    <h3>4. Chấm công tháng</h3>
     <table border="1" cellpadding="6" cellspacing="0">
-        <tr><td>Tong ban ghi</td><td>{{ $attendanceMonthly['total_records'] ?? 0 }}</td></tr>
-        <tr><td>Dung gio</td><td>{{ $attendanceMonthly['on_time_records'] ?? 0 }}</td></tr>
-        <tr><td>Di muon</td><td>{{ $attendanceMonthly['late_records'] ?? 0 }}</td></tr>
-        <tr><td>Ve som</td><td>{{ $attendanceMonthly['early_leave_records'] ?? 0 }}</td></tr>
-        <tr><td>Vang mat</td><td>{{ $attendanceMonthly['absent_records'] ?? 0 }}</td></tr>
-        <tr><td>Tong phut lam</td><td>{{ $attendanceMonthly['worked_minutes'] ?? 0 }}</td></tr>
+        <tr><td>Tổng bản ghi</td><td>{{ $attendanceMonthly['total_records'] ?? 0 }}</td></tr>
+        <tr><td>Đúng giờ</td><td>{{ $attendanceMonthly['on_time_records'] ?? 0 }}</td></tr>
+        <tr><td>Đi muộn</td><td>{{ $attendanceMonthly['late_records'] ?? 0 }}</td></tr>
+        <tr><td>Về sớm</td><td>{{ $attendanceMonthly['early_leave_records'] ?? 0 }}</td></tr>
+        <tr><td>Vắng mặt</td><td>{{ $attendanceMonthly['absent_records'] ?? 0 }}</td></tr>
+        <tr><td>Tổng phút làm</td><td>{{ $attendanceMonthly['worked_minutes'] ?? 0 }}</td></tr>
     </table>
 </body>
 </html>
+
+

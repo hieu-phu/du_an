@@ -39,7 +39,7 @@ class UserApprovalService extends BaseService
                 'requested_by' => $this->user()?->id,
                 'status' => 'pending',
                 'submitted_at' => now(),
-                'reason' => 'De nghi tao tai khoan nhan su moi',
+                'reason' => 'Đề nghị tạo tài khoản nhân sự mới',
             ]);
 
             foreach ($payload as $field => $value) {
@@ -62,7 +62,7 @@ class UserApprovalService extends BaseService
 
             if (!$profile) {
                 throw ValidationException::withMessages([
-                    'approval' => 'Nhan su nay chua co ho so nhan vien de thay doi luong.',
+                    'approval' => 'Nhân sự này chưa có hồ sơ nhân viên để thay đổi lương.',
                 ]);
             }
 
@@ -71,7 +71,7 @@ class UserApprovalService extends BaseService
 
             if ($normalizedSalary === $oldSalary) {
                 throw ValidationException::withMessages([
-                    'base_salary' => 'Luong moi trung voi luong hien tai, khong can gui yeu cau.',
+                    'base_salary' => 'Lương mới trùng với lương hiện tại, không cần gửi yêu cầu.',
                 ]);
             }
 
@@ -84,7 +84,7 @@ class UserApprovalService extends BaseService
 
             if ($hasPendingRequest) {
                 throw ValidationException::withMessages([
-                    'base_salary' => 'Nhan su nay dang co yeu cau doi luong cho duyet.',
+                    'base_salary' => 'Nhân sự này đang có yêu cầu đổi lương chờ duyệt.',
                 ]);
             }
 
@@ -95,7 +95,7 @@ class UserApprovalService extends BaseService
                 'requested_by' => $this->user()?->id,
                 'status' => 'pending',
                 'submitted_at' => now(),
-                'reason' => $reason ?: 'De nghi thay doi luong co ban',
+                'reason' => $reason ?: 'Đề nghị thay đổi lương cơ bản',
             ]);
 
             $payload = [
@@ -242,7 +242,7 @@ class UserApprovalService extends BaseService
 
                 if (!$profile) {
                     throw ValidationException::withMessages([
-                        'approval' => 'Nhan su khong co ho so de cap nhat luong.',
+                        'approval' => 'Nhân sự không có hồ sơ để cập nhật lương.',
                     ]);
                 }
 
@@ -277,7 +277,7 @@ class UserApprovalService extends BaseService
             }
 
             throw ValidationException::withMessages([
-                'approval' => 'Loai yeu cau khong hop le.',
+                'approval' => 'Loại yêu cầu không hợp lệ.',
             ]);
         });
     }
@@ -304,13 +304,13 @@ class UserApprovalService extends BaseService
         $this->handleTransaction(function () use ($approvalRequest, $actor, $note) {
             if ($approvalRequest->status !== 'pending') {
                 throw ValidationException::withMessages([
-                    'approval' => 'Chi duoc huy yeu cau dang cho duyet.',
+                    'approval' => 'Chỉ được hủy yêu cầu đang chờ duyệt.',
                 ]);
             }
 
             if ((int) $approvalRequest->requested_by !== (int) $actor->id && !$this->canReviewApprovalRequest($approvalRequest, $actor)) {
                 throw ValidationException::withMessages([
-                    'approval' => 'Ban khong duoc phep huy yeu cau nay.',
+                    'approval' => 'Bạn không được phép hủy yêu cầu này.',
                 ]);
             }
 
@@ -340,13 +340,13 @@ class UserApprovalService extends BaseService
     {
         if (!empty($payload['email']) && User::query()->where('email', $payload['email'])->exists()) {
             throw ValidationException::withMessages([
-                'email' => 'Email da ton tai, khong the duyet yeu cau.',
+                'email' => 'Email đã tồn tại, không thể duyệt yêu cầu.',
             ]);
         }
 
         if (!empty($payload['phone']) && User::query()->where('phone', $payload['phone'])->exists()) {
             throw ValidationException::withMessages([
-                'phone' => 'So dien thoai da ton tai, khong the duyet yeu cau.',
+                'phone' => 'Số điện thoại đã tồn tại, không thể duyệt yêu cầu.',
             ]);
         }
     }
@@ -388,13 +388,13 @@ class UserApprovalService extends BaseService
     {
         if (!in_array($approvalRequest->request_type, [self::REQUEST_TYPE_CREATE_USER, self::REQUEST_TYPE_SALARY_CHANGE], true)) {
             throw ValidationException::withMessages([
-                'approval' => 'Loai yeu cau khong hop le.',
+                'approval' => 'Loại yêu cầu không hợp lệ.',
             ]);
         }
 
         if ($approvalRequest->status !== 'pending') {
             throw ValidationException::withMessages([
-                'approval' => 'Yeu cau nay da duoc xu ly.',
+                'approval' => 'Yêu cầu này đã được xử lý.',
             ]);
         }
     }
@@ -430,7 +430,7 @@ class UserApprovalService extends BaseService
         }
 
         throw ValidationException::withMessages([
-            'approval' => 'Ban khong co quyen xu ly loai yeu cau nay.',
+            'approval' => 'Bạn không có quyền xử lý loại yêu cầu này.',
         ]);
     }
 
@@ -456,7 +456,7 @@ class UserApprovalService extends BaseService
             'employee_profile_id' => 'ID hồ sơ nhân sự',
             'employee_name' => 'Nhân sự',
             'employee_email' => 'Email nhân sự',
-            'employee_code' => 'Mã nhân sự',
+            'employee_code' => 'Mã nhân viên',
             'name' => 'Họ tên',
             'email' => 'Email',
             'phone' => 'Số điện thoại',
@@ -482,3 +482,5 @@ class UserApprovalService extends BaseService
         );
     }
 }
+
+

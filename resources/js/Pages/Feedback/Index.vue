@@ -652,7 +652,7 @@ const markRead = async (item, options = {}) => {
       updateFeedbackCollections({
         ...currentItem,
         status: 'read',
-        status_label: 'Da doc',
+        status_label: 'Đã đọc',
         read_at: new Date().toISOString(),
       })
     }

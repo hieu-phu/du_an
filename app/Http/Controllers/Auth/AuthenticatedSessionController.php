@@ -37,7 +37,7 @@ class AuthenticatedSessionController extends Controller
 
         if ($this->firstLoginOtpService->requiresOtp($user)) {
             $this->firstLoginOtpService->sendOtp($user);
-            $this->firstLoginOtpService->storePendingLogin($request, $user, 'Email va mat khau', $request->getRedirectUrl());
+            $this->firstLoginOtpService->storePendingLogin($request, $user, 'Email va mật khẩu', $request->getRedirectUrl());
 
             return redirect()->route('login.otp.view');
         }
@@ -48,7 +48,7 @@ class AuthenticatedSessionController extends Controller
         $this->loginNotificationService->handleSuccessfulLogin(
             $user,
             $request,
-            'Email va mat khau'
+            'Email va mật khẩu'
         );
 
         $request->session()->save();
@@ -76,7 +76,7 @@ class AuthenticatedSessionController extends Controller
             'email' => $user->email,
             'status' => session('status'),
             'context' => 'first-login',
-            'title' => 'Xac nhan OTP dang nhap',
+            'title' => 'Xác nhận OTP dang nhap',
             'description' => 'Chung toi da gui ma OTP 6 so den email',
             'submitRoute' => route('login.otp.verify'),
             'resendRoute' => route('login.otp.resend'),
@@ -94,7 +94,7 @@ class AuthenticatedSessionController extends Controller
         $pendingLogin = $request->session()->get(FirstLoginOtpService::SESSION_KEY);
 
         if (!$pendingLogin || empty($pendingLogin['user_id'])) {
-            return redirect()->route('login')->with('error', 'Phien xac thuc da het han. Vui long dang nhap lai.');
+            return redirect()->route('login')->with('error', 'Phien xac thuc da het han. Vui lòng dang nhap lai.');
         }
 
         $user = User::query()->find($pendingLogin['user_id']);
@@ -102,7 +102,7 @@ class AuthenticatedSessionController extends Controller
         if (!$user) {
             $request->session()->forget(FirstLoginOtpService::SESSION_KEY);
 
-            return redirect()->route('login')->with('error', 'Tai khoan khong ton tai.');
+            return redirect()->route('login')->with('error', 'Tài khoản không ton tai.');
         }
 
         $otpRecord = LoginOtp::query()
@@ -114,7 +114,7 @@ class AuthenticatedSessionController extends Controller
 
         if (!$otpRecord) {
             return back()->withErrors([
-                'otp' => 'Ma OTP khong chinh xac hoac da het han.',
+                'otp' => 'Ma OTP không chinh xac hoac da het han.',
             ]);
         }
 
@@ -126,7 +126,7 @@ class AuthenticatedSessionController extends Controller
         $this->loginNotificationService->handleSuccessfulLogin(
             $user,
             $request,
-            (string) ($pendingLogin['login_method'] ?? 'Email va mat khau')
+            (string) ($pendingLogin['login_method'] ?? 'Email va mật khẩu')
         );
 
         $request->session()->forget(FirstLoginOtpService::SESSION_KEY);
@@ -148,7 +148,7 @@ class AuthenticatedSessionController extends Controller
         $pendingLogin = $request->session()->get(FirstLoginOtpService::SESSION_KEY);
 
         if (!$pendingLogin || empty($pendingLogin['user_id'])) {
-            return redirect()->route('login')->with('error', 'Phien xac thuc da het han. Vui long dang nhap lai.');
+            return redirect()->route('login')->with('error', 'Phien xac thuc da het han. Vui lòng dang nhap lai.');
         }
 
         $user = User::query()->find($pendingLogin['user_id']);
@@ -156,7 +156,7 @@ class AuthenticatedSessionController extends Controller
         if (!$user) {
             $request->session()->forget(FirstLoginOtpService::SESSION_KEY);
 
-            return redirect()->route('login')->with('error', 'Tai khoan khong ton tai.');
+            return redirect()->route('login')->with('error', 'Tài khoản không ton tai.');
         }
 
         $otpRecord = LoginOtp::query()
@@ -168,7 +168,7 @@ class AuthenticatedSessionController extends Controller
             $secondsLeft = now()->diffInSeconds($otpRecord->updated_at->addMinute());
 
             return back()->withErrors([
-                'otp' => "Vui long cho {$secondsLeft} giay truoc khi gui lai ma OTP.",
+                'otp' => "Vui lòng cho {$secondsLeft} giay truoc khi gui lai ma OTP.",
             ]);
         }
 
@@ -183,7 +183,7 @@ class AuthenticatedSessionController extends Controller
 
         if ($user) {
             $loggedOutAt = now('Asia/Ho_Chi_Minh');
-            $userAgent = (string) ($request->userAgent() ?: 'Khong xac dinh');
+            $userAgent = (string) ($request->userAgent() ?: 'Không xác định');
 
             \App\Models\LoginHistory::query()
                 ->where('user_id', $user->id)
@@ -198,7 +198,7 @@ class AuthenticatedSessionController extends Controller
                 'user_id' => $user->id,
                 'module' => 'auth',
                 'action' => 'logout',
-                'description' => 'Dang xuat khoi he thong',
+                'description' => 'Dang xuat khoi hệ thống',
                 'reference_table' => 'users',
                 'reference_id' => $user->id,
                 'ip_address' => $request->ip(),
@@ -216,3 +216,5 @@ class AuthenticatedSessionController extends Controller
         return redirect('/');
     }
 }
+
+

@@ -15,10 +15,10 @@
       <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <div class="text-sm font-semibold text-gray-900">{{ filterTitle }}</div>
-          <div class="mt-1 text-sm text-gray-500">Chon thang nam bang lich va loc them theo nhan vien neu can.</div>
+          <div class="mt-1 text-sm text-gray-500">Chọn tháng năm bằng lịch và lọc thêm theo nhân viên nếu cần.</div>
         </div>
         <div class="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-          Dang xem: {{ currentPeriodLabel }}
+          Đang xem: {{ currentPeriodLabel }}
         </div>
       </div>
 
@@ -26,8 +26,8 @@
         <div class="max-w-xl">
           <InputDate
             v-model="filterForm.period"
-            label="Chon thang nam"
-            placeholder="Chon thang nam"
+            label="Chọn tháng năm"
+            placeholder="Chọn tháng năm"
             :clearable="false"
             :config="periodPickerConfig"
           />
@@ -36,8 +36,8 @@
           <FormSelect
             v-model="filterForm.employee_profile_id"
             :options="employeeOptionItems"
-            label="Nhan vien"
-            placeholder="Tat ca"
+            label="Nhân viên"
+            placeholder="Tất cả"
             :searchable="true"
             :can-clear="false"
             :show-optional-label="false"
@@ -49,7 +49,7 @@
             class="rounded-2xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
             @click="jumpToCurrentPeriod"
           >
-            Thang nay
+            Tháng này
           </button>
         </div>
       </div>
@@ -62,9 +62,9 @@
 
       <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div class="space-y-1">
-          <p class="text-sm text-gray-500">Ca lam va gio chuan lay tu phan ca/snapshot cua ngay cong.</p>
+          <p class="text-sm text-gray-500">Ca làm và giờ chuẩn lấy từ phân ca/snapshot của ngày công.</p>
           <p v-if="bulkBlockedRecordsOnPage.length" class="text-xs font-medium text-amber-700">
-            {{ bulkBlockedRecordsOnPage.length }} ban ghi tren trang nay khong the chon hang loat vi thieu check-out hoac khong du quyen.
+            {{ bulkBlockedRecordsOnPage.length }} bản ghi trên trang này không thể chọn hàng loạt vì thiếu check-out hoặc không đủ quyền.
           </p>
         </div>
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -76,7 +76,7 @@
               :disabled="!bulkApprovableRecordsOnPage.length"
               @change="toggleCurrentPageSelection"
             />
-            Chon trang hien tai
+            Chọn trang hiện tại
           </label>
           <button
             type="button"
@@ -84,7 +84,7 @@
             :disabled="!selectedRecordIds.length || bulkDecisionForm.processing"
             @click="approveSelectedRecords"
           >
-            Duyet hang loat ({{ selectedRecordIds.length }})
+            Duyệt hàng loạt ({{ selectedRecordIds.length }})
           </button>
         </div>
       </div>
@@ -96,8 +96,8 @@
             class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
             :checked="isCurrentPageSelected"
             :disabled="!bulkApprovableRecordsOnPage.length"
-            title="Chon tat ca ban ghi co the duyet tren trang nay"
             @change="toggleCurrentPageSelection"
+            title="Chọn tất cả bản ghi có thể duyệt trên trang này"
           />
         </template>
         <template #cell-selection="{ item }">
@@ -125,7 +125,7 @@
         </template>
         <template #cell-shift_info="{ item }">
           <div class="min-w-[140px]">
-            <div class="font-semibold text-gray-900">{{ item.shift_name || 'Ca mac dinh' }}</div>
+            <div class="font-semibold text-gray-900">{{ item.shift_name || 'Ca mặc định' }}</div>
             <div class="text-xs text-gray-500">{{ formatTimeRange(item.shift_start_time, item.shift_end_time) }}</div>
           </div>
         </template>
@@ -174,25 +174,25 @@
             v-if="hasRequestDetail(item)"
             type="button"
             :class="requestPresenceClass(item.request_presence)"
-            :title="item.request_reason || item.request_presence_label || 'Khong co don'"
+            :title="item.request_reason || item.request_presence_label || 'Không có đơn'"
             class="inline-flex max-w-[170px] min-w-[118px] justify-center rounded-full px-3 py-1 text-xs font-semibold transition hover:opacity-80"
             @click="openRequestDetailFromRecord(item)"
           >
-            <span class="truncate">{{ item.request_presence_label || 'Khong co don' }}</span>
+            <span class="truncate">{{ item.request_presence_label || 'Không có đơn' }}</span>
           </button>
           <span
             v-else
             :class="requestPresenceClass(item.request_presence)"
-            :title="item.request_reason || item.request_presence_label || 'Khong co don'"
+            :title="item.request_reason || item.request_presence_label || 'Không có đơn'"
             class="inline-flex max-w-[170px] min-w-[118px] justify-center rounded-full px-3 py-1 text-xs font-semibold"
           >
-            <span class="truncate">{{ item.request_presence_label || 'Khong co don' }}</span>
+            <span class="truncate">{{ item.request_presence_label || 'Không có đơn' }}</span>
           </span>
         </template>
       </DataTable>
       <LocalPagination
         v-if="records.length"
-        label="ban ghi"
+        label="bản ghi"
         :total="records.length"
         :page="pagination.records"
         :per-page="perPage.records"
@@ -209,7 +209,7 @@
 
       <div v-if="isLeaveApproval" class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div class="text-sm text-gray-500">
-          Chon nhieu don nghi phep cho duyet tren trang hien tai neu can.
+          Chọn nhiều đơn nghỉ phép chờ duyệt trên trang hiện tại nếu cần.
         </div>
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
           <label class="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700">
@@ -220,7 +220,7 @@
               :disabled="!bulkApprovableRequestsOnPage.length"
               @change="toggleCurrentRequestPageSelection"
             />
-            Chon trang hien tai
+            Chọn trang hiện tại
           </label>
           <button
             type="button"
@@ -228,7 +228,7 @@
             :disabled="!selectedApprovalRequestIds.length || requestBulkDecisionForm.processing"
             @click="approveSelectedRequests"
           >
-            Duyet hang loat ({{ selectedApprovalRequestIds.length }})
+            Duyệt hàng loạt ({{ selectedApprovalRequestIds.length }})
           </button>
         </div>
       </div>
@@ -240,7 +240,7 @@
             class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
             :checked="isCurrentRequestPageSelected"
             :disabled="!bulkApprovableRequestsOnPage.length"
-            title="Chon tat ca don co the duyet tren trang nay"
+            title="Chọn tất cả đơn có thể duyệt trên trang này"
             @change="toggleCurrentRequestPageSelection"
           />
         </template>
@@ -251,7 +251,7 @@
               class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
               :checked="selectedApprovalRequestIds.includes(item.id)"
               :disabled="!isRequestBulkApprovable(item)"
-              title="Chon de duyet hang loat"
+              title="Chọn để duyệt hàng loạt"
               @change="toggleRequestSelection(item)"
               @click.stop
             />
@@ -271,7 +271,7 @@
       </DataTable>
       <LocalPagination
         v-if="request_approvals.length"
-        label="don"
+        label="đơn"
         :total="request_approvals.length"
         :page="pagination.requests"
         :per-page="perPage.requests"
@@ -283,16 +283,16 @@
 
     <div v-if="!isLeaveApproval" class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <h3 class="text-lg font-semibold text-gray-900">Lich su duyet cong</h3>
+        <h3 class="text-lg font-semibold text-gray-900">Lịch sử duyệt công</h3>
       </div>
 
-      <DataTable :columns="reviewedRecordColumns" :data="paginatedReviewedRecords" :show-index="true" :index-offset="pageOffset('reviewedRecords')" empty-message="Chua co lich su duyet cong trong ky.">
+      <DataTable :columns="reviewedRecordColumns" :data="paginatedReviewedRecords" :show-index="true" :index-offset="pageOffset('reviewedRecords')" empty-message="Chưa có lịch sử duyệt công trong kỳ.">
         <template #cell-work_date="{ item }">
           {{ formatDate(item.work_date) }}
         </template>
         <template #cell-shift_info="{ item }">
           <div class="min-w-[140px]">
-            <div class="font-semibold text-gray-900">{{ item.shift_name || 'Ca mac dinh' }}</div>
+            <div class="font-semibold text-gray-900">{{ item.shift_name || 'Ca mặc định' }}</div>
             <div class="text-xs text-gray-500">{{ formatTimeRange(item.shift_start_time, item.shift_end_time) }}</div>
           </div>
         </template>
@@ -336,7 +336,7 @@
       </DataTable>
       <LocalPagination
         v-if="reviewed_records.length"
-        label="ban ghi"
+        label="bản ghi"
         :total="reviewed_records.length"
         :page="pagination.reviewedRecords"
         :per-page="perPage.reviewedRecords"
@@ -369,7 +369,7 @@
       </DataTable>
       <LocalPagination
         v-if="reviewed_request_approvals.length"
-        label="don"
+        label="đơn"
         :total="reviewed_request_approvals.length"
         :page="pagination.reviewedRequests"
         :per-page="perPage.reviewedRequests"
@@ -474,11 +474,11 @@ const breadcrumbItems = computed(() => isLeaveApproval.value
   ? [{ text: 'Nghỉ phép', link: null }, { text: 'Duyệt nghỉ phép', link: null }]
   : [{ text: 'Chấm công', link: null }, { text: 'Duyệt công', link: null }]
 )
-const filterTitle = computed(() => isLeaveApproval.value ? 'Bo loc ky duyet nghi phep' : 'Bo loc ky duyet cong')
+const filterTitle = computed(() => isLeaveApproval.value ? 'Bộ lọc ký duyệt nghỉ phép' : 'Bộ lọc ký duyệt công')
 const pendingRequestTitle = computed(() => isLeaveApproval.value ? 'Đơn nghỉ phép chờ duyệt' : 'Đơn chấm công chờ duyệt')
 const pendingRequestEmptyMessage = computed(() => isLeaveApproval.value ? 'Không có đơn nghỉ phép chờ duyệt.' : 'Không có đơn chấm công chờ duyệt.')
-const reviewedRequestTitle = computed(() => isLeaveApproval.value ? 'Lich su duyet nghi phep' : 'Lich su duyet don cham cong')
-const reviewedRequestEmptyMessage = computed(() => isLeaveApproval.value ? 'Chua co lich su duyet nghi phep trong ky.' : 'Chua co lich su duyet don trong ky.')
+const reviewedRequestTitle = computed(() => isLeaveApproval.value ? 'Lịch sử duyệt nghỉ phép' : 'Lịch sử duyệt đơn chấm công')
+const reviewedRequestEmptyMessage = computed(() => isLeaveApproval.value ? 'Chưa có lịch sử duyệt nghỉ phép trong kỳ.' : 'Chưa có lịch sử duyệt đơn trong kỳ.')
 const requestDetailTitle = computed(() => isLeaveApproval.value ? 'Chi tiết đơn nghỉ phép' : 'Chi tiết đơn chấm công')
 const requestSupplementTitle = computed(() => isLeaveApproval.value ? 'Thông tin nghỉ phép' : 'Thông tin bổ sung đơn chấm công')
 const currentAuthorityLevel = computed(() => Number(page.props.auth?.user?.authority_level || 0))
@@ -528,7 +528,7 @@ const LocalPagination = {
     page: { type: Number, required: true },
     perPage: { type: Number, required: true },
     options: { type: Array, default: () => [10, 20, 50] },
-    label: { type: String, default: 'ban ghi' },
+    label: { type: String, default: 'bản ghi' },
   },
   emits: ['page', 'per-page'],
   setup(componentProps, { emit }) {
@@ -551,9 +551,9 @@ const LocalPagination = {
     ].join(' ')
 
     return () => h('div', { class: 'mt-4 flex flex-col gap-3 border-t border-gray-100 pt-4 md:flex-row md:items-center md:justify-between' }, [
-      h('div', { class: 'text-sm font-medium text-gray-600' }, `Hien thi ${from.value}-${to.value} / ${componentProps.total} ${componentProps.label}`),
+      h('div', { class: 'text-sm font-medium text-gray-600' }, `Hiển thị ${from.value}-${to.value} / ${componentProps.total} ${componentProps.label}`),
       h('div', { class: 'flex flex-wrap items-center gap-2' }, [
-        h('label', { class: 'text-sm text-gray-600' }, 'Moi trang'),
+        h('label', { class: 'text-sm text-gray-600' }, 'Mỗi trang'),
         h('select', {
           class: 'rounded-lg border border-gray-300 px-3 py-2 text-sm',
           value: componentProps.perPage,
@@ -564,7 +564,7 @@ const LocalPagination = {
           class: buttonClass(false, componentProps.page <= 1),
           disabled: componentProps.page <= 1,
           onClick: () => goToPage(componentProps.page - 1),
-        }, 'Truoc'),
+        }, 'Trước'),
         ...visiblePages.value.map((page) => h('button', {
           type: 'button',
           class: buttonClass(page === componentProps.page),
@@ -645,7 +645,7 @@ const columns = [
   { label: 'Đi muộn', key: 'late_minutes', align: 'text-center', class: 'min-w-[88px] whitespace-nowrap' },
   { label: 'Về sớm', key: 'early_leave_minutes', align: 'text-center', class: 'min-w-[88px] whitespace-nowrap' },
   { label: 'Trạng thái ngày', key: 'day_status', align: 'text-center', class: 'min-w-[150px]' },
-  { label: 'Don', key: 'request_presence', align: 'text-center', class: 'min-w-[136px]' },
+  { label: 'Đơn', key: 'request_presence', align: 'text-center', class: 'min-w-[136px]' },
   { label: 'Duyệt', key: 'approval_status', align: 'text-center', class: 'min-w-[92px]' },
 ]
 
@@ -661,31 +661,31 @@ const requestColumns = [
 ]
 
 const reviewedRecordColumns = [
-  { label: 'Nhan vien', key: 'employee_name' },
-  { label: 'Ma NV', key: 'employee_code' },
-  { label: 'Ngay cong', key: 'work_date' },
-  { label: 'Ca lam', key: 'shift_info' },
-  { label: 'Gio chuan', key: 'standard_minutes', align: 'text-center' },
-  { label: 'Gio lam', key: 'worked_minutes', align: 'text-center' },
-  { label: 'Di muon', key: 'late_minutes', align: 'text-center' },
-  { label: 'Ve som', key: 'early_leave_minutes', align: 'text-center' },
-  { label: 'Trang thai ngay', key: 'day_status', align: 'text-center' },
-  { label: 'Ket qua duyet', key: 'approval_status', align: 'text-center' },
-  { label: 'Nguoi duyet', key: 'reviewed_by_name' },
-  { label: 'Duyet luc', key: 'reviewed_at' },
-  { label: 'Ghi chu', key: 'approval_note' },
+  { label: 'Nhân viên', key: 'employee_name' },
+  { label: 'Mã NV', key: 'employee_code' },
+  { label: 'Ngày công', key: 'work_date' },
+  { label: 'Ca làm', key: 'shift_info' },
+  { label: 'Giờ chuẩn', key: 'standard_minutes', align: 'text-center' },
+  { label: 'Giờ làm', key: 'worked_minutes', align: 'text-center' },
+  { label: 'Đi muộn', key: 'late_minutes', align: 'text-center' },
+  { label: 'Về sớm', key: 'early_leave_minutes', align: 'text-center' },
+  { label: 'Trạng thái ngày', key: 'day_status', align: 'text-center' },
+  { label: 'Kết quả duyệt', key: 'approval_status', align: 'text-center' },
+  { label: 'Người duyệt', key: 'reviewed_by_name' },
+  { label: 'Duyệt lúc', key: 'reviewed_at' },
+  { label: 'Ghi chú', key: 'approval_note' },
 ]
 
 const reviewedRequestColumns = [
-  { label: 'Nhan vien', key: 'employee_name' },
-  { label: 'Ma NV', key: 'employee_code' },
-  { label: 'Loai don', key: 'request_type_label' },
-  { label: 'Ngay ap dung', key: 'request_date' },
-  { label: 'Khoang thoi gian', key: 'period' },
-  { label: 'Ket qua duyet', key: 'status_label', align: 'text-center' },
-  { label: 'Nguoi duyet', key: 'reviewed_by_name' },
-  { label: 'Duyet luc', key: 'reviewed_at' },
-  { label: 'Ghi chu', key: 'review_note' },
+  { label: 'Nhân viên', key: 'employee_name' },
+  { label: 'Mã NV', key: 'employee_code' },
+  { label: 'Loại đơn', key: 'request_type_label' },
+  { label: 'Ngày áp dụng', key: 'request_date' },
+  { label: 'Khoảng thời gian', key: 'period' },
+  { label: 'Kết quả duyệt', key: 'status_label', align: 'text-center' },
+  { label: 'Người duyệt', key: 'reviewed_by_name' },
+  { label: 'Duyệt lúc', key: 'reviewed_at' },
+  { label: 'Ghi chú', key: 'review_note' },
 ]
 
 const displayRequestColumns = computed(() => [
@@ -713,7 +713,7 @@ const summaryCards = computed(() => {
 
 const currentPeriodLabel = computed(() => {
   const date = parsePeriodValue(filterForm.period)
-  if (!date) return `Thang ${filterForm.month} / ${filterForm.year}`
+  if (!date) return `Tháng ${filterForm.month} / ${filterForm.year}`
 
   return new Intl.DateTimeFormat('vi-VN', {
     month: 'long',
@@ -730,7 +730,7 @@ const periodPickerConfig = {
 }
 
 const employeeOptionItems = computed(() => [
-  { value: null, label: 'Tat ca' },
+  { value: null, label: 'Tất cả' },
   ...(props.employees || []).map((employee) => ({
     value: employee.id,
     label: employee.label,
@@ -930,20 +930,20 @@ function isRecordBulkApprovable(item) {
 }
 
 function bulkSelectionTitle(item) {
-  return bulkSelectionBlockReason(item) || 'Chon de duyet hang loat'
+  return bulkSelectionBlockReason(item) || 'Chọn để duyệt hàng loạt'
 }
 
 function bulkSelectionBlockReason(item) {
-  if (!isRecordSelectable(item)) return 'Khong the chon do khong du quyen duyet'
-  if (item.display_approval_status === 'needs_verification') return 'Nhan vien can giai trinh truoc khi duyet'
-  if (needsResolvedCheckOut(item)) return 'Khong the chon vi thieu check-out'
+  if (!isRecordSelectable(item)) return 'Không thể chọn do không đủ quyền duyệt'
+  if (item.display_approval_status === 'needs_verification') return 'Nhân viên cần giải trình trước khi duyệt'
+  if (needsResolvedCheckOut(item)) return 'Không thể chọn vì thiếu check-out'
 
   return ''
 }
 
 function bulkSelectionShortReason(item) {
-  if (!isRecordSelectable(item)) return 'Khong du quyen'
-  if (needsResolvedCheckOut(item)) return 'Thieu check-out'
+  if (!isRecordSelectable(item)) return 'Không đủ quyền'
+  if (needsResolvedCheckOut(item)) return 'Thiếu check-out'
 
   return ''
 }
@@ -979,7 +979,7 @@ async function approveSelectedRecords() {
     message: 'Nhập ghi chú duyệt hàng loạt.',
     inputLabel: 'Ghi chú duyệt',
     inputType: 'textarea',
-    defaultValue: 'Duyet hang loat',
+    defaultValue: 'Duyệt hàng loạt',
     okText: 'Duyệt hàng loạt',
     cancelText: 'Đóng',
     variant: 'primary',
@@ -1042,7 +1042,7 @@ async function approveSelectedRequests() {
     message: 'Nhập ghi chú duyệt hàng loạt.',
     inputLabel: 'Ghi chú duyệt',
     inputType: 'textarea',
-    defaultValue: 'Duyet hang loat',
+    defaultValue: 'Duyệt hàng loạt',
     okText: 'Duyệt hàng loạt',
     cancelText: 'Đóng',
     variant: 'primary',

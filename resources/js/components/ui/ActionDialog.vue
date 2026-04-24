@@ -2,7 +2,7 @@
   <transition name="fade">
     <div
       v-if="visible"
-      class="fixed inset-0 z-[10000] flex items-center justify-center px-4 py-6"
+      class="fixed inset-0 z-[100010] flex items-center justify-center px-4 py-6"
       @keydown.esc="handleEscape"
     >
       <div class="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]" @click="handleBackdrop"></div>

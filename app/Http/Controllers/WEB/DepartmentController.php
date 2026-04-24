@@ -91,7 +91,7 @@ class DepartmentController extends Controller
     {
         $this->departmentService->delete($id);
 
-        return redirect()->back()->with('success', 'Phong ban da duoc xoa thanh cong.');
+        return redirect()->back()->with('success', 'Phòng ban đã được xóa thành công.');
     }
 
     /**

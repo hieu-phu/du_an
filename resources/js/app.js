@@ -6,7 +6,7 @@ import 'vue3-toastify/dist/index.css'
 import PrimeVue from 'primevue/config'
 import { setupProgress } from './plugins/progress'
 // import '../css/app.css'
-import './bootstrap'
+import { syncCsrfToken } from './bootstrap'
 import './echo'
 
 import { router } from '@inertiajs/vue3'
@@ -22,6 +22,10 @@ router.on('error', (event) => {
   }
 })
 
+router.on('success', (event) => {
+  syncCsrfToken(event.detail?.page?.props?.csrf_token)
+})
+
 createInertiaApp({
   // ✅ Hiện tại: eager: true → load ALL pages ngay khi vào app (tăng bundle size)
   // ✅ Fix: Bỏ eager để lazy load theo route
@@ -30,6 +34,8 @@ createInertiaApp({
     return pages[`./Pages/${name}.vue`]()             // Thêm () để gọi dynamic import
   },
   setup({ el, App, props, plugin }) {
+    syncCsrfToken(props.initialPage?.props?.csrf_token)
+
     createApp({ render: () => h(App, props) })
       .use(plugin)
       .use(ZiggyVue)

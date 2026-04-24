@@ -1,15 +1,15 @@
 <template>
-  <Head title="Bang luong cong ty" />
+  <Head title="Bảng lương công ty" />
 
   <AdminLayout>
-    <PageBreadcrumb title="Bang luong cong ty" :items="[{ text: 'Luong', link: null }, { text: 'Bang luong cong ty', link: null }]" />
+    <PageBreadcrumb title="Bảng lương công ty" :items="[{ text: 'Lương', link: null }, { text: 'Bảng lương công ty', link: null }]" />
 
     <div class="space-y-6">
       <section class="rounded-[24px] border border-gray-200 bg-white p-6 shadow-theme-sm">
         <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <div class="text-sm font-semibold text-gray-900">Bo loc bang luong</div>
-            <div class="mt-1 text-sm text-gray-500">Loc theo ky luong, nhan su, phong ban va chuc vu.</div>
+            <div class="text-sm font-semibold text-gray-900">Bộ lọc bảng lương</div>
+            <div class="mt-1 text-sm text-gray-500">Lọc theo kỳ lương, nhân sự, phòng ban và chức vụ.</div>
           </div>
           <div class="inline-flex items-center rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
             {{ currentPeriodLabel }}
@@ -20,23 +20,23 @@
           class="mt-4 rounded-2xl px-4 py-3 text-sm"
           :class="periodStatus?.is_locked ? 'border border-amber-200 bg-amber-50 text-amber-800' : 'border border-blue-200 bg-blue-50 text-blue-800'"
         >
-          <div class="font-semibold">{{ periodStatus?.status_label || 'Nhap / tinh dong' }}</div>
+          <div class="font-semibold">{{ periodStatus?.status_label || 'Nháp / tính dòng' }}</div>
           <div class="mt-1">
             <template v-if="periodStatus?.is_locked">
-              Snapshot duoc khoa luc {{ formatDateTime(periodStatus.locked_at) }} boi {{ periodStatus.locked_by_name || 'He thong' }}.
-              Dang dung {{ formatNumber(periodStatus.snapshot_count) }} ban ghi snapshot.
+              Snapshot được khóa lúc {{ formatDateTime(periodStatus.locked_at) }} bởi {{ periodStatus.locked_by_name || 'Hệ thống' }}.
+              Đang dùng {{ formatNumber(periodStatus.snapshot_count) }} bản ghi snapshot.
             </template>
             <template v-else>
-              Ky luong chua khoa. So lieu dang duoc tinh dong theo cham cong va dieu chinh hien tai.
+              Kỳ lương chưa khóa. Số liệu đang được tính dòng theo chấm công và điều chỉnh hiện tại.
             </template>
           </div>
         </div>
 
         <div v-if="false" class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <div class="font-semibold">Ky luong da duoc chot</div>
+          <div class="font-semibold">Kỳ lương đã được chốt</div>
           <div class="mt-1">
-            Snapshot duoc khoa luc {{ formatDateTime(periodStatus.locked_at) }} bởi {{ periodStatus.locked_by_name || 'He thong' }}.
-            Dang dung {{ formatNumber(periodStatus.snapshot_count) }} ban ghi snapshot.
+            Snapshot được khóa lúc {{ formatDateTime(periodStatus.locked_at) }} bởi {{ periodStatus.locked_by_name || 'Hệ thống' }}.
+            Đang dùng {{ formatNumber(periodStatus.snapshot_count) }} bản ghi snapshot.
           </div>
         </div>
 
@@ -44,44 +44,44 @@
           <div class="xl:col-span-3">
             <InputDate
               v-model="filterForm.period"
-              label="Ky luong"
-              placeholder="Chon thang nam"
+              label="Kỳ lương"
+              placeholder="Chọn tháng năm"
               :clearable="false"
               :config="periodPickerConfig"
             />
           </div>
 
           <label class="block xl:col-span-5">
-            <span class="mb-2 block text-sm font-medium text-gray-700">Tim nhan su</span>
+            <span class="mb-2 block text-sm font-medium text-gray-700">Tìm nhân sự</span>
             <input
               v-model="filterForm.keyword"
               type="text"
               class="h-11 w-full rounded-xl border border-gray-300 px-4 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              placeholder="VD: EMP-001, Nguyen Van A, Ke toan"
+              placeholder="VD: EMP-001, Nguyễn Văn A, Kế toán"
               @keydown.enter.prevent="applyFilters"
             >
           </label>
 
           <label class="block xl:col-span-2">
-            <span class="mb-2 block text-sm font-medium text-gray-700">Phong ban</span>
+            <span class="mb-2 block text-sm font-medium text-gray-700">Phòng ban</span>
             <select
               v-model="filterForm.department_id"
               class="h-11 w-full rounded-xl border border-gray-300 bg-white px-4 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               @change="applyFilters"
             >
-              <option value="">Tat ca</option>
+              <option value="">Tất cả</option>
               <option v-for="item in departments" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
             </select>
           </label>
 
           <label class="block xl:col-span-2">
-            <span class="mb-2 block text-sm font-medium text-gray-700">Chuc vu</span>
+            <span class="mb-2 block text-sm font-medium text-gray-700">Chức vụ</span>
             <select
               v-model="filterForm.position_id"
               class="h-11 w-full rounded-xl border border-gray-300 bg-white px-4 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               @change="applyFilters"
             >
-              <option value="">Tat ca</option>
+              <option value="">Tất cả</option>
               <option v-for="item in positions" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
             </select>
           </label>
@@ -93,28 +93,28 @@
             class="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
             @click="applyFilters"
           >
-            Ap dung
+            Áp dụng
           </button>
           <button
             type="button"
             class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
             @click="jumpToCurrentPeriod"
           >
-            Thang nay
+            Tháng này
           </button>
           <button
             type="button"
             class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
             @click="resetFilters"
           >
-            Dat lai
+            Đặt lại
           </button>
           <button
             type="button"
             class="rounded-xl border border-emerald-300 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
             @click="exportExcel"
           >
-            Xuat Excel
+            Xuất Excel
           </button>
           <button
             v-if="permissions.can_manage_payroll && !periodStatus?.is_locked"
@@ -122,7 +122,7 @@
             class="rounded-xl border border-amber-300 px-4 py-2.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-50"
             @click="lockPeriod"
           >
-            Chot ky luong
+            Chốt kỳ lương
           </button>
           <button
             v-if="permissions.can_manage_payroll && periodStatus?.is_locked"
@@ -130,7 +130,7 @@
             class="rounded-xl border border-rose-300 px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
             @click="unlockPeriod"
           >
-            Mo khoa ky luong
+            Mở khóa kỳ lương
           </button>
           <button
             v-if="permissions.can_manage_payroll"
@@ -138,7 +138,7 @@
             class="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
             @click="recalculatePeriod"
           >
-            Tinh lai luong
+            Tính lại lương
           </button>
         </div>
       </section>
@@ -149,120 +149,120 @@
       >
         <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <div class="text-sm font-semibold text-amber-900">Canh bao du lieu chua hoan tat</div>
+            <div class="text-sm font-semibold text-amber-900">Cảnh báo dữ liệu chưa hoàn tất</div>
             <div class="mt-1 text-sm text-amber-800">
-              Co {{ formatNumber(summary.warning_employee_count) }} nhan su dang co canh bao, tong {{ formatNumber(summary.total_warning_count) }} muc can kiem tra.
+              Có {{ formatNumber(summary.warning_employee_count) }} nhân sự đang có cảnh báo, tổng {{ formatNumber(summary.total_warning_count) }} mục cần kiểm tra.
             </div>
           </div>
           <div class="text-xs font-semibold uppercase tracking-wide text-amber-700">
-            Kiem tra cham cong, duyet cong va thong tin luong
+            Kiểm tra chấm công, duyệt công và thông tin lương
           </div>
         </div>
       </section>
 
       <section class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard label="Nhan su trong ky" :value="formatNumber(summary.employee_count)" />
-        <SummaryCard label="Thu nhap phat sinh" :value="formatCurrency(summary.total_gross_amount)" />
-        <SummaryCard label="Khau tru thieu cong" :value="formatCurrency(summary.total_attendance_deduction_amount)" tone="red" />
-        <SummaryCard label="So du sau doi tru" :value="formatCurrency(summary.total_net_amount)" tone="green" />
+        <SummaryCard label="Nhân sự trong kỳ" :value="formatNumber(summary.employee_count)" />
+        <SummaryCard label="Thu nhập phát sinh" :value="formatCurrency(summary.total_gross_amount)" />
+        <SummaryCard label="Khấu trừ thiếu công" :value="formatCurrency(summary.total_attendance_deduction_amount)" tone="red" />
+        <SummaryCard label="Số dư sau đối trừ" :value="formatCurrency(summary.total_net_amount)" tone="green" />
       </section>
 
       <section class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 shadow-theme-sm">
-        Thu nhap theo cong la tien cua cong da lam va da duyet. "Khau tru thieu cong" la phan thu nhap khong duoc huong do chua du cong chuan trong ky dang tinh.
+        Thu nhập theo công là tiền của công đã làm và đã duyệt. "Khấu trừ thiếu công" là phần thu nhập không được hưởng do chưa đủ công chuẩn trong kỳ đang tính.
       </section>
 
       <section class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
-        <BreakdownItem label="Tong luong co ban" :value="formatCurrency(summary.total_base_salary)" />
-        <BreakdownItem label="Tong phu cap" :value="formatCurrency(summary.total_allowance_amount)" />
-        <BreakdownItem label="Thu nhap theo cong" :value="formatCurrency(summary.total_base_salary_amount)" />
-        <BreakdownItem label="Tien OT" :value="formatCurrency(summary.total_overtime_amount)" />
-        <BreakdownItem label="Tien cho duyet" :value="formatCurrency(summary.total_pending_amount)" />
-        <BreakdownItem label="Khau tru theo cong tam tinh" :value="formatCurrency(summary.total_attendance_deduction_amount)" />
-        <BreakdownItem label="Khau tru khac tam tinh" :value="formatCurrency(summary.total_manual_deduction_amount)" />
-        <BreakdownItem label="Tong khau tru tam tinh" :value="formatCurrency(summary.total_deduction_amount)" />
+        <BreakdownItem label="Tổng lương cơ bản" :value="formatCurrency(summary.total_base_salary)" />
+        <BreakdownItem label="Tổng phụ cấp" :value="formatCurrency(summary.total_allowance_amount)" />
+        <BreakdownItem label="Thu nhập theo công" :value="formatCurrency(summary.total_base_salary_amount)" />
+        <BreakdownItem label="Tiền OT" :value="formatCurrency(summary.total_overtime_amount)" />
+        <BreakdownItem label="Tiền chờ duyệt" :value="formatCurrency(summary.total_pending_amount)" />
+        <BreakdownItem label="Khấu trừ theo công tạm tính" :value="formatCurrency(summary.total_attendance_deduction_amount)" />
+        <BreakdownItem label="Khấu trừ khác tạm tính" :value="formatCurrency(summary.total_manual_deduction_amount)" />
+        <BreakdownItem label="Tổng khấu trừ tạm tính" :value="formatCurrency(summary.total_deduction_amount)" />
       </section>
 
       <section class="rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
         <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <h3 class="text-lg font-semibold text-gray-900">Danh sach luong nhan su</h3>
-            <p class="mt-1 text-sm text-gray-500">Bam vao cot de sap xep. Chon chi tiet de xem bang luong tung nhan su.</p>
+            <h3 class="text-lg font-semibold text-gray-900">Danh sách lương nhân sự</h3>
+            <p class="mt-1 text-sm text-gray-500">Bấm vào cột để sắp xếp. Chọn chi tiết để xem bảng lương từng nhân sự.</p>
           </div>
-          <div class="text-sm text-gray-500">Tong dong: {{ formatNumber(rows.total) }}</div>
+          <div class="text-sm text-gray-500">Tổng dòng: {{ formatNumber(rows.total) }}</div>
         </div>
 
         <div class="mt-4 overflow-auto">
           <table class="min-w-full text-sm">
             <thead>
               <tr class="text-left text-gray-600">
-                <th class="p-2">Nhan su</th>
+                <th class="p-2">Nhân sự</th>
                 <th class="p-2">
                   <button type="button" class="inline-flex items-center gap-1 font-semibold" @click="toggleSort('department')">
-                    Phong ban
+                    Phòng ban
                     <span>{{ sortIndicator('department') }}</span>
                   </button>
                 </th>
                 <th class="p-2">
                   <button type="button" class="inline-flex items-center gap-1 font-semibold" @click="toggleSort('base_salary')">
-                    Luong co ban
+                    Lương cơ bản
                     <span>{{ sortIndicator('base_salary') }}</span>
                   </button>
                 </th>
                 <th class="p-2">
                   <button type="button" class="inline-flex items-center gap-1 font-semibold" @click="toggleSort('approved_work_units')">
-                    Cong duyet
+                    Công duyệt
                     <span>{{ sortIndicator('approved_work_units') }}</span>
                   </button>
                 </th>
                 <th class="p-2">
                   <button type="button" class="inline-flex items-center gap-1 font-semibold" @click="toggleSort('approved_overtime_minutes')">
-                    OT duyet
+                    OT duyệt
                     <span>{{ sortIndicator('approved_overtime_minutes') }}</span>
                   </button>
                 </th>
                 <th class="p-2">
                   <button type="button" class="inline-flex items-center gap-1 font-semibold" @click="toggleSort('overtime_amount')">
-                    Tien OT
+                    Tiền OT
                     <span>{{ sortIndicator('overtime_amount') }}</span>
                   </button>
                 </th>
                 <th class="p-2">
                   <button type="button" class="inline-flex items-center gap-1 font-semibold" @click="toggleSort('allowance_amount')">
-                    Phu cap
+                    Phụ cấp
                     <span>{{ sortIndicator('allowance_amount') }}</span>
                   </button>
                 </th>
                 <th class="p-2">
                   <button type="button" class="inline-flex items-center gap-1 font-semibold" @click="toggleSort('pending_amount')">
-                    Cho duyet
+                    Chờ duyệt
                     <span>{{ sortIndicator('pending_amount') }}</span>
                   </button>
                 </th>
                 <th class="p-2">
                   <button type="button" class="inline-flex items-center gap-1 font-semibold" @click="toggleSort('attendance_deduction_amount')">
-                    Khau tru thieu cong
+                    Khấu trừ thiếu công
                     <span>{{ sortIndicator('attendance_deduction_amount') }}</span>
                   </button>
                 </th>
                 <th class="p-2">
                   <button type="button" class="inline-flex items-center gap-1 font-semibold" @click="toggleSort('manual_deduction_amount')">
-                    Tru khac
+                    Trừ khác
                     <span>{{ sortIndicator('manual_deduction_amount') }}</span>
                   </button>
                 </th>
                 <th class="p-2">
                   <button type="button" class="inline-flex items-center gap-1 font-semibold" @click="toggleSort('warning_count')">
-                    Canh bao
+                    Cảnh báo
                     <span>{{ sortIndicator('warning_count') }}</span>
                   </button>
                 </th>
                 <th class="p-2">
                   <button type="button" class="inline-flex items-center gap-1 font-semibold" @click="toggleSort('net_amount')">
-                    So du sau doi tru
+                    Số dư sau đối trừ
                     <span>{{ sortIndicator('net_amount') }}</span>
                   </button>
                 </th>
-                <th class="p-2 text-right">Tac vu</th>
+                <th class="p-2 text-right">Tác vụ</th>
               </tr>
             </thead>
             <tbody>
@@ -290,11 +290,11 @@
                 <td class="p-2">
                   <div v-if="item.summary.warning_count" class="space-y-1">
                     <div class="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
-                      {{ formatNumber(item.summary.warning_count) }} canh bao
+                      {{ formatNumber(item.summary.warning_count) }} cảnh báo
                     </div>
                     <div class="text-xs text-amber-700">{{ item.warnings[0] }}</div>
                   </div>
-                  <div v-else class="text-xs font-semibold text-emerald-700">Da day du</div>
+                  <div v-else class="text-xs font-semibold text-emerald-700">Đã đầy đủ</div>
                 </td>
                 <td class="p-2 font-semibold text-emerald-700">{{ formatCurrency(item.summary.net_amount, item.currency) }}</td>
                 <td class="p-2 text-right">
@@ -303,17 +303,17 @@
                     class="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-50"
                     @click="openDetail(item.employee_profile_id)"
                   >
-                    Chi tiet
+                    Chi tiết
                   </button>
                 </td>
               </tr>
               <tr v-if="!rows.data.length">
-                <td class="border-t p-4 text-center text-gray-500" colspan="13">Khong co du lieu luong cho bo loc hien tai.</td>
+                <td class="border-t p-4 text-center text-gray-500" colspan="13">Không có dữ liệu lương cho bộ lọc hiện tại.</td>
               </tr>
             </tbody>
             <tfoot v-if="rows.data.length">
               <tr class="border-t bg-gray-50 font-semibold text-gray-900">
-                <td class="p-2" colspan="2">Tong trang hien tai</td>
+                <td class="p-2" colspan="2">Tổng trang hiện tại</td>
                 <td class="p-2">{{ formatCurrency(sumByPage('base_salary')) }}</td>
                 <td class="p-2">{{ formatNumber(sumByPage('approved_work_units')) }}</td>
                 <td class="p-2">{{ formatMinutes(sumByPage('approved_overtime_minutes')) }}</td>
@@ -335,7 +335,7 @@
 
       <CustomModal
         v-if="selectedDetail"
-        title="Chi tiet bang luong nhan su"
+        title="Chi tiết bảng lương nhân sự"
         :custom_class="detailModalClasses"
         @close="closeDetail"
       >
@@ -343,29 +343,29 @@
           <div class="max-h-[80vh] overflow-y-auto px-6 pb-6">
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div class="rounded-xl border border-gray-200 p-4">
-                <div class="mb-3 text-sm font-semibold text-gray-900">Thong tin nhan su</div>
+                <div class="mb-3 text-sm font-semibold text-gray-900">Thông tin nhân sự</div>
                 <div class="space-y-2 text-sm text-gray-600">
-                  <div><span class="font-medium text-gray-900">Ma NV:</span> {{ selectedDetail.profile.employee_code || '-' }}</div>
-                  <div><span class="font-medium text-gray-900">Ho ten:</span> {{ selectedDetail.profile.name || '-' }}</div>
+                  <div><span class="font-medium text-gray-900">Mã NV:</span> {{ selectedDetail.profile.employee_code || '-' }}</div>
+                  <div><span class="font-medium text-gray-900">Họ tên:</span> {{ selectedDetail.profile.name || '-' }}</div>
                   <div><span class="font-medium text-gray-900">Email:</span> {{ selectedDetail.profile.email || '-' }}</div>
-                  <div><span class="font-medium text-gray-900">Phong ban:</span> {{ selectedDetail.profile.department || '-' }}</div>
-                  <div><span class="font-medium text-gray-900">Chuc vu:</span> {{ selectedDetail.profile.position || '-' }}</div>
-                  <div><span class="font-medium text-gray-900">Loai HD:</span> {{ employmentTypeLabel(selectedDetail.profile.employment_type) }}</div>
+                  <div><span class="font-medium text-gray-900">Phòng ban:</span> {{ selectedDetail.profile.department || '-' }}</div>
+                  <div><span class="font-medium text-gray-900">Chức vụ:</span> {{ selectedDetail.profile.position || '-' }}</div>
+                  <div><span class="font-medium text-gray-900">Loại HĐ:</span> {{ employmentTypeLabel(selectedDetail.profile.employment_type) }}</div>
                 </div>
               </div>
 
               <div class="rounded-xl border border-gray-200 p-4">
-                <div class="mb-3 text-sm font-semibold text-gray-900">Tong hop ky luong</div>
+                <div class="mb-3 text-sm font-semibold text-gray-900">Tổng hợp kỳ lương</div>
                 <div class="space-y-2 text-sm text-gray-600">
-                  <div><span class="font-medium text-gray-900">Luong co ban:</span> {{ formatCurrency(selectedDetail.summary.base_salary, selectedDetail.profile.currency) }}</div>
-                  <div><span class="font-medium text-gray-900">Thu nhap theo cong da duyet:</span> {{ formatCurrency(selectedDetail.summary.base_salary_amount, selectedDetail.profile.currency) }}</div>
-                  <div><span class="font-medium text-gray-900">Tien OT:</span> {{ formatCurrency(selectedDetail.summary.overtime_amount, selectedDetail.profile.currency) }}</div>
-                  <div><span class="font-medium text-gray-900">Phu cap:</span> {{ formatCurrency(selectedDetail.summary.allowance_amount, selectedDetail.profile.currency) }}</div>
-                  <div><span class="font-medium text-gray-900">Tong thu nhap phat sinh:</span> {{ formatCurrency(selectedDetail.summary.gross_amount, selectedDetail.profile.currency) }}</div>
-                  <div><span class="font-medium text-gray-900">Tien cho duyet:</span> {{ formatCurrency(selectedDetail.summary.pending_amount, selectedDetail.profile.currency) }}</div>
-                  <div><span class="font-medium text-gray-900">Khau tru do thieu cong:</span> {{ formatCurrency(selectedDetail.summary.attendance_deduction_amount, selectedDetail.profile.currency) }}</div>
-                  <div><span class="font-medium text-gray-900">Khau tru khac tam tinh:</span> {{ formatCurrency(selectedDetail.summary.manual_deduction_amount, selectedDetail.profile.currency) }}</div>
-                  <div><span class="font-medium text-gray-900">So du sau doi tru:</span> <span class="text-emerald-700">{{ formatCurrency(selectedDetail.summary.net_amount, selectedDetail.profile.currency) }}</span></div>
+                  <div><span class="font-medium text-gray-900">Lương cơ bản:</span> {{ formatCurrency(selectedDetail.summary.base_salary, selectedDetail.profile.currency) }}</div>
+                  <div><span class="font-medium text-gray-900">Thu nhập theo công đã duyệt:</span> {{ formatCurrency(selectedDetail.summary.base_salary_amount, selectedDetail.profile.currency) }}</div>
+                  <div><span class="font-medium text-gray-900">Tiền OT:</span> {{ formatCurrency(selectedDetail.summary.overtime_amount, selectedDetail.profile.currency) }}</div>
+                  <div><span class="font-medium text-gray-900">Phụ cấp:</span> {{ formatCurrency(selectedDetail.summary.allowance_amount, selectedDetail.profile.currency) }}</div>
+                  <div><span class="font-medium text-gray-900">Tổng thu nhập phát sinh:</span> {{ formatCurrency(selectedDetail.summary.gross_amount, selectedDetail.profile.currency) }}</div>
+                  <div><span class="font-medium text-gray-900">Tiền chờ duyệt:</span> {{ formatCurrency(selectedDetail.summary.pending_amount, selectedDetail.profile.currency) }}</div>
+                  <div><span class="font-medium text-gray-900">Khấu trừ do thiếu công:</span> {{ formatCurrency(selectedDetail.summary.attendance_deduction_amount, selectedDetail.profile.currency) }}</div>
+                  <div><span class="font-medium text-gray-900">Khấu trừ khác tạm tính:</span> {{ formatCurrency(selectedDetail.summary.manual_deduction_amount, selectedDetail.profile.currency) }}</div>
+                  <div><span class="font-medium text-gray-900">Số dư sau đối trừ:</span> <span class="text-emerald-700">{{ formatCurrency(selectedDetail.summary.net_amount, selectedDetail.profile.currency) }}</span></div>
                 </div>
               </div>
             </div>
@@ -374,7 +374,7 @@
               v-if="selectedDetail.summary.warnings?.length"
               class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4"
             >
-              <div class="mb-3 text-sm font-semibold text-amber-900">Canh bao du lieu</div>
+              <div class="mb-3 text-sm font-semibold text-amber-900">Cảnh báo dữ liệu</div>
               <ul class="space-y-2 text-sm text-amber-800">
                 <li v-for="warning in selectedDetail.summary.warnings" :key="warning">{{ warning }}</li>
               </ul>
@@ -383,8 +383,8 @@
             <div class="mt-4 rounded-xl border border-gray-200 p-4">
               <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
-                  <div class="text-sm font-semibold text-gray-900">Phu cap va khau tru</div>
-                  <div class="mt-1 text-xs text-gray-500">Quan ly theo tung nhan su, tung ky luong.</div>
+                  <div class="text-sm font-semibold text-gray-900">Phụ cấp và khấu trừ</div>
+                  <div class="mt-1 text-xs text-gray-500">Quản lý theo từng nhân sự, từng kỳ lương.</div>
                 </div>
               </div>
 
@@ -392,18 +392,18 @@
                 v-if="periodStatus?.is_locked"
                 class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
               >
-                Ky luong da khoa snapshot. Muon sua phu cap hoac khau tru, hay mo khoa ky luong truoc.
+                Kỳ lương đã khóa snapshot. Muốn sửa phụ cấp hoặc khấu trừ, hãy mở khóa kỳ lương trước.
               </div>
 
               <div class="mt-4 overflow-auto">
                 <table class="min-w-full text-sm">
                   <thead>
                     <tr class="text-left text-gray-600">
-                      <th class="p-2">Loai</th>
-                      <th class="p-2">Noi dung</th>
-                      <th class="p-2">So tien</th>
-                      <th class="p-2">Ghi chu</th>
-                      <th v-if="permissions.can_manage_payroll && !periodStatus?.is_locked" class="p-2 text-right">Tac vu</th>
+                      <th class="p-2">Loại</th>
+                      <th class="p-2">Nội dung</th>
+                      <th class="p-2">Số tiền</th>
+                      <th class="p-2">Ghi chú</th>
+                      <th v-if="permissions.can_manage_payroll && !periodStatus?.is_locked" class="p-2 text-right">Tác vụ</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -413,7 +413,7 @@
                           class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
                           :class="item.type === 'allowance' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'"
                         >
-                          {{ item.type === 'allowance' ? 'Phu cap' : 'Khau tru' }}
+                          {{ item.type === 'allowance' ? 'Phụ cấp' : 'Khấu trừ' }}
                         </span>
                       </td>
                       <td class="p-2 font-medium text-gray-900">{{ item.label }}</td>
@@ -425,13 +425,13 @@
                           class="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50"
                           @click="removeAdjustment(item)"
                         >
-                          Xoa
+                          Xóa
                         </button>
                       </td>
                     </tr>
                     <tr v-if="!selectedDetail.adjustments.length">
                       <td class="border-t p-4 text-center text-gray-500" :colspan="permissions.can_manage_payroll && !periodStatus?.is_locked ? 5 : 4">
-                        Chua co phu cap/khau tru rieng trong ky.
+                        Chưa có phụ cấp/khấu trừ riêng trong kỳ.
                       </td>
                     </tr>
                   </tbody>
@@ -440,23 +440,23 @@
 
               <div v-if="permissions.can_manage_payroll && !periodStatus?.is_locked" class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-12">
                 <label class="block md:col-span-2">
-                  <span class="mb-2 block text-sm font-medium text-gray-700">Loai</span>
+                  <span class="mb-2 block text-sm font-medium text-gray-700">Loại</span>
                   <select v-model="adjustmentForm.type" class="h-11 w-full rounded-xl border border-gray-300 bg-white px-4 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
-                    <option value="allowance">Phu cap</option>
-                    <option value="deduction">Khau tru</option>
+                    <option value="allowance">Phụ cấp</option>
+                    <option value="deduction">Khấu trừ</option>
                   </select>
                 </label>
                 <label class="block md:col-span-4">
-                  <span class="mb-2 block text-sm font-medium text-gray-700">Noi dung</span>
-                  <input v-model="adjustmentForm.label" type="text" class="h-11 w-full rounded-xl border border-gray-300 px-4 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="VD: Phu cap xang xe" />
+                  <span class="mb-2 block text-sm font-medium text-gray-700">Nội dung</span>
+                  <input v-model="adjustmentForm.label" type="text" class="h-11 w-full rounded-xl border border-gray-300 px-4 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="VD: Phụ cấp xăng xe" />
                 </label>
                 <label class="block md:col-span-2">
-                  <span class="mb-2 block text-sm font-medium text-gray-700">So tien</span>
+                  <span class="mb-2 block text-sm font-medium text-gray-700">Số tiền</span>
                   <input v-model="adjustmentForm.amount" type="number" min="0" step="1000" class="h-11 w-full rounded-xl border border-gray-300 px-4 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="0" />
                 </label>
                 <label class="block md:col-span-4">
-                  <span class="mb-2 block text-sm font-medium text-gray-700">Ghi chu</span>
-                  <input v-model="adjustmentForm.note" type="text" class="h-11 w-full rounded-xl border border-gray-300 px-4 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Mo ta them neu can" />
+                  <span class="mb-2 block text-sm font-medium text-gray-700">Ghi chú</span>
+                  <input v-model="adjustmentForm.note" type="text" class="h-11 w-full rounded-xl border border-gray-300 px-4 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Mô tả thêm nếu cần" />
                 </label>
               </div>
 
@@ -466,26 +466,26 @@
                   class="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
                   @click="saveAdjustment"
                 >
-                  Luu phu cap / khau tru
+                  Lưu phụ cấp / khấu trừ
                 </button>
               </div>
             </div>
 
             <div class="mt-4 rounded-xl border border-gray-200 p-4">
-              <div class="mb-3 text-sm font-semibold text-gray-900">Cong tinh luong</div>
+              <div class="mb-3 text-sm font-semibold text-gray-900">Công tính lương</div>
               <div class="overflow-auto">
                 <table class="min-w-full text-sm">
                   <thead>
                     <tr class="text-left text-gray-600">
-                      <th class="p-2">Ngay</th>
+                      <th class="p-2">Ngày</th>
                       <th class="p-2">Check in</th>
                       <th class="p-2">Check out</th>
                       <th class="p-2">Ca</th>
-                      <th class="p-2">Cong</th>
-                      <th class="p-2">Tien cong</th>
+                      <th class="p-2">Công</th>
+                      <th class="p-2">Tiền công</th>
                       <th class="p-2">OT</th>
-                      <th class="p-2">Tien OT</th>
-                      <th class="p-2">Trang thai</th>
+                      <th class="p-2">Tiền OT</th>
+                      <th class="p-2">Trạng thái</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -504,7 +504,7 @@
                       <td class="p-2">{{ approvalLabel(item.approval_status) }}</td>
                     </tr>
                     <tr v-if="!selectedDetail.records.length">
-                      <td class="border-t p-4 text-center text-gray-500" colspan="9">Khong co du lieu chi tiet trong ky.</td>
+                      <td class="border-t p-4 text-center text-gray-500" colspan="9">Không có dữ liệu chi tiết trong kỳ.</td>
                     </tr>
                   </tbody>
                 </table>
@@ -588,7 +588,7 @@ BreakdownItem.props = ['label', 'value']
 
 const currentPeriodLabel = computed(() => {
   const date = parsePeriodValue(filterForm.period)
-  if (!date) return `Thang ${filterForm.month}/${filterForm.year}`
+  if (!date) return `Tháng ${filterForm.month}/${filterForm.year}`
 
   return new Intl.DateTimeFormat('vi-VN', {
     month: 'long',
@@ -771,8 +771,8 @@ async function unlockPeriod() {
 
 async function recalculatePeriod() {
   const message = periodStatusLocked()
-    ? `Tinh lai snapshot ky luong thang ${String(filterForm.month).padStart(2, '0')}/${filterForm.year}?`
-    : `Ky luong ${String(filterForm.month).padStart(2, '0')}/${filterForm.year} chua khoa. Ban van muon tai lai man hinh hien tai?`
+    ? `Tính lại snapshot kỳ lương tháng ${String(filterForm.month).padStart(2, '0')}/${filterForm.year}?`
+    : `Kỳ lương ${String(filterForm.month).padStart(2, '0')}/${filterForm.year} chưa khóa. Bạn vẫn muốn tải lại màn hình hiện tại?`
 
   const confirmed = await openConfirm({
     title: 'Xác nhận tính lại',
@@ -887,18 +887,18 @@ function periodStatusLocked() {
 
 function employmentTypeLabel(type) {
   return {
-    official: 'Chinh thuc',
-    probation: 'Thu viec',
-    intern: 'Thuc tap',
-    contractor: 'Hop dong',
+    official: 'Chính thức',
+    probation: 'Thử việc',
+    intern: 'Thực tập',
+    contractor: 'Hợp đồng',
   }[type] || type || '-'
 }
 
 function approvalLabel(status) {
   return {
-    approved: 'Da duyet',
-    rejected: 'Tu choi',
-    pending: 'Cho duyet',
+    approved: 'Đã duyệt',
+    rejected: 'Từ chối',
+    pending: 'Chờ duyệt',
   }[status] || status || '-'
 }
 
@@ -919,11 +919,11 @@ function formatNumber(value) {
 
 function formatMinutes(minutes) {
   const value = Number(minutes || 0)
-  if (value <= 0) return '0 phut'
+  if (value <= 0) return '0 phút'
   const hours = Math.floor(value / 60)
   const rest = value % 60
-  if (!hours) return `${rest} phut`
-  return rest ? `${hours} gio ${rest} phut` : `${hours} gio`
+  if (!hours) return `${rest} phút`
+  return rest ? `${hours} giờ ${rest} phút` : `${hours} giờ`
 }
 
 function formatDate(value) {

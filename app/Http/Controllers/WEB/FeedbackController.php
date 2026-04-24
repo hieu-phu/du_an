@@ -127,13 +127,13 @@ class FeedbackController extends Controller
             ]),
             'receiverOptions' => $this->feedbackEscalationService->receiverOptions($user),
             'statusOptions' => [
-                ['value' => 'sent', 'label' => 'Da gui'],
-                ['value' => 'read', 'label' => 'Da doc'],
-                ['value' => 'archived', 'label' => 'Da luu'],
+                ['value' => 'sent', 'label' => 'Đã gửi'],
+                ['value' => 'read', 'label' => 'Đã đọc'],
+                ['value' => 'archived', 'label' => 'Đã lưu'],
             ],
             'processingOptions' => [
-                ['value' => 'unprocessed', 'label' => 'Chua duoc phan hoi'],
-                ['value' => 'processed', 'label' => 'Da duoc phan hoi'],
+                ['value' => 'unprocessed', 'label' => 'Chưa được phản hồi'],
+                ['value' => 'processed', 'label' => 'Đã được phản hồi'],
             ],
             'summary' => [
                 'sent_total' => $sent->count(),
@@ -165,7 +165,7 @@ class FeedbackController extends Controller
 
         if (!$this->feedbackEscalationService->canSendToPosition($user, $receiverPosition)) {
             throw ValidationException::withMessages([
-                'receiver_position_id' => 'Chi duoc gui phan hoi den cap bac cao hon va dang co nguoi xu ly.',
+                'receiver_position_id' => 'Chỉ được gửi phản hồi đến cấp bậc cao hơn và đang có người xử lý.',
             ]);
         }
 
@@ -188,8 +188,8 @@ class FeedbackController extends Controller
         if (!empty($recipientIds)) {
             $this->notificationService->createForUsers(
                 $recipientIds,
-                'Phan hoi noi bo moi',
-                "{$user->name} vua gui phan hoi: {$feedback->subject}",
+                'Phản hồi nội bộ mới',
+                "{$user->name} vừa gửi phản hồi: {$feedback->subject}",
                 [
                     'feedback_message_id' => $feedback->id,
                     'action_url' => '/feedbacks',
@@ -207,13 +207,13 @@ class FeedbackController extends Controller
             $this->sendFeedbackMail(
                 actorId: $user->id,
                 toEmail: (string) $recipient->email,
-                subject: "[Feedback] Phan hoi moi: {$feedback->subject}",
+                subject: "[Feedback] Phản hồi mới: {$feedback->subject}",
                 bodySummary: "feedback_message_id={$feedback->id}; from={$user->email}; to_position={$receiverPosition->name}; type=new_feedback",
-                body: "Ban co phan hoi moi tu {$user->name} ({$user->email}).\nTieu de: {$feedback->subject}\nNoi dung: {$feedback->message}\nVui long vao he thong de xu ly."
+                body: "Bạn có phản hồi mới từ {$user->name} ({$user->email}).\nTiêu đề: {$feedback->subject}\nNội dung: {$feedback->message}\nVui lòng vào hệ thống để xử lý."
             );
         }
 
-        return redirect()->back()->with('success', 'Da gui phan hoi thanh cong.');
+        return redirect()->back()->with('success', 'Đã gửi phản hồi thành công.');
     }
 
     public function reply(Request $request, FeedbackMessage $feedbackMessage)
@@ -271,7 +271,7 @@ class FeedbackController extends Controller
             $this->notifyFeedbackSender($feedbackMessage, $user, $validated['reply_message']);
         }
 
-        return redirect()->back()->with('success', 'Da tra loi phan hoi.');
+        return redirect()->back()->with('success', 'Đã trả lời phản hồi.');
     }
 
     public function markRead(Request $request, FeedbackMessage $feedbackMessage)
@@ -471,24 +471,24 @@ class FeedbackController extends Controller
             'receiver_group_label' => $item->receiverPosition?->name ?: match ($item->receiver_group) {
                 'admin' => 'Admin',
                 'hr' => 'HR',
-                'specific_user' => 'Nguoi cu the',
+                'specific_user' => 'Người cụ thể',
                 default => '-',
             },
             'status' => $item->status,
             'status_label' => match ($item->status) {
-                'sent' => 'Da gui',
-                'read' => 'Da doc',
-                'archived' => 'Da luu',
+                'sent' => 'Đã gửi',
+                'read' => 'Đã đọc',
+                'archived' => 'Đã lưu',
                 default => '-',
             },
             'processing_state' => $hasRecipientReply ? 'processed' : 'unprocessed',
-            'processing_state_label' => $hasRecipientReply ? 'Da duoc phan hoi' : 'Chua duoc phan hoi',
+            'processing_state_label' => $hasRecipientReply ? 'Đã được phản hồi' : 'Chưa được phản hồi',
             'action_state' => $actionState,
             'action_state_label' => match ($actionState) {
-                'waiting_handler' => 'Cho xu ly',
-                'waiting_sender' => 'Cho phan hoi tiep',
-                'resolved' => 'Da giai quyet',
-                'closed' => 'Da dong',
+                'waiting_handler' => 'Chờ xử lý',
+                'waiting_sender' => 'Chờ phản hồi tiếp',
+                'resolved' => 'Đã giải quyết',
+                'closed' => 'Đã đóng',
                 default => '-',
             },
             'waiting_for' => $waitingFor,
@@ -612,8 +612,8 @@ class FeedbackController extends Controller
     {
         $this->notificationService->create(
             $feedbackMessage->sender_id,
-            'Phan hoi da duoc tra loi',
-            "Yeu cau '{$feedbackMessage->subject}' da duoc {$actor->name} phan hoi.",
+            'Phản hồi đã được trả lời',
+            "Yêu cầu '{$feedbackMessage->subject}' đã được {$actor->name} phản hồi.",
             [
                 'feedback_message_id' => $feedbackMessage->id,
                 'action_url' => '/feedbacks',
@@ -631,9 +631,9 @@ class FeedbackController extends Controller
             $this->sendFeedbackMail(
                 actorId: $actor->id,
                 toEmail: (string) $sender->email,
-                subject: "[Feedback] Yeu cau da duoc tra loi: {$feedbackMessage->subject}",
+                subject: "[Feedback] Yêu cầu đã được trả lời: {$feedbackMessage->subject}",
                 bodySummary: "feedback_message_id={$feedbackMessage->id}; sender_id={$sender->id}; type=reply",
-                body: "{$actor->name} da tra loi phan hoi cua ban.\nTieu de: {$feedbackMessage->subject}\nNoi dung tra loi: {$replyMessage}\nVui long vao he thong de xem chi tiet."
+                body: "{$actor->name} đã trả lời phản hồi của bạn.\nTiêu đề: {$feedbackMessage->subject}\nNội dung trả lời: {$replyMessage}\nVui lòng vào hệ thống để xem chi tiết."
             );
         }
     }
@@ -661,8 +661,8 @@ class FeedbackController extends Controller
         if ($recipientIds->isNotEmpty()) {
             $this->notificationService->createForUsers(
                 $recipientIds->all(),
-                'Phan hoi noi bo co tin nhan moi',
-                "{$actor->name} vua phan hoi them: {$feedbackMessage->subject}",
+                'Phản hồi nội bộ có tin nhắn mới',
+                "{$actor->name} vừa phản hồi thêm: {$feedbackMessage->subject}",
                 [
                     'feedback_message_id' => $feedbackMessage->id,
                     'action_url' => '/feedbacks',
@@ -684,10 +684,11 @@ class FeedbackController extends Controller
             $this->sendFeedbackMail(
                 actorId: $actor->id,
                 toEmail: (string) $recipient->email,
-                subject: "[Feedback] Co tin nhan moi: {$feedbackMessage->subject}",
+                subject: "[Feedback] Có tin nhắn mới: {$feedbackMessage->subject}",
                 bodySummary: "feedback_message_id={$feedbackMessage->id}; actor_id={$actor->id}; type=thread_reply",
-                body: "{$actor->name} vua gui them mot tin nhan trong feedback.\nTieu de: {$feedbackMessage->subject}\nNoi dung: {$replyMessage}\nVui long vao he thong de xem va xu ly."
+                body: "{$actor->name} vừa gửi thêm một tin nhắn trong feedback.\nTiêu đề: {$feedbackMessage->subject}\nNội dung: {$replyMessage}\nVui lòng vào hệ thống để xem và xử lý."
             );
         }
     }
 }
+

@@ -23,23 +23,23 @@ const page = usePage()
 
 const alertMap = {
   success: {
-    title: 'Thanh cong',
+    title: 'Thành công',
     icon: '✓',
     className: 'border-emerald-200 bg-emerald-50 text-emerald-800',
   },
   error: {
-    title: 'Co loi',
-    icon: '!',
+    title: 'Có lỗi',
+    icon: '✕',
     className: 'border-red-200 bg-red-50 text-red-800',
   },
   warning: {
-    title: 'Luu y',
-    icon: '!',
+    title: 'Lưu ý',
+    icon: '⚠',
     className: 'border-amber-200 bg-amber-50 text-amber-800',
   },
   info: {
-    title: 'Thong tin',
-    icon: 'i',
+    title: 'Thông tin',
+    icon: 'ℹ',
     className: 'border-blue-200 bg-blue-50 text-blue-800',
   },
 }
@@ -56,3 +56,4 @@ const alerts = computed(() => {
     .filter((item) => item.message)
 })
 </script>
+

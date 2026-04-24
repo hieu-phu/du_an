@@ -174,7 +174,7 @@ class FeedbackEscalationService
                 toEmail: (string) $recipient->email,
                 subject: "[Feedback] Escalated: {$feedback->subject}",
                 bodySummary: "feedback_message_id={$feedback->id}; from={$sender->email}; to_position={$nextPosition->name}; type=feedback_escalation",
-                body: "Feedback cua {$sender->name} ({$sender->email}) da qua han xu ly va duoc chuyen len {$nextPosition->name}.\nTieu de: {$feedback->subject}\nNoi dung: {$feedback->message}\nVui long vao he thong de xu ly."
+                body: "Feedback của {$sender->name} ({$sender->email}) đã quá hạn xử lý và được chuyển lên {$nextPosition->name}.\nTiêu đề: {$feedback->subject}\nNội dung: {$feedback->message}\nVui lòng vào hệ thống để xử lý."
             );
         }
     }
@@ -267,3 +267,4 @@ class FeedbackEscalationService
         }
     }
 }
+

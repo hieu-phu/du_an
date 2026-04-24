@@ -37,14 +37,14 @@ class PasswordResetLinkController extends Controller
         $request->validate([
             'email' => ['required', 'email', 'exists:users,email'],
         ], [
-            'email.exists' => 'Email không tồn tại trong hệ thống.'
+            'email.exists' => 'Email không tá»“n táº¡i trong há»‡ thá»‘ng.'
         ]);
 
         $existingOtp = PasswordResetOtp::where('email', $request->email)->first();
         if ($existingOtp && $existingOtp->updated_at->addMinute()->isFuture()) {
             $secondsLeft = now()->diffInSeconds($existingOtp->updated_at->addMinute());
             return back()->withErrors([
-                'email' => "Vui lòng chờ {$secondsLeft} giây trước khi yêu cầu mã mới."
+                'email' => "Vui lòng chờ {$secondsLeft} giây trưá»›c khi yêu cáº§u mã má»›i."
             ]);
         }
 
@@ -72,8 +72,8 @@ class PasswordResetLinkController extends Controller
             'email' => $request->email,
             'status' => session('status'),
             'context' => 'password-reset',
-            'title' => 'Xac nhan ma OTP',
-            'description' => 'Chung toi da gui ma xac nhan 6 so den email',
+            'title' => 'Xác nhận ma OTP',
+            'description' => 'Chung toi da gui ma xác nhận 6 so den email',
             'submitRoute' => route('password.otp.verify'),
             'resendRoute' => route('password.email'),
             'changeRoute' => route('password.request'),
@@ -97,7 +97,7 @@ class PasswordResetLinkController extends Controller
             ->first();
 
         if (!$otpRecord) {
-            return back()->withErrors(['otp' => 'Mã xác nhận không chính xác hoặc đã hết hạn.']);
+            return back()->withErrors(['otp' => 'Mã xác nháº­n không chính xác hoáº·c Ä‘ã háº¿t háº¡n.']);
         }
 
         // Generate a temporary token to pass to the password reset page
@@ -118,3 +118,4 @@ class PasswordResetLinkController extends Controller
         ]);
     }
 }
+

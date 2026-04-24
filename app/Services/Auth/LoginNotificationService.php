@@ -20,8 +20,8 @@ class LoginNotificationService
 
     public function handleSuccessfulLogin(User $user, Request $request, string $loginMethod): void
     {
-        $ipAddress = $request->ip() ?? 'Khong xac dinh';
-        $userAgent = (string) ($request->userAgent() ?: 'Khong xac dinh');
+        $ipAddress = $request->ip() ?? 'Không xác định';
+        $userAgent = (string) ($request->userAgent() ?: 'Không xác định');
         $loggedInAt = now('Asia/Ho_Chi_Minh');
         $device = $this->auditTrailService->detectDevice($userAgent) ?? 'Unknown device';
         $browser = $this->auditTrailService->detectBrowser($userAgent) ?? 'Unknown browser';
@@ -104,3 +104,4 @@ class LoginNotificationService
         }
     }
 }
+

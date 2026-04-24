@@ -1,24 +1,24 @@
 <template>
-  <Head title="Nghi phep cua toi" />
+  <Head title="Nghỉ phép của tôi" />
 
   <AdminLayout>
-    <PageBreadcrumb title="Nghi phep cua toi" :items="[{ text: 'Cham cong', link: null }, { text: 'Nghi phep cua toi', link: null }]" />
+    <PageBreadcrumb title="Nghỉ phép của tôi" :items="[{ text: 'Chấm công', link: null }, { text: 'Nghỉ phép của tôi', link: null }]" />
 
     <section class="mb-6 rounded-[24px] border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
         <div>
-          <div class="text-sm font-semibold text-gray-900">Tong quan nghi phep</div>
+          <div class="text-sm font-semibold text-gray-900">Tổng quan nghỉ phép</div>
           <div class="mt-1 text-sm text-gray-500">
-            Theo doi quy phep, don nghi da gui va tac dong toi cong theo tung nam.
+            Theo dõi quỹ phép, đơn nghỉ đã gửi và tác động tới công theo từng năm.
           </div>
 
           <div class="mt-4 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-4">
-            <div class="text-xs font-semibold uppercase tracking-wide text-blue-700">So du hien tai</div>
+            <div class="text-xs font-semibold uppercase tracking-wide text-blue-700">Số dư hiện tại</div>
             <div class="mt-2 text-2xl font-semibold text-blue-950">{{ headlineText }}</div>
             <div class="mt-2 text-sm text-blue-900">
-              Cong thuc: <strong>{{ formatDays(summary.total_entitled) }}</strong> duoc huong
-              - <strong>{{ formatDays(summary.total_used) }}</strong> da dung
-              - <strong>{{ formatDays(summary.total_pending) }}</strong> dang cho duyet.
+              Công thức: <strong>{{ formatDays(summary.total_entitled) }}</strong> được hưởng
+              - <strong>{{ formatDays(summary.total_used) }}</strong> đã dùng
+              - <strong>{{ formatDays(summary.total_pending) }}</strong> đang chờ duyệt.
             </div>
             <div class="mt-3 flex flex-wrap gap-2">
               <span
@@ -34,45 +34,45 @@
         </div>
 
         <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-          <div class="text-sm font-semibold text-gray-900">Bo loc</div>
+          <div class="text-sm font-semibold text-gray-900">Bộ lọc</div>
           <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label class="mb-2 block text-sm font-medium text-gray-700">Nam</label>
+              <label class="mb-2 block text-sm font-medium text-gray-700">Năm</label>
               <select v-model="filterForm.year" class="form-input" @change="applyYearFilter">
                 <option v-for="year in year_options" :key="year" :value="year">{{ year }}</option>
               </select>
             </div>
 
             <div>
-              <label class="mb-2 block text-sm font-medium text-gray-700">Loai nghi</label>
+              <label class="mb-2 block text-sm font-medium text-gray-700">Loại nghỉ</label>
               <select v-model="filterForm.leave_type_name" class="form-input">
-                <option value="">Tat ca</option>
+                <option value="">Tất cả</option>
                 <option v-for="option in leaveTypeOptions" :key="option" :value="option">{{ option }}</option>
               </select>
             </div>
 
             <div>
-              <label class="mb-2 block text-sm font-medium text-gray-700">Trang thai don</label>
+              <label class="mb-2 block text-sm font-medium text-gray-700">Trạng thái đơn</label>
               <select v-model="filterForm.request_status" class="form-input">
-                <option value="">Tat ca</option>
+                <option value="">Tất cả</option>
                 <option v-for="option in requestStatusOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
               </select>
             </div>
           </div>
 
           <div class="mt-4">
-            <label class="mb-2 block text-sm font-medium text-gray-700">Tim nhanh</label>
+            <label class="mb-2 block text-sm font-medium text-gray-700">Tìm nhanh</label>
             <input
               v-model.trim="filterForm.keyword"
               class="form-input"
-              placeholder="Tim theo loai nghi, ly do, ghi chu, nguoi duyet..."
+              placeholder="Tìm theo loại nghỉ, lý do, ghi chú, người duyệt..."
               type="text"
             >
           </div>
 
           <div class="mt-4 flex flex-wrap gap-2">
             <button class="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50" type="button" @click="clearLocalFilters">
-              Xoa loc nang cao
+              Xóa lọc nâng cao
             </button>
           </div>
         </div>
@@ -89,9 +89,9 @@
 
     <section class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="mb-4">
-        <h3 class="text-lg font-semibold text-gray-900">So du theo loai nghi</h3>
+        <h3 class="text-lg font-semibold text-gray-900">Số dư theo loại nghỉ</h3>
         <p class="mt-1 text-sm text-gray-500">
-          Duoc huong = dau ky + cong them + dieu chinh. Con kha dung = duoc huong - da dung - dang cho duyet.
+          Được hưởng = đầu kỳ + cộng thêm + điều chỉnh. Còn khả dụng = được hưởng - đã dùng - đang chờ duyệt.
         </p>
       </div>
 
@@ -99,12 +99,12 @@
         <table class="min-w-full text-sm">
           <thead>
             <tr class="text-left text-gray-500">
-              <th class="p-2">Loai nghi</th>
-              <th class="p-2">Duoc huong</th>
-              <th class="p-2">Dieu chinh</th>
-              <th class="p-2">Da su dung</th>
-              <th class="p-2">Dang cho duyet</th>
-              <th class="p-2">Con kha dung</th>
+              <th class="p-2">Loại nghỉ</th>
+              <th class="p-2">Được hưởng</th>
+              <th class="p-2">Điều chỉnh</th>
+              <th class="p-2">Đã sử dụng</th>
+              <th class="p-2">Đang chờ duyệt</th>
+              <th class="p-2">Còn khả dụng</th>
             </tr>
           </thead>
           <tbody>
@@ -122,15 +122,15 @@
                   </span>
                 </div>
                 <div class="mt-1 text-xs text-gray-500">
-                  {{ item.leave_type_paid ? 'Co luong' : 'Khong luong' }}
-                  <span v-if="item.leave_type_deducts_balance"> | Tru quy phep</span>
-                  <span v-else> | Khong tru quy phep</span>
+                  {{ item.leave_type_paid ? 'Có lương' : 'Không lương' }}
+                  <span v-if="item.leave_type_deducts_balance"> | Trừ quỹ phép</span>
+                  <span v-else> | Không trừ quỹ phép</span>
                 </div>
               </td>
               <td class="p-2">
                 <div>{{ formatDays(item.total_entitled) }}</div>
                 <div class="text-xs text-gray-500">
-                  Dau ky {{ formatDays(item.opening_balance) }} + cong them {{ formatDays(item.accrued_days) }}
+                  Đầu kỳ {{ formatDays(item.opening_balance) }} + cộng thêm {{ formatDays(item.accrued_days) }}
                 </div>
               </td>
               <td class="p-2">{{ formatSignedDays(item.adjusted_days) }}</td>
@@ -146,15 +146,15 @@
       </div>
 
       <div v-else class="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-sm text-gray-500">
-        Khong co du lieu so du phu hop voi bo loc hien tai.
+        Không có dữ liệu số dư phù hợp với bộ lọc hiện tại.
       </div>
     </section>
 
     <section class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="mb-4">
-        <h3 class="text-lg font-semibold text-gray-900">Lich su don nghi phep</h3>
+        <h3 class="text-lg font-semibold text-gray-900">Lịch sử đơn nghỉ phép</h3>
         <p class="mt-1 text-sm text-gray-500">
-          Xem ro trang thai duyet, tac dong toi cong va cach he thong dang giu/tru quy phep cho tung don.
+          Xem rõ trạng thái duyệt, tác động tới công và cách hệ thống đang giữ/trừ quỹ phép cho từng đơn.
         </p>
       </div>
 
@@ -165,11 +165,11 @@
         paginate
         :default-per-page="10"
         :per-page-options="[10, 20, 50]"
-        empty-message="Khong co don nghi phep nao phu hop voi bo loc hien tai."
+        empty-message="Không có đơn nghỉ phép nào phù hợp với bộ lọc hiện tại."
       >
         <template #cell-leave_type_name="{ item }">
           <div class="font-medium text-gray-900">{{ item.leave_type_name || item.leave_type || '-' }}</div>
-          <div class="text-xs text-gray-500">{{ item.leave_type_paid ? 'Co luong' : 'Khong luong' }}</div>
+          <div class="text-xs text-gray-500">{{ item.leave_type_paid ? 'Có lương' : 'Không lương' }}</div>
         </template>
         <template #cell-period="{ item }">
           {{ requestPeriodLabel(item) }}
@@ -204,7 +204,7 @@
             target="_blank"
             rel="noreferrer"
           >
-            Xem tep
+            Xem tệp
           </a>
           <span v-else>-</span>
         </template>
@@ -242,10 +242,10 @@ const filterForm = reactive({
 })
 
 const requestStatusOptions = [
-  { value: 'pending', label: 'Cho duyet' },
-  { value: 'approved', label: 'Da duyet' },
-  { value: 'rejected', label: 'Tu choi' },
-  { value: 'cancelled', label: 'Da huy' },
+  { value: 'pending', label: 'Chờ duyệt' },
+  { value: 'approved', label: 'Đã duyệt' },
+  { value: 'rejected', label: 'Từ chối' },
+  { value: 'cancelled', label: 'Đã hủy' },
 ]
 
 const leaveTypeOptions = computed(() => {
@@ -271,7 +271,7 @@ const filteredBalances = computed(() => {
 
     return normalizeText([
       item.leave_type_name,
-      item.leave_type_paid ? 'co luong' : 'khong luong',
+      item.leave_type_paid ? 'có lương' : 'không lương',
     ].join(' ')).includes(normalizedKeyword.value)
   })
 })
@@ -331,31 +331,31 @@ const summary = computed(() => {
 
 const headlineText = computed(() => {
   if (!filteredBalances.value.length) {
-    return 'Chua co du lieu nghi phep trong scope hien tai'
+    return 'Chưa có dữ liệu nghỉ phép trong scope hiện tại'
   }
 
   if (summary.value.raw_available < 0) {
-    return `Ban dang vuot phep ${formatDays(Math.abs(summary.value.raw_available))}`
+    return `Bạn đang vượt phép ${formatDays(Math.abs(summary.value.raw_available))}`
   }
 
-  return `Ban con ${formatDays(summary.value.total_available)} phep (sau khi tru cac don dang cho)`
+  return `Bạn còn ${formatDays(summary.value.total_available)} phép (sau khi trừ các đơn đang chờ)`
 })
 
 const headlineBadges = computed(() => {
   const badges = []
 
   if (summary.value.raw_available < 0) {
-    badges.push({ label: 'Vuot phep', tone: 'danger' })
+    badges.push({ label: 'Vượt phép', tone: 'danger' })
   } else if (summary.value.total_available > 0 && summary.value.total_available <= LOW_BALANCE_THRESHOLD) {
-    badges.push({ label: 'Sap het phep', tone: 'warning' })
+    badges.push({ label: 'Sắp hết phép', tone: 'warning' })
   }
 
   if (summary.value.total_pending > 0) {
-    badges.push({ label: `Dang giu ${formatDays(summary.value.total_pending)}`, tone: 'info' })
+    badges.push({ label: `Đang giữ ${formatDays(summary.value.total_pending)}`, tone: 'info' })
   }
 
   if (!badges.length) {
-    badges.push({ label: 'Con du quy phep', tone: 'success' })
+    badges.push({ label: 'Còn dư quỹ phép', tone: 'success' })
   }
 
   return badges
@@ -363,47 +363,47 @@ const headlineBadges = computed(() => {
 
 const summaryCards = computed(() => [
   {
-    label: 'Duoc huong',
+    label: 'Được hưởng',
     value: formatDays(summary.value.total_entitled),
-    hint: `Dau ky ${formatDays(summary.value.total_opening)} + cong them ${formatDays(summary.value.total_accrued)} + dieu chinh ${formatSignedDays(summary.value.total_adjusted)}`,
+    hint: `Đầu kỳ ${formatDays(summary.value.total_opening)} + cộng thêm ${formatDays(summary.value.total_accrued)} + điều chỉnh ${formatSignedDays(summary.value.total_adjusted)}`,
   },
   {
-    label: 'Da su dung',
+    label: 'Đã sử dụng',
     value: formatDays(summary.value.total_used),
-    hint: 'Chi tinh cac don nghi da duoc duyet.',
+    hint: 'Chỉ tính các đơn nghỉ đã được duyệt.',
   },
   {
-    label: 'Dang cho duyet',
+    label: 'Đang chờ duyệt',
     value: formatDays(summary.value.total_pending),
-    hint: 'So ngay dang tam giu quy phep cho don pending.',
+    hint: 'Số ngày đang tạm giữ quỹ phép cho đơn pending.',
   },
   {
-    label: 'Con kha dung',
+    label: 'Còn khả dụng',
     value: formatDays(summary.value.total_available),
-    hint: `Duoc huong - da dung - cho duyet = ${formatDays(summary.value.total_available)}`,
+    hint: `Được hưởng - đã dùng - chờ duyệt = ${formatDays(summary.value.total_available)}`,
   },
 ])
 
 const requestColumns = [
-  { label: 'Loai nghi', key: 'leave_type_name' },
-  { label: 'Khoang nghi', key: 'period' },
-  { label: 'Thoi luong', key: 'leave_duration', align: 'text-center' },
-  { label: 'Trang thai', key: 'status_label', align: 'text-center' },
-  { label: 'Anh huong toi cong', key: 'attendance_impact' },
-  { label: 'Tac dong quy phep', key: 'balance_effect' },
-  { label: 'Gui luc', key: 'submitted_at' },
-  { label: 'Duyet luc', key: 'reviewed_at' },
-  { label: 'Nguoi duyet', key: 'reviewed_by_name' },
-  { label: 'Minh chung', key: 'attachment', align: 'text-center' },
-  { label: 'Ly do', key: 'reason' },
-  { label: 'Ghi chu duyet', key: 'review_note' },
+  { label: 'Loại nghỉ', key: 'leave_type_name' },
+  { label: 'Khoảng nghỉ', key: 'period' },
+  { label: 'Thời lượng', key: 'leave_duration', align: 'text-center' },
+  { label: 'Trạng thái', key: 'status_label', align: 'text-center' },
+  { label: 'Ảnh hưởng tới công', key: 'attendance_impact' },
+  { label: 'Tác động quỹ phép', key: 'balance_effect' },
+  { label: 'Gửi lúc', key: 'submitted_at' },
+  { label: 'Duyệt lúc', key: 'reviewed_at' },
+  { label: 'Người duyệt', key: 'reviewed_by_name' },
+  { label: 'Minh chứng', key: 'attachment', align: 'text-center' },
+  { label: 'Lý do', key: 'reason' },
+  { label: 'Ghi chú duyệt', key: 'review_note' },
 ]
 
 const requestActions = [
   {
-    label: 'Huy',
+    label: 'Hủy',
     buttonProps: {
-      title: 'Huy don nghi phep dang cho duyet',
+      title: 'Hủy đơn nghỉ phép đang chờ duyệt',
       class: 'border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-sm hover:border-rose-300 hover:bg-rose-100 hover:text-rose-800',
     },
     hidden: (item) => !canCancelLeaveRequest(item),
@@ -462,88 +462,88 @@ function requestPeriodLabel(item) {
 
 function leaveDurationLabel(item) {
   if (!item?.leave_duration_type) {
-    return item?.leave_days ? `${formatNumber(item.leave_days)} ngay` : '-'
+    return item?.leave_days ? `${formatNumber(item.leave_days)} ngày` : '-'
   }
 
-  if (item.leave_duration_type === 'full_day') return 'Ca ngay'
-  if (item.leave_duration_type === 'half_day') return 'Nua ngay'
+  if (item.leave_duration_type === 'full_day') return 'Cả ngày'
+  if (item.leave_duration_type === 'half_day') return 'Nửa ngày'
   if (item.leave_duration_type === 'hourly') {
-    return `Theo gio${item.leave_hours ? ` (${formatNumber(item.leave_hours)} gio)` : ''}`
+    return `Theo giờ${item.leave_hours ? ` (${formatNumber(item.leave_hours)} giờ)` : ''}`
   }
 
   return item.leave_duration_type
 }
 
 function attendanceImpactLabel(item) {
-  const statusPrefix = item?.status === 'approved' ? 'Da ghi nhan:' : 'Neu duyet:'
+  const statusPrefix = item?.status === 'approved' ? 'Đã ghi nhận:' : 'Nếu duyệt:'
 
   if (item?.leave_type === 'unpaid') {
-    return `${statusPrefix} nghi khong luong`
+    return `${statusPrefix} nghỉ không lương`
   }
 
-  return `${statusPrefix} nghi co luong`
+  return `${statusPrefix} nghỉ có lương`
 }
 
 function attendanceImpactHint(item) {
   if (item?.leave_duration_type === 'hourly') {
-    return 'Anh huong cong theo so gio nghi duoc duyet.'
+    return 'Ảnh hưởng công theo số giờ nghỉ được duyệt.'
   }
 
   if (item?.leave_duration_type === 'half_day') {
-    return 'Neu duyet se anh huong nua cong trong ngay nghi.'
+    return 'Nếu duyệt sẽ ảnh hưởng nửa công trong ngày nghỉ.'
   }
 
-  return 'Neu duyet se cap nhat trang thai ngay cong theo loai nghi.'
+  return 'Nếu duyệt sẽ cập nhật trạng thái ngày công theo loại nghỉ.'
 }
 
 function balanceEffectLabel(item) {
   if (!item?.leave_type_deducts_balance) {
-    return 'Khong tru quy phep'
+    return 'Không trừ quỹ phép'
   }
 
   if (item?.status === 'pending') {
-    return `Tam giu ${formatDays(item.leave_days || 0)}`
+    return `Tạm giữ ${formatDays(item.leave_days || 0)}`
   }
 
   if (item?.status === 'approved') {
-    return `Da tru ${formatDays(item.leave_days || 0)}`
+    return `Đã trừ ${formatDays(item.leave_days || 0)}`
   }
 
-  return 'Khong tru / da hoan lai'
+  return 'Không trừ / đã hoàn lại'
 }
 
 function balanceEffectHint(item) {
   if (!item?.leave_type_deducts_balance) {
-    return 'Loai nghi nay khong lam giam quy phep.'
+    return 'Loại nghỉ này không làm giảm quỹ phép.'
   }
 
   if (item?.status === 'pending') {
-    return 'He thong dang giu cho quy phep trong luc cho duyet.'
+    return 'Hệ thống đang giữ chỗ quỹ phép trong lúc chờ duyệt.'
   }
 
   if (item?.status === 'approved') {
-    return 'So ngay nay da duoc chuyen thanh da su dung.'
+    return 'Số ngày này đã được chuyển thành đã sử dụng.'
   }
 
-  return 'Neu don bi tu choi/huy, quy phep se khong bi tru.'
+  return 'Nếu đơn bị từ chối/hủy, quỹ phép sẽ không bị trừ.'
 }
 
 function balanceAvailabilityText(item) {
   const rawRemaining = Number(item.total_entitled || 0) - Number(item.used_days || 0) - Number(item.pending_days || 0)
 
   if (rawRemaining < 0) {
-    return `Vuot ${formatDays(Math.abs(rawRemaining))} so voi quy hien co`
+    return `Vượt ${formatDays(Math.abs(rawRemaining))} so với quỹ hiện có`
   }
 
   if (Number(item.available_days || 0) <= LOW_BALANCE_THRESHOLD && Number(item.available_days || 0) > 0) {
-    return 'Sap cham nguong het phep'
+    return 'Sắp chạm ngưỡng hết phép'
   }
 
   if (Number(item.pending_days || 0) > 0) {
-    return 'Da tru san ca phan dang cho duyet'
+    return 'Đã trừ sẵn cả phần đang chờ duyệt'
   }
 
-  return 'Con trong han muc kha dung'
+  return 'Còn trong hạn mức khả dụng'
 }
 
 function balanceBadges(item) {
@@ -551,13 +551,13 @@ function balanceBadges(item) {
   const badges = []
 
   if (rawRemaining < 0) {
-    badges.push({ label: 'Vuot phep', tone: 'danger' })
+    badges.push({ label: 'Vượt phép', tone: 'danger' })
   } else if (Number(item.available_days || 0) > 0 && Number(item.available_days || 0) <= LOW_BALANCE_THRESHOLD) {
-    badges.push({ label: 'Sap het phep', tone: 'warning' })
+    badges.push({ label: 'Sắp hết phép', tone: 'warning' })
   }
 
   if (Number(item.pending_days || 0) > 0) {
-    badges.push({ label: 'Dang giu quota', tone: 'info' })
+    badges.push({ label: 'Đang giữ quota', tone: 'info' })
   }
 
   return badges
@@ -573,14 +573,14 @@ function badgeClass(tone) {
 }
 
 function formatDays(value) {
-  return `${formatNumber(value)} ngay`
+  return `${formatNumber(value)} ngày`
 }
 
 function formatSignedDays(value) {
   const number = Number(value || 0)
-  if (number > 0) return `+${formatNumber(number)} ngay`
-  if (number < 0) return `${formatNumber(number)} ngay`
-  return '0 ngay'
+  if (number > 0) return `+${formatNumber(number)} ngày`
+  if (number < 0) return `${formatNumber(number)} ngày`
+  return '0 ngày'
 }
 
 function formatNumber(value) {

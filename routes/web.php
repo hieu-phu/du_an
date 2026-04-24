@@ -158,35 +158,42 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
         Route::put('/projects/{project}/toggle-lock', [ProjectController::class, 'toggleLock'])
             ->middleware('position.capability:' . PositionCapability::MANAGE_PROJECTS)
             ->name('projects.toggle-lock');
+        Route::post('/projects/{project}/attachments', [ProjectController::class, 'uploadAttachment'])
+            ->name('projects.attachments.store');
+        Route::get('/projects/{project}/attachments/{attachment}/download', [ProjectController::class, 'downloadAttachment'])
+            ->name('projects.attachments.download');
+        Route::delete('/projects/{project}/attachments/{attachment}', [ProjectController::class, 'destroyAttachment'])
+            ->name('projects.attachments.destroy');
         Route::post('/projects/{project}/members', [ProjectController::class, 'addMember'])
-            ->middleware('position.capability:' . PositionCapability::MANAGE_PROJECT_MEMBERS)
             ->name('projects.members.store');
         Route::put('/projects/{project}/members/{projectMember}', [ProjectController::class, 'updateMemberRole'])
-            ->middleware('position.capability:' . PositionCapability::MANAGE_PROJECT_MEMBERS)
             ->name('projects.members.update');
         Route::delete('/projects/{project}/members/{projectMember}', [ProjectController::class, 'removeMember'])
-            ->middleware('position.capability:' . PositionCapability::MANAGE_PROJECT_MEMBERS)
             ->name('projects.members.destroy');
         Route::post('/projects/{project}/roles', [ProjectController::class, 'addRole'])
             ->middleware('position.capability:' . PositionCapability::MANAGE_PROJECT_ROLES)
             ->name('projects.roles.store');
+        Route::put('/projects/{project}/roles/{projectRole}', [ProjectController::class, 'updateRole'])
+            ->middleware('position.capability:' . PositionCapability::MANAGE_PROJECT_ROLES)
+            ->name('projects.roles.update');
         Route::delete('/projects/{project}/roles/{projectRole}', [ProjectController::class, 'removeRole'])
             ->middleware('position.capability:' . PositionCapability::MANAGE_PROJECT_ROLES)
             ->name('projects.roles.destroy');
         Route::post('/projects/{project}/implementation-details', [ProjectController::class, 'storeImplementationDetail'])
-            ->middleware('position.capability:' . PositionCapability::MANAGE_PROJECT_MEMBERS)
             ->name('projects.implementation-details.store');
+        Route::post('/projects/{project}/implementation-details/{implementationDetail}/attachments', [ProjectController::class, 'uploadImplementationDetailAttachment'])
+            ->name('projects.implementation-details.attachments.store');
+        Route::post('/projects/{project}/implementation-details/{implementationDetail}/comments', [ProjectController::class, 'storeImplementationDetailComment'])
+            ->name('projects.implementation-details.comments.store');
+        Route::delete('/projects/{project}/implementation-details/{implementationDetail}/comments/{comment}', [ProjectController::class, 'destroyImplementationDetailComment'])
+            ->name('projects.implementation-details.comments.destroy');
         Route::put('/projects/{project}/implementation-details/{implementationDetail}', [ProjectController::class, 'updateImplementationDetail'])
-            ->middleware('position.capability:' . PositionCapability::MANAGE_PROJECT_MEMBERS)
             ->name('projects.implementation-details.update');
         Route::put('/projects/{project}/implementation-details/{implementationDetail}/status', [ProjectController::class, 'updateImplementationDetailStatus'])
-            ->middleware('position.capability:' . PositionCapability::UPDATE_PROJECT_TASK_STATUS)
             ->name('projects.implementation-details.status');
         Route::put('/projects/{project}/implementation-details/{implementationDetail}/toggle-lock', [ProjectController::class, 'toggleImplementationDetailLock'])
-            ->middleware('position.capability:' . PositionCapability::MANAGE_PROJECT_MEMBERS)
             ->name('projects.implementation-details.toggle-lock');
         Route::delete('/projects/{project}/implementation-details/{implementationDetail}', [ProjectController::class, 'destroyImplementationDetail'])
-            ->middleware('position.capability:' . PositionCapability::MANAGE_PROJECT_MEMBERS)
             ->name('projects.implementation-details.destroy');
     });
 

@@ -66,13 +66,13 @@ final class PositionCapability
         return [
             self::MANAGE_EMPLOYEES => [
                 'module' => 'human_resources',
-                'name' => 'Quan ly nhan su',
-                'description' => 'Them, sua, khoa nhan su',
+                'name' => 'Quan ly nhân sự',
+                'description' => 'Them, sua, khoa nhân sự',
             ],
             self::VIEW_ALL_PROFILES => [
                 'module' => 'human_resources',
-                'name' => 'Xem ho so nhan vien',
-                'description' => 'Xem ho so cua toan bo nhan su',
+                'name' => 'Xem ho so nhân viên',
+                'description' => 'Xem ho so cua toan bo nhân sự',
             ],
             self::VIEW_OWN_PROFILE => [
                 'module' => 'human_resources',
@@ -86,8 +86,8 @@ final class PositionCapability
             ],
             self::VIEW_SALARY => [
                 'module' => 'human_resources',
-                'name' => 'Xem luong nhan vien',
-                'description' => 'Xem muc luong cua toan bo nhan su',
+                'name' => 'Xem luong nhân viên',
+                'description' => 'Xem muc luong cua toan bo nhân sự',
             ],
             self::VIEW_OWN_SALARY => [
                 'module' => 'salary',
@@ -97,137 +97,137 @@ final class PositionCapability
             self::VIEW_ALL_SALARY => [
                 'module' => 'salary',
                 'name' => 'Xem luong toan cong ty',
-                'description' => 'Xem muc luong cua toan bo nhan su',
+                'description' => 'Xem muc luong cua toan bo nhân sự',
             ],
             self::MANAGE_SALARY => [
                 'module' => 'salary',
-                'name' => 'Dieu chinh luong',
-                'description' => 'De xuat va phe duyet thay doi luong',
+                'name' => 'Điều chỉnh luong',
+                'description' => 'De xuat va phe duyệt thay doi luong',
             ],
             self::APPROVE_ATTENDANCE => [
                 'module' => 'attendance',
-                'name' => 'Duyet cham cong',
-                'description' => 'Xac nhan va phe duyet cong cua nhan vien',
+                'name' => 'Duyệt chấm công',
+                'description' => 'Xác nhận va phe duyệt cong cua nhân viên',
             ],
             self::VIEW_ALL_ATTENDANCE => [
                 'module' => 'attendance',
-                'name' => 'Xem toan bo cham cong',
-                'description' => 'Xem bao cao cong cua tat ca nhan su',
+                'name' => 'Xem toan bo chấm công',
+                'description' => 'Xem bao cao cong cua tat ca nhân sự',
             ],
             self::VIEW_OWN_ATTENDANCE => [
                 'module' => 'attendance',
-                'name' => 'Xem cham cong ca nhan',
-                'description' => 'Xem du lieu cham cong cua chinh minh',
+                'name' => 'Xem chấm công ca nhan',
+                'description' => 'Xem dữ liệu chấm công cua chinh minh',
             ],
             self::EXPORT_ATTENDANCE => [
                 'module' => 'attendance',
-                'name' => 'Xuat bao cao cham cong',
+                'name' => 'Xuat bao cao chấm công',
                 'description' => 'Xuat Excel / PDF',
             ],
             self::CHECK_IN => [
                 'module' => 'attendance',
-                'name' => 'Cham cong vao',
+                'name' => 'Chấm công vao',
                 'description' => 'Thuc hien check-in',
             ],
             self::CHECK_OUT => [
                 'module' => 'attendance',
-                'name' => 'Cham cong ra',
+                'name' => 'Chấm công ra',
                 'description' => 'Thuc hien check-out',
             ],
             self::REQUEST_ATTENDANCE_ADJUSTMENT => [
                 'module' => 'attendance',
-                'name' => 'Yeu cau chinh cong',
-                'description' => 'Tao yeu cau chinh cong',
+                'name' => 'Yêu cầu chinh cong',
+                'description' => 'Tao yêu cầu chinh cong',
             ],
             self::APPROVE_LEAVE => [
                 'module' => 'leave',
-                'name' => 'Phe duyet ngay nghi',
-                'description' => 'Duyet hoac tu choi don xin nghi',
+                'name' => 'Phe duyệt ngay nghi',
+                'description' => 'Duyệt hoac từ chối don xin nghi',
             ],
             self::MANAGE_LEAVE_POLICY => [
                 'module' => 'leave',
                 'name' => 'Quan ly chinh sach nghi',
-                'description' => 'Thiet lap quy dinh nghi phep',
+                'description' => 'Thiet lap quy dinh nghỉ phép',
             ],
             self::MANAGE_PROJECTS => [
                 'module' => 'project',
-                'name' => 'Quan ly du an',
-                'description' => 'Tao, sua, phan cong du an',
+                'name' => 'Quan ly dự án',
+                'description' => 'Tao, sua, phan cong dự án',
             ],
             self::MANAGE_PROJECT_MEMBERS => [
                 'module' => 'project',
-                'name' => 'Quan ly thanh vien du an',
+                'name' => 'Quan ly thanh vien dự án',
                 'description' => 'Them/xoa thanh vien',
             ],
             self::MANAGE_PROJECT_ROLES => [
                 'module' => 'project',
-                'name' => 'Quan ly vai tro du an',
-                'description' => 'Tao va xoa vai tro trong tung du an',
+                'name' => 'Quan ly vai trò dự án',
+                'description' => 'Tao va xoa vai trò trong tung dự án',
             ],
             self::VIEW_ALL_PROJECTS => [
                 'module' => 'project',
-                'name' => 'Xem toan bo du an',
-                'description' => 'Xem tat ca du an trong he thong',
+                'name' => 'Xem toan bo dự án',
+                'description' => 'Xem tat ca dự án trong hệ thống',
             ],
             self::VIEW_OWN_PROJECTS => [
                 'module' => 'project',
-                'name' => 'Xem du an ca nhan',
-                'description' => 'Xem cac du an minh tham gia',
+                'name' => 'Xem dự án ca nhan',
+                'description' => 'Xem cac dự án minh tham gia',
             ],
             self::UPDATE_PROJECT_TASK_STATUS => [
                 'module' => 'project',
-                'name' => 'Cap nhat trang thai dau viec',
-                'description' => 'Cap nhat trang thai task',
+                'name' => 'Cap nhat trạng thái dau viec',
+                'description' => 'Cap nhat trạng thái task',
             ],
             self::MANAGE_DEPARTMENTS => [
                 'module' => 'organization',
-                'name' => 'Quan ly phong ban',
-                'description' => 'Them, sua, khoa phong ban',
+                'name' => 'Quan ly phòng ban',
+                'description' => 'Them, sua, khoa phòng ban',
             ],
             self::MANAGE_POSITIONS => [
                 'module' => 'organization',
-                'name' => 'Quan ly chuc vu',
-                'description' => 'Them, sua, khoa chuc vu',
+                'name' => 'Quan ly chức vụ',
+                'description' => 'Them, sua, khoa chức vụ',
             ],
             self::TRANSFER_EMPLOYEE => [
                 'module' => 'organization',
-                'name' => 'Dieu chuyen nhan su',
-                'description' => 'Chuyen nhan vien sang phong ban khac',
+                'name' => 'Dieu chuyen nhân sự',
+                'description' => 'Chuyen nhân viên sang phòng ban khac',
             ],
             self::APPROVE_USER_REQUESTS => [
                 'module' => 'approval',
-                'name' => 'Duyet yeu cau nhan su',
-                'description' => 'Phe duyet tao moi va cap nhat yeu cau nhan su',
+                'name' => 'Duyệt yêu cầu nhân sự',
+                'description' => 'Phe duyệt tao moi va cap nhat yêu cầu nhân sự',
             ],
             self::APPROVE_DEPARTMENT_REQUESTS => [
                 'module' => 'approval',
-                'name' => 'Duyet yeu cau phong ban',
-                'description' => 'Phe duyet tao moi, cap nhat va khoa/mo phong ban',
+                'name' => 'Duyệt yêu cầu phòng ban',
+                'description' => 'Phe duyệt tao moi, cap nhat va khoa/mo phòng ban',
             ],
             self::APPROVE_SALARY_REQUESTS => [
                 'module' => 'approval',
-                'name' => 'Duyet yeu cau luong',
-                'description' => 'Phe duyet thay doi luong co ban',
+                'name' => 'Duyệt yêu cầu luong',
+                'description' => 'Phe duyệt thay doi lương cơ bản',
             ],
             self::SIGN_DOCUMENTS => [
                 'module' => 'approval',
-                'name' => 'Ky duyet van ban',
-                'description' => 'Ky va phe duyet hop dong, quyet dinh',
+                'name' => 'Ky duyệt van ban',
+                'description' => 'Ky va phe duyệt hop dong, quyet dinh',
             ],
             self::VIEW_REPORTS => [
                 'module' => 'report',
                 'name' => 'Xem bao cao tong hop',
-                'description' => 'Dashboard va bao cao toan he thong',
+                'description' => 'Dashboard va bao cao toan hệ thống',
             ],
             self::EXPORT_REPORTS => [
                 'module' => 'report',
                 'name' => 'Xuat bao cao',
-                'description' => 'Xuat du lieu Excel / PDF',
+                'description' => 'Xuat dữ liệu Excel / PDF',
             ],
             self::VIEW_ACTIVITY_LOGS => [
                 'module' => 'report',
                 'name' => 'Xem nhat ky hoat dong',
-                'description' => 'Xem lich su thao tac he thong',
+                'description' => 'Xem lich su thao tac hệ thống',
             ],
             self::VIEW_DASHBOARD => [
                 'module' => 'system',
@@ -242,7 +242,7 @@ final class PositionCapability
             self::CREATE_FEEDBACK => [
                 'module' => 'feedback',
                 'name' => 'Tao phan hoi',
-                'description' => 'Gui feedback noi bo',
+                'description' => 'Gửi feedback noi bo',
             ],
             self::REPLY_FEEDBACK => [
                 'module' => 'feedback',
@@ -257,3 +257,5 @@ final class PositionCapability
         ];
     }
 }
+
+

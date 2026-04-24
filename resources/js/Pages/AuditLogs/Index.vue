@@ -1,30 +1,30 @@
 <template>
-  <AdminLayout title="Truy vet hoat dong">
+  <AdminLayout title="Truy vết hoạt động">
     <PageBreadcrumb
-      title="Truy vet hoat dong"
+      title="Truy vết hoạt động"
       :items="[
-        { text: 'Bao cao', link: null },
-        { text: 'Truy vet hoat dong', link: null },
+        { text: 'Báo cáo', link: null },
+        { text: 'Truy vết hoạt động', link: null },
       ]"
     />
 
     <div class="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <div class="grid grid-cols-1 gap-4 xl:grid-cols-6">
         <div class="xl:col-span-2">
-          <label class="mb-1.5 block text-sm font-medium text-gray-700">Tim kiem</label>
+          <label class="mb-1.5 block text-sm font-medium text-gray-700">Tìm kiếm</label>
           <input
             v-model="form.search"
             type="text"
             class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500"
-            placeholder="Ten, email, IP, thiet bi..."
+            placeholder="Tên, email, IP, thiết bị..."
             @keyup.enter="applyFilters"
           />
         </div>
 
         <div>
-          <label class="mb-1.5 block text-sm font-medium text-gray-700">Tai khoan</label>
+          <label class="mb-1.5 block text-sm font-medium text-gray-700">Tài khoản</label>
           <select v-model="form.user_id" class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500">
-            <option value="">Tat ca</option>
+            <option value="">Tất cả</option>
             <option v-for="user in users" :key="user.id" :value="String(user.id)">
               {{ user.label }}
             </option>
@@ -34,7 +34,7 @@
         <div>
           <label class="mb-1.5 block text-sm font-medium text-gray-700">Module</label>
           <select v-model="form.module" class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500">
-            <option value="">Tat ca</option>
+            <option value="">Tất cả</option>
             <option v-for="module in modules" :key="module" :value="module">
               {{ module }}
             </option>
@@ -42,9 +42,9 @@
         </div>
 
         <div>
-          <label class="mb-1.5 block text-sm font-medium text-gray-700">Hanh dong</label>
+          <label class="mb-1.5 block text-sm font-medium text-gray-700">Hành động</label>
           <select v-model="form.action" class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500">
-            <option value="">Tat ca</option>
+            <option value="">Tất cả</option>
             <option v-for="action in actions" :key="action" :value="action">
               {{ action }}
             </option>
@@ -52,7 +52,7 @@
         </div>
 
         <div>
-          <label class="mb-1.5 block text-sm font-medium text-gray-700">So dong</label>
+          <label class="mb-1.5 block text-sm font-medium text-gray-700">Số dòng</label>
           <select v-model="form.per_page" class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500">
             <option value="20">20</option>
             <option value="50">50</option>
@@ -61,12 +61,12 @@
         </div>
 
         <div>
-          <label class="mb-1.5 block text-sm font-medium text-gray-700">Tu ngay</label>
+          <label class="mb-1.5 block text-sm font-medium text-gray-700">Từ ngày</label>
           <input v-model="form.date_from" type="date" class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500" />
         </div>
 
         <div>
-          <label class="mb-1.5 block text-sm font-medium text-gray-700">Den ngay</label>
+          <label class="mb-1.5 block text-sm font-medium text-gray-700">Đến ngày</label>
           <input v-model="form.date_to" type="date" class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500" />
         </div>
 
@@ -76,7 +76,7 @@
             class="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
             @click="applyFilters"
           >
-            Loc du lieu
+            Lọc dữ liệu
           </button>
 
           <button
@@ -84,7 +84,7 @@
             class="rounded-xl border border-gray-300 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
             @click="resetFilters"
           >
-            Xoa loc
+            Xóa lọc
           </button>
         </div>
       </div>
@@ -92,25 +92,25 @@
 
     <div class="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       <div class="border-b border-gray-200 px-5 py-4">
-        <h3 class="text-lg font-semibold text-gray-900">Nhat ky hoat dong</h3>
-        <p class="mt-1 text-sm text-gray-500">Theo doi tai khoan da thuc hien hanh dong gi, o dau, bang thiet bi nao va vao luc nao.</p>
+        <h3 class="text-lg font-semibold text-gray-900">Nhật ký hoạt động</h3>
+        <p class="mt-1 text-sm text-gray-500">Theo dõi tài khoản đã thực hiện hành động gì, ở đâu, bằng thiết bị nào và vào lúc nào.</p>
       </div>
 
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50">
             <tr>
-              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Tai khoan</th>
-              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Hanh dong</th>
-              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Mo ta</th>
-              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">IP / Thiet bi</th>
-              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Thoi gian</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Tài khoản</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Hành động</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Mô tả</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">IP / Thiết bị</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Thời gian</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200">
             <tr v-for="log in activityLogs.data" :key="log.id" class="align-top">
               <td class="px-4 py-4 text-sm text-gray-700">
-                <div class="font-medium text-gray-900">{{ log.user_name || 'He thong' }}</div>
+                <div class="font-medium text-gray-900">{{ log.user_name || 'Hệ thống' }}</div>
                 <div class="text-xs text-gray-500">{{ log.user_email || '-' }}</div>
               </td>
               <td class="px-4 py-4 text-sm text-gray-700">
@@ -132,7 +132,7 @@
             </tr>
             <tr v-if="!activityLogs.data.length">
               <td colspan="5" class="px-4 py-12 text-center text-sm text-gray-500">
-                Khong co ban ghi truy vet phu hop.
+                Không có bản ghi truy vết phù hợp.
               </td>
             </tr>
           </tbody>
@@ -141,7 +141,7 @@
 
       <div class="flex flex-col gap-3 border-t border-gray-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div class="text-sm text-gray-500">
-          Hien thi {{ activityLogs.from || 0 }}-{{ activityLogs.to || 0 }} / {{ activityLogs.total }} ban ghi
+          Hiển thị {{ activityLogs.from || 0 }}-{{ activityLogs.to || 0 }} / {{ activityLogs.total }} bản ghi
         </div>
         <div class="flex items-center gap-2">
           <button
@@ -150,7 +150,7 @@
             :disabled="!activityLogs.prev_page_url"
             @click="goToPage(activityLogs.current_page - 1)"
           >
-            Truoc
+            Trước
           </button>
           <div class="text-sm text-gray-600">Trang {{ activityLogs.current_page }} / {{ activityLogs.last_page }}</div>
           <button
@@ -167,19 +167,19 @@
 
     <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       <div class="border-b border-gray-200 px-5 py-4">
-        <h3 class="text-lg font-semibold text-gray-900">Phien dang nhap gan day</h3>
-        <p class="mt-1 text-sm text-gray-500">Thong tin dang nhap, dang xuat, IP, thiet bi va trinh duyet.</p>
+        <h3 class="text-lg font-semibold text-gray-900">Phiên đăng nhập gần đây</h3>
+        <p class="mt-1 text-sm text-gray-500">Thông tin đăng nhập, đăng xuất, IP, thiết bị và trình duyệt.</p>
       </div>
 
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50">
             <tr>
-              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Tai khoan</th>
-              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Dang nhap</th>
-              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Dang xuat</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Tài khoản</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Đăng nhập</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Đăng xuất</th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">IP</th>
-              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Thiet bi / Browser</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Thiết bị / Browser</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200">
@@ -198,7 +198,7 @@
             </tr>
             <tr v-if="!loginHistories.length">
               <td colspan="5" class="px-4 py-12 text-center text-sm text-gray-500">
-                Chua co lich su dang nhap.
+                Chưa có lịch sử đăng nhập.
               </td>
             </tr>
           </tbody>

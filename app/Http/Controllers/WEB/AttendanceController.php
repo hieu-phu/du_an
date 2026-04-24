@@ -141,14 +141,14 @@ class AttendanceController extends Controller
         );
 
         if ($result['failed'] > 0) {
-            $firstFailure = $result['failures'][0]['message'] ?? 'Mot so ban ghi khong the duyet.';
+            $firstFailure = $result['failures'][0]['message'] ?? 'Một số bản ghi không thể duyệt.';
 
             return redirect()->back()
-                ->with('success', "Da duyet {$result['approved']} ban ghi.")
-                ->withErrors(['error' => "{$result['failed']} ban ghi chua duoc duyet: {$firstFailure}"]);
+                ->with('success', "Đã duyệt {$result['approved']} bản ghi.")
+                ->withErrors(['error' => "{$result['failed']} bản ghi chưa được duyệt: {$firstFailure}"]);
         }
 
-        return redirect()->back()->with('success', "Da duyet {$result['approved']} ban ghi cham cong.");
+        return redirect()->back()->with('success', "Đã duyệt {$result['approved']} bản ghi chấm công.");
     }
 
     public function reject(Request $request, AttendanceRecord $attendanceRecord)
@@ -243,7 +243,7 @@ class AttendanceController extends Controller
             return back()->withErrors(['error' => $exception->getMessage()]);
         }
 
-        return redirect()->back()->with('success', 'Da huy don cham cong.');
+        return redirect()->back()->with('success', 'Đã hủy đơn chấm công.');
     }
 
     public function lockMonth(Request $request)
@@ -326,14 +326,14 @@ class AttendanceController extends Controller
         );
 
         if ($result['failed'] > 0) {
-            $firstFailure = $result['failures'][0]['message'] ?? 'Mot so don khong the duyet.';
+            $firstFailure = $result['failures'][0]['message'] ?? 'Một số đơn không thể duyệt.';
 
             return redirect()->back()
-                ->with('success', "Da duyet {$result['processed']} don.")
-                ->withErrors(['error' => "{$result['failed']} don chua duoc duyet: {$firstFailure}"]);
+                ->with('success', "Đã duyệt {$result['processed']} đơn.")
+                ->withErrors(['error' => "{$result['failed']} đơn chưa được duyệt: {$firstFailure}"]);
         }
 
-        return redirect()->back()->with('success', "Da duyet {$result['processed']} don.");
+        return redirect()->back()->with('success', "Đã duyệt {$result['processed']} đơn.");
     }
 
     public function rejectRequest(Request $request, ApprovalRequest $approvalRequest)

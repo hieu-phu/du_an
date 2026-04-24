@@ -13,11 +13,11 @@ const props = defineProps({
     },
     title: {
         type: String,
-        default: 'Xac nhan ma OTP',
+        default: 'Xác nhận mã OTP',
     },
     description: {
         type: String,
-        default: 'Chung toi da gui ma xac nhan 6 so den email',
+        default: 'Chúng tôi đã gửi mã xác nhận 6 số đến email',
     },
     submitRoute: {
         type: String,
@@ -33,7 +33,7 @@ const props = defineProps({
     },
     changeLabel: {
         type: String,
-        default: 'Thay doi email khac',
+        default: 'Thay đổi email khác',
     },
 })
 
@@ -109,7 +109,7 @@ const handleResend = () => {
 
                 <form class="space-y-6" @submit.prevent="submit">
                     <div>
-                        <label for="otp" class="block text-sm font-semibold text-gray-700 mb-2">Ma xac nhan (OTP)</label>
+                        <label for="otp" class="block text-sm font-semibold text-gray-700 mb-2">Mã xác nhận (OTP)</label>
                         <input
                             id="otp"
                             ref="otpInput"
@@ -141,13 +141,13 @@ const handleResend = () => {
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
-                            <span>{{ form.processing ? 'Dang xac nhan...' : 'Tiep tuc' }}</span>
+                            <span>{{ form.processing ? 'Đang xác nhận...' : 'Tiếp tục' }}</span>
                         </button>
                     </div>
 
                     <div class="text-center space-y-4">
                         <p class="text-sm text-gray-500">
-                            Khong nhan duoc ma?
+                            Không nhận được mã?
                             <button
                                 type="button"
                                 @click="handleResend"
@@ -155,7 +155,7 @@ const handleResend = () => {
                                 class="font-medium transition duration-200"
                                 :class="canResend ? 'text-blue-600 hover:underline' : 'text-gray-400 cursor-not-allowed'"
                             >
-                                Gui lai ma <span v-if="!canResend">({{ cooldown }}s)</span>
+                                Gửi lại mã <span v-if="!canResend">({{ cooldown }}s)</span>
                             </button>
                         </p>
 

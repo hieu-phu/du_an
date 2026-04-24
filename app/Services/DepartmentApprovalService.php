@@ -28,7 +28,7 @@ class DepartmentApprovalService extends BaseService
         return $this->createRequest(
             self::REQUEST_TYPE_CREATE,
             0,
-            'Đề nghị tạo phòng ban mới',
+            'Äá» nghá»‹ táº¡o phòng ban má»›i',
             Arr::only($validatedData, ['name', 'description', 'manager_user_id', 'is_active'])
         );
     }
@@ -45,7 +45,7 @@ class DepartmentApprovalService extends BaseService
                 'requested_by' => $this->user()?->id,
                 'status' => 'pending',
                 'submitted_at' => now(),
-                'reason' => "Đề nghị cập nhật phòng ban {$department->name}",
+                'reason' => "Äá» nghá»‹ cáº­p nháº­t phòng ban {$department->name}",
             ]);
 
             foreach ($payload as $field => $value) {
@@ -71,8 +71,8 @@ class DepartmentApprovalService extends BaseService
                 'status' => 'pending',
                 'submitted_at' => now(),
                 'reason' => $department->is_active
-                    ? "Đề nghị khóa phòng ban {$department->name}"
-                    : "Đề nghị mở lại phòng ban {$department->name}",
+                    ? "Äá» nghá»‹ khÃ³a phòng ban {$department->name}"
+                    : "Äá» nghá»‹ má»Ÿ láº¡i phòng ban {$department->name}",
             ]);
 
             $request->changes()->create([
@@ -191,13 +191,13 @@ class DepartmentApprovalService extends BaseService
         $this->handleTransaction(function () use ($approvalRequest, $actor, $note) {
             if ($approvalRequest->status !== 'pending') {
                 throw ValidationException::withMessages([
-                    'approval' => 'Chi duoc huy yeu cau dang cho duyet.',
+                    'approval' => 'Chi duoc huy yêu cầu dang cho duyệt.',
                 ]);
             }
 
             if ((int) $approvalRequest->requested_by !== (int) $actor->id && !AccessMatrix::canApproveDepartmentRequests($actor)) {
                 throw ValidationException::withMessages([
-                    'approval' => 'Ban khong duoc phep huy yeu cau nay.',
+                    'approval' => 'Ban không duoc phep huy yêu cầu nay.',
                 ]);
             }
 
@@ -244,7 +244,7 @@ class DepartmentApprovalService extends BaseService
             self::REQUEST_TYPE_UPDATE => $this->approveUpdate($approvalRequest, $payload),
             self::REQUEST_TYPE_TOGGLE => $this->approveToggle($approvalRequest, $payload),
             default => throw ValidationException::withMessages([
-                'approval' => 'Loại yêu cầu phòng ban không hợp lệ.',
+                'approval' => 'Loáº¡i yêu cáº§u phòng ban không há»£p lá»‡.',
             ]),
         };
     }
@@ -285,13 +285,13 @@ class DepartmentApprovalService extends BaseService
             self::REQUEST_TYPE_TOGGLE,
         ], true)) {
             throw ValidationException::withMessages([
-                'approval' => 'Loại yêu cầu phòng ban không hợp lệ.',
+                'approval' => 'Loáº¡i yêu cáº§u phòng ban không há»£p lá»‡.',
             ]);
         }
 
         if ($approvalRequest->status !== 'pending') {
             throw ValidationException::withMessages([
-                'approval' => 'Yêu cầu này đã được xử lý.',
+                'approval' => 'Yêu cáº§u này Ä‘ã Ä‘ưá»£c xử lý.',
             ]);
         }
     }
@@ -316,7 +316,7 @@ class DepartmentApprovalService extends BaseService
             $payload['manager_name'] = null;
         }
 
-        $payload['is_active_label'] = !empty($payload['is_active']) ? 'Đang hoạt động' : 'Tạm khóa';
+        $payload['is_active_label'] = !empty($payload['is_active']) ? 'Äang hoáº¡t Ä‘á»™ng' : 'Táº¡m khÃ³a';
 
         return $payload;
     }
@@ -334,7 +334,7 @@ class DepartmentApprovalService extends BaseService
 
         if ($exists) {
             throw ValidationException::withMessages([
-                'name' => 'Tên phòng ban đã tồn tại, không thể duyệt yêu cầu.',
+                'name' => 'Tên phòng ban Ä‘ã tá»“n táº¡i, không thá»ƒ duyá»‡t yêu cáº§u.',
             ]);
         }
     }
@@ -354,10 +354,10 @@ class DepartmentApprovalService extends BaseService
     private function fieldLabel(string $field): string
     {
         return match ($field) {
-            'name' => 'Ten phong ban',
+            'name' => 'Ten phòng ban',
             'description' => 'Mo ta',
             'manager_user_id' => 'Truong phong',
-            'is_active' => 'Trang thai',
+            'is_active' => 'Trạng thái',
             default => $field,
         };
     }
@@ -374,3 +374,5 @@ class DepartmentApprovalService extends BaseService
         );
     }
 }
+
+

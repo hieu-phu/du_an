@@ -37,6 +37,7 @@ class AttendanceAdjustmentController extends Controller
             return back()->withErrors(['error' => $exception->getMessage()]);
         }
 
-        return redirect()->back()->with('success', 'Da ap dung dieu chinh cong.');
+        return redirect()->back()->with('success', 'Đã áp dụng điều chỉnh công.');
     }
 }
+

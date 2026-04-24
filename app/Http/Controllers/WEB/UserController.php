@@ -94,11 +94,11 @@ class UserController extends Controller
             'reason' => ['nullable', 'string', 'max:500'],
             'expires_at' => ['nullable', 'date', 'after:now'],
         ], [
-            'capability_code.required' => 'Vui long chon quyen can ghi de.',
-            'capability_code.in' => 'Capability khong hop le.',
-            'effect.required' => 'Vui long chon hieu luc.',
-            'effect.in' => 'Hieu luc chi chap nhan allow hoac deny.',
-            'expires_at.after' => 'Ngay het han phai lon hon thoi diem hien tai.',
+            'capability_code.required' => 'Vui lòng chọn quyền cần ghi đè.',
+            'capability_code.in' => 'Quyền (Capability) không hợp lệ.',
+            'effect.required' => 'Vui lòng chọn hiệu lực.',
+            'effect.in' => 'Hiệu lực chỉ chấp nhận cho phép (allow) hoặc từ chối (deny).',
+            'expires_at.after' => 'Ngày hết hạn phải lớn hơn thời điểm hiện tại.',
         ]);
 
         $capability = PositionCapabilityModel::query()
@@ -106,7 +106,7 @@ class UserController extends Controller
             ->first();
 
         if (!$capability) {
-            return back()->withErrors(['error' => 'Capability chua duoc khoi tao trong danh muc.']);
+            return back()->withErrors(['error' => 'Quyền (Capability) chưa được khởi tạo trong danh mục.']);
         }
 
         UserPositionCapabilityOverride::query()->updateOrCreate(
@@ -122,7 +122,7 @@ class UserController extends Controller
             ]
         );
 
-        return back()->with('success', 'Da cap nhat ghi de quyen theo nguoi dung.');
+        return back()->with('success', 'Đã cập nhật ghi đè quyền theo người dùng.');
     }
 
     public function destroyCapabilityOverride(Request $request, User $user, UserPositionCapabilityOverride $override)
@@ -130,12 +130,12 @@ class UserController extends Controller
         $this->ensureManageableUser($request->user(), $user);
 
         if ((int) $override->user_id !== (int) $user->id) {
-            return back()->withErrors(['error' => 'Ban ghi ghi de khong thuoc user nay.']);
+            return back()->withErrors(['error' => 'Bản ghi ghi đè không thuộc người dùng này.']);
         }
 
         $override->delete();
 
-        return back()->with('success', 'Da xoa ghi de quyen theo nguoi dung.');
+        return back()->with('success', 'Đã xóa ghi đè quyền theo người dùng.');
     }
 
     public function employeeRequests(Request $request)
@@ -204,12 +204,12 @@ class UserController extends Controller
                 $request->file('avatar')
             );
 
-            return redirect()->back()->with('success', 'Cap nhat nhan su thanh cong!');
+            return redirect()->back()->with('success', 'Cập nhật nhân sự thành công!');
         } catch (ValidationException $e) {
             return back()->withInput()->withErrors($e->errors());
         } catch (\Exception $e) {
             return back()->withInput()->withErrors([
-                'error' => 'Cap nhat that bai: ' . $e->getMessage(),
+                'error' => 'Cập nhật thất bại: ' . $e->getMessage(),
             ]);
         }
     }
@@ -232,10 +232,10 @@ class UserController extends Controller
             'base_salary' => ['required', 'numeric', 'min:0'],
             'reason' => ['nullable', 'string', 'max:500'],
         ], [
-            'base_salary.required' => 'Vui long nhap luong co ban.',
-            'base_salary.numeric' => 'Luong co ban phai la so.',
-            'base_salary.min' => 'Luong co ban khong duoc am.',
-            'reason.max' => 'Ly do khong duoc vuot qua 500 ky tu.',
+            'base_salary.required' => 'Vui lòng nhập lương cơ bản.',
+            'base_salary.numeric' => 'Lương cơ bản phải là số.',
+            'base_salary.min' => 'Lương cơ bản không được âm.',
+            'reason.max' => 'Lý do không được vượt quá 500 ký tự.',
         ]);
 
         try {
@@ -244,7 +244,7 @@ class UserController extends Controller
 
             if (!$profile) {
                 throw ValidationException::withMessages([
-                    'base_salary' => 'Nhan su nay chua co ho so nhan vien de cap nhat luong.',
+                    'base_salary' => 'Nhân sự này chưa có hồ sơ nhân viên để cập nhật lương.',
                 ]);
             }
 
@@ -253,7 +253,7 @@ class UserController extends Controller
 
             if ($requestedSalary === $currentSalary) {
                 throw ValidationException::withMessages([
-                    'base_salary' => 'Luong moi trung voi luong hien tai, khong can cap nhat.',
+                    'base_salary' => 'Lương mới trùng với lương hiện tại, không cần cập nhật.',
                 ]);
             }
 
@@ -261,10 +261,10 @@ class UserController extends Controller
                 $this->userApprovalService->submitSalaryChangeRequest(
                     $user,
                     $requestedSalary,
-                    $validated['reason'] ?? 'HR de nghi thay doi luong co ban'
+                    $validated['reason'] ?? 'HR đề nghị thay đổi lương cơ bản'
                 );
 
-                return redirect()->back()->with('success', 'Da gui yeu cau doi luong cho Admin duyet.');
+                return redirect()->back()->with('success', 'Đã gửi yêu cầu đổi lương cho Admin duyệt.');
             }
 
             DB::transaction(function () use ($profile, $requestedSalary, $currentSalary, $actor, $validated, $user) {
@@ -279,7 +279,7 @@ class UserController extends Controller
                     'currency' => 'VND',
                     'effective_date' => now()->toDateString(),
                     'approved_by' => $actor?->id,
-                    'note' => $validated['reason'] ?? 'Cap nhat luong truc tiep tu danh sach nhan su',
+                    'note' => $validated['reason'] ?? 'Cập nhật lương trực tiếp từ danh sách nhân sự',
                 ]);
 
                 $this->approvalDecisionNotifier->notifyDirectSalaryUpdate(
@@ -291,12 +291,12 @@ class UserController extends Controller
                 );
             });
 
-            return redirect()->back()->with('success', 'Da cap nhat luong co ban.');
+            return redirect()->back()->with('success', 'Đã cập nhật lương cơ bản.');
         } catch (ValidationException $e) {
             return back()->withInput()->withErrors($e->errors());
         } catch (\Exception $e) {
             return back()->withInput()->withErrors([
-                'error' => 'Cap nhat luong that bai: ' . $e->getMessage(),
+                'error' => 'Cập nhật lương thất bại: ' . $e->getMessage(),
             ]);
         }
     }
@@ -367,7 +367,7 @@ class UserController extends Controller
         $targetLevel = $this->resolveActorAuthorityLevel($target);
 
         if ($actorLevel <= $targetLevel) {
-            abort(403, 'Ban khong duoc phep tac dong tai khoan co muc quyen han bang hoac cao hon.');
+            abort(403, 'Bạn không được phép tác động tài khoản có mức quyền hạn bằng hoặc cao hơn.');
         }
     }
 
@@ -482,7 +482,7 @@ class UserController extends Controller
     {
         if ($positionId <= 0) {
             throw ValidationException::withMessages([
-                'position_id' => 'Vui long chon chuc vu hop le.',
+                'position_id' => 'Vui lòng chọn chức vụ hợp lệ.',
             ]);
         }
 
@@ -492,7 +492,7 @@ class UserController extends Controller
 
         if (!$position) {
             throw ValidationException::withMessages([
-                'position_id' => 'Chuc vu khong ton tai hoac da bi khoa.',
+                'position_id' => 'Chức vụ không tồn tại hoặc đã bị khóa.',
             ]);
         }
 
@@ -501,7 +501,7 @@ class UserController extends Controller
 
         if (!$this->isSystemOwner($actor) && $targetLevel >= $actorLevel) {
             throw ValidationException::withMessages([
-                'position_id' => 'Ban chi duoc tao/gan chuc vu co muc quyen han thap hon minh.',
+                'position_id' => 'Bạn chỉ được tạo/gán chức vụ có mức quyền hạn thấp hơn mình.',
             ]);
         }
     }

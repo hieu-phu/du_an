@@ -171,7 +171,7 @@ class PositionController extends Controller
 
     public function storeCapability(Request $request)
     {
-        abort(403, 'Chuc nang them quyen tuy chinh da duoc tat.');
+        abort(403, 'Chức năng thêm quyền tùy chỉnh đã được tắt.');
 
         if (!Schema::hasTable('position_capabilities')) {
             return back()->withErrors(['error' => 'Bảng danh mục quyền chưa sẵn sàng. Vui lòng chạy migrate.']);
@@ -220,7 +220,7 @@ class PositionController extends Controller
         }
 
         if (!Schema::hasTable('authority_levels')) {
-            return back()->withErrors(['error' => 'Bang muc quyen han chua san sang. Vui long chay migrate.']);
+            return back()->withErrors(['error' => 'Bảng mức quyền hạn chưa sẵn sàng. Vui lòng chạy migrate.']);
         }
 
         $validated = $request->validate([
@@ -228,9 +228,9 @@ class PositionController extends Controller
             'name' => ['required', 'string', 'max:120'],
             'is_active' => ['boolean'],
         ], [
-            'rank.required' => 'Vui long nhap so thu bac.',
-            'rank.unique' => 'So thu bac nay da ton tai.',
-            'name.required' => 'Vui long nhap ten muc quyen han.',
+            'rank.required' => 'Vui lòng nhập số thứ bậc.',
+            'rank.unique' => 'Số thứ bậc này đã tồn tại.',
+            'name.required' => 'Vui lòng nhập tên mức quyền hạn.',
         ]);
 
         $rank = (int) $validated['rank'];
@@ -241,7 +241,7 @@ class PositionController extends Controller
             'is_active' => (bool) ($validated['is_active'] ?? true),
         ]);
 
-        return back()->with('success', 'Da them muc quyen han moi.');
+        return back()->with('success', 'Đã thêm mức quyền hạn mới.');
     }
 
     public function toggleAuthorityLevel(AuthorityLevel $authorityLevel)
@@ -259,7 +259,7 @@ class PositionController extends Controller
 
             if ($inUse) {
                 return back()->withErrors([
-                    'authority_level' => 'Khong the khoa muc nay vi dang co chuc vu su dung.',
+                    'authority_level' => 'Không thể khóa mục này vì đang có chức vụ sử dụng.',
                 ]);
             }
         }
@@ -268,7 +268,7 @@ class PositionController extends Controller
             'is_active' => $next,
         ]);
 
-        return back()->with('success', $next ? 'Da mo muc quyen han.' : 'Da khoa muc quyen han.');
+        return back()->with('success', $next ? 'Đã mở mức quyền hạn.' : 'Đã khóa mức quyền hạn.');
     }
 
     private function allowedCapabilityKeys(): array
@@ -386,7 +386,7 @@ class PositionController extends Controller
 
         if ($actorPositionId > 0 && $actorPositionId === (int) $position->id) {
             throw ValidationException::withMessages([
-                'position' => 'Ban khong duoc sua chuc vu cua chinh minh.',
+                'position' => 'Bạn không được sửa chức vụ của chính mình.',
             ]);
         }
 
@@ -395,7 +395,7 @@ class PositionController extends Controller
 
         if ($targetLevel > $actorLevel) {
             throw ValidationException::withMessages([
-                'position' => 'Ban khong duoc sua chuc vu co muc quyen han cao hon minh.',
+                'position' => 'Bạn không được sửa chức vụ có mức quyền hạn cao hơn mình.',
             ]);
         }
     }

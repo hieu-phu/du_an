@@ -24,7 +24,7 @@ class DepartmentService extends BaseService
     public function store(array $data)
     {
         $department = $this->departmentRepository->create($data);
-        $this->audit('departments', 'create', "Tao phong ban {$department->name}", 'departments', $department->id);
+        $this->audit('departments', 'create', "Tao phòng ban {$department->name}", 'departments', $department->id);
 
         return $department;
     }
@@ -35,7 +35,7 @@ class DepartmentService extends BaseService
     public function update($id, array $data)
     {
         $result = $this->departmentRepository->update($id, $data);
-        $this->audit('departments', 'update', "Cap nhat phong ban #{$id}", 'departments', $id);
+        $this->audit('departments', 'update', "Cap nhat phòng ban #{$id}", 'departments', $id);
 
         return $result;
     }
@@ -46,7 +46,7 @@ class DepartmentService extends BaseService
     public function delete($id)
     {
         $result = $this->departmentRepository->delete($id);
-        $this->audit('departments', 'delete', "Xoa phong ban #{$id}", 'departments', $id);
+        $this->audit('departments', 'delete', "Xoa phòng ban #{$id}", 'departments', $id);
 
         return $result;
     }
@@ -54,8 +54,9 @@ class DepartmentService extends BaseService
     public function toggleStatus(int $id): bool
     {
         $result = $this->departmentRepository->toggleStatus($id);
-        $this->audit('departments', 'toggle_status', "Chuyen trang thai phong ban #{$id}", 'departments', $id);
+        $this->audit('departments', 'toggle_status', "Chuyen trạng thái phòng ban #{$id}", 'departments', $id);
 
         return $result;
     }
 }
+

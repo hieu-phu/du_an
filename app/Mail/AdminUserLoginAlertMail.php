@@ -29,7 +29,7 @@ class AdminUserLoginAlertMail extends Mailable implements ShouldQueue
         $appName = config('app.name', 'HRM');
 
         return new Envelope(
-            subject: '[' . $appName . '] Canh bao dang nhap tai khoan',
+            subject: '[' . $appName . '] Canh bao dang nhap tài khoản',
         );
     }
 
@@ -40,3 +40,4 @@ class AdminUserLoginAlertMail extends Mailable implements ShouldQueue
         );
     }
 }
+

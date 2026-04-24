@@ -42,20 +42,20 @@ class UpdateUserRequest extends BaseRequest
     public function messages(): array
     {
         return [
-            'name.required' => 'Vui long nhap ho va ten.',
-            'email.required' => 'Vui long nhap email.',
+            'name.required' => 'Vui lòng nhap ho va ten.',
+            'email.required' => 'Vui lòng nhap email.',
             'email.unique' => 'Email da ton tai.',
             'email.regex' => 'Email phai dung dinh dang Gmail.',
-            'phone.required' => 'Vui long nhap so dien thoai.',
+            'phone.required' => 'Vui lòng nhap so dien thoai.',
             'phone.unique' => 'So dien thoai da ton tai.',
-            'phone.regex' => 'So dien thoai khong dung dinh dang.',
-            'hire_date.required' => 'Vui long chon ngay vao lam.',
+            'phone.regex' => 'So dien thoai không dung dinh dang.',
+            'hire_date.required' => 'Vui lòng chọn ngay vao lam.',
             'date_of_birth.before' => 'Ngay sinh phai nho hon ngay vao lam.',
-            'department_id.required' => 'Vui long chon phong ban.',
-            'position_id.required' => 'Vui long chon chuc vu.',
-            'employment_type.required' => 'Vui long chon loai nhan su.',
-            'termination_date.required' => 'Nhan vien nghi viec phai co ngay nghi.',
-            'termination_date.after_or_equal' => 'Ngay nghi phai lon hon hoac bang ngay vao lam.',
+            'department_id.required' => 'Vui lòng chọn phòng ban.',
+            'position_id.required' => 'Vui lòng chọn chức vụ.',
+            'employment_type.required' => 'Vui lòng chọn loai nhân sự.',
+            'termination_date.required' => 'Nhân viên nghi viec phai co ngay nghi.',
+            'termination_date.after_or_equal' => 'Ngày nghỉ phai lon hon hoac bang ngay vao lam.',
         ];
     }
 
@@ -68,11 +68,13 @@ class UpdateUserRequest extends BaseRequest
             'date_of_birth' => 'ngay sinh',
             'hire_date' => 'ngay vao lam',
             'termination_date' => 'ngay nghi viec',
-            'department_id' => 'phong ban',
-            'position_id' => 'chuc vu',
-            'employment_status' => 'trang thai lam viec',
-            'employment_type' => 'loai nhan su',
-            'status' => 'trang thai tai khoan',
+            'department_id' => 'phòng ban',
+            'position_id' => 'chức vụ',
+            'employment_status' => 'trạng thái lam viec',
+            'employment_type' => 'loai nhân sự',
+            'status' => 'trạng thái tài khoản',
         ];
     }
 }
+
+

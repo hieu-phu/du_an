@@ -22,7 +22,7 @@ class PositionService extends BaseService
         $position = $this->positionRepository->create($data);
         $position->syncCapabilityCodes($data['capabilities'] ?? []);
 
-        $this->logActivity('create', "Da tao chuc vu moi: {$position->name}", $position->id);
+        $this->logActivity('create', "Da tao chức vụ moi: {$position->name}", $position->id);
 
         return $position;
     }
@@ -55,7 +55,7 @@ class PositionService extends BaseService
             $changes[] = 'Thu hoi quyen: ' . implode(', ', $removed);
         }
 
-        $description = "Cap nhat chuc vu '{$position->name}'" . (!empty($changes) ? ': ' . implode('; ', $changes) : '');
+        $description = "Cap nhat chức vụ '{$position->name}'" . (!empty($changes) ? ': ' . implode('; ', $changes) : '');
 
         $this->logActivity('update', $description, $id);
 
@@ -70,7 +70,7 @@ class PositionService extends BaseService
         $result = $this->positionRepository->update($id, ['is_active' => $newStatus]);
         $statusText = $newStatus ? 'kich hoat' : 'tam khoa';
 
-        $this->logActivity('toggle_status', "Da {$statusText} chuc vu: {$position->name}", $id);
+        $this->logActivity('toggle_status', "Da {$statusText} chức vụ: {$position->name}", $id);
 
         return $result;
     }
@@ -82,7 +82,7 @@ class PositionService extends BaseService
 
         $result = $this->positionRepository->delete($id);
 
-        $this->logActivity('delete', "Da xoa chuc vu: {$name}", $id);
+        $this->logActivity('delete', "Da xoa chức vụ: {$name}", $id);
 
         return $result;
     }
@@ -92,4 +92,5 @@ class PositionService extends BaseService
         $this->audit('positions', $action, $description, 'positions', $id);
     }
 }
+
 

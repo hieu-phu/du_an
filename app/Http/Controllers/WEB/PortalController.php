@@ -58,21 +58,21 @@ class PortalController extends Controller
 
         $stats = [
             [
-                'title' => $this->isSystemOwner($user) ? 'Nhan su' : 'Nhan su duoi quyen',
+                'title' => $this->isSystemOwner($user) ? 'Nhân sự' : 'Nhân sự dưới quyền',
                 'value' => (string) ($this->isSystemOwner($user)
                     ? User::query()->where('is_employee', 1)->count()
                     : $this->visibleEmployeeProfilesQuery($user)->count()),
             ],
             [
-                'title' => 'Phong ban',
+                'title' => 'Phòng ban',
                 'value' => (string) Department::query()->count(),
             ],
             [
-                'title' => 'Chuc vu',
+                'title' => 'Chức vụ',
                 'value' => (string) Position::query()->count(),
             ],
             [
-                'title' => 'Du an',
+                'title' => 'Dự án',
                 'value' => (string) Project::query()->count(),
             ],
         ];
@@ -80,7 +80,7 @@ class PortalController extends Controller
         if ($user && !$this->hasGlobalProjectAccess($user) && $profileId) {
             $stats = [
                 [
-                    'title' => 'Du an cua toi',
+                    'title' => 'Dự án của tôi',
                     'value' => (string) ProjectMember::query()
                         ->where('employee_profile_id', $profileId)
                         ->where('is_active', true)
@@ -201,10 +201,10 @@ class PortalController extends Controller
     private function buildProjectStatusCounts(Builder $projectBaseQuery): array
     {
         $statusMap = [
-            'planning' => 'Ke hoach',
-            'in_progress' => 'Dang trien khai',
-            'on_hold' => 'Tam dung',
-            'completed' => 'Hoan thanh',
+            'planning' => 'Kế hoạch',
+            'in_progress' => 'Đang triển khai',
+            'on_hold' => 'Tạm dừng',
+            'completed' => 'Hoàn thành',
         ];
 
         $counts = (clone $projectBaseQuery)
@@ -374,10 +374,10 @@ class PortalController extends Controller
     private function projectStatusLabel(?string $status): string
     {
         return match ((string) $status) {
-            'planning' => 'Ke hoach',
-            'in_progress' => 'Dang trien khai',
-            'on_hold' => 'Tam dung',
-            'completed' => 'Hoan thanh',
+            'planning' => 'Kế hoạch',
+            'in_progress' => 'Đang triển khai',
+            'on_hold' => 'Tạm dừng',
+            'completed' => 'Hoàn thành',
             default => '-',
         };
     }
@@ -491,6 +491,7 @@ class PortalController extends Controller
                 ])->filter()->join(', '),
                 'current_shift' => $currentShift,
             ],
+            'passwordChangeOtpPending' => (bool) $request->session()->has('auth.password_change_otp'),
         ]);
     }
 

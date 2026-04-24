@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
     <style>
@@ -16,16 +16,18 @@
         </div>
         <div class="content">
             <p>Xin chao,</p>
-            <p>He thong yeu cau xac minh OTP cho lan dang nhap dau tien cua tai khoan. Vui long nhap ma ben duoi de tiep tuc:</p>
+            <p>Hệ thống yêu cầu xac minh OTP cho lan dang nhap dau tien cua tài khoản. Vui lòng nhap ma ben duoi de tiep tuc:</p>
 
             <div class="otp-code">{{ $otp }}</div>
 
-            <p>Ma nay se het han sau 15 phut. Neu ban khong thuc hien dang nhap, vui long bo qua email nay.</p>
+            <p>Ma nay se het han sau 15 phut. Neu ban không thuc hien dang nhap, vui long bo qua email nay.</p>
             <p>Tran trong,<br>Doi ngu {{ config('app.name') }}</p>
         </div>
         <div class="footer">
-            Day la email tu dong, vui long khong tra loi.
+            Day la email tu dong, vui long không tra loi.
         </div>
     </div>
 </body>
 </html>
+
+

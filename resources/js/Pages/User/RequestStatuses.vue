@@ -1,6 +1,6 @@
 <template>
-    <AdminLayout title="Yeu cau cua toi">
-        <PageBreadcrumb title="Yeu cau cua toi" :items="breadcrumbItems" />
+    <AdminLayout title="Yêu cầu của tôi">
+        <PageBreadcrumb title="Yêu cầu của tôi" :items="breadcrumbItems" />
 
         <div class="rounded-xl border border-gray-200 bg-white p-4">
             <div class="mb-4 flex flex-wrap gap-3">
@@ -51,11 +51,11 @@
                         </div>
 
                         <div v-if="activeApprovalTab === 'rejected'" class="mt-2 rounded-lg px-3 py-2 text-sm" :class="activeApprovalPanel.noteClass">
-                            {{ item.review_note || 'Admin chua nhap ly do tu choi.' }}
+                            {{ item.review_note || 'Admin chưa nhập lý do từ chối.' }}
                         </div>
 
                         <div v-if="activeApprovalTab === 'approved'" class="mt-2 text-sm text-emerald-700">
-                            Da duoc {{ item.reviewed_by?.name || 'Admin' }} duyet.
+                            Đã được {{ item.reviewed_by?.name || 'Admin' }} duyệt.
                         </div>
                     </div>
                 </div>
@@ -84,13 +84,13 @@ const rejectedApprovals = computed(() => props.approvalSummary?.rejected || [])
 
 const breadcrumbItems = [
     { text: 'HCNS', link: null },
-    { text: 'Yeu cau cua toi', link: null },
+    { text: 'Yêu cầu của tôi', link: null },
 ]
 
 const approvalTabs = computed(() => [
     {
         key: 'approved',
-        label: 'Da duyet',
+        label: 'Đã duyệt',
         count: approvedApprovals.value.length,
         activeClass: 'border-emerald-200 bg-emerald-50 text-emerald-800',
         inactiveClass: 'border-gray-200 bg-white text-gray-700 hover:border-emerald-200 hover:text-emerald-700',
@@ -99,7 +99,7 @@ const approvalTabs = computed(() => [
     },
     {
         key: 'rejected',
-        label: 'Tu choi',
+        label: 'Từ chối',
         count: rejectedApprovals.value.length,
         activeClass: 'border-rose-200 bg-rose-50 text-rose-800',
         inactiveClass: 'border-gray-200 bg-white text-gray-700 hover:border-rose-200 hover:text-rose-700',
@@ -108,7 +108,7 @@ const approvalTabs = computed(() => [
     },
     {
         key: 'pending',
-        label: 'Cho duyet',
+        label: 'Chờ duyệt',
         count: pendingApprovals.value.length,
         activeClass: 'border-amber-200 bg-amber-50 text-amber-800',
         inactiveClass: 'border-gray-200 bg-white text-gray-700 hover:border-amber-200 hover:text-amber-700',
@@ -125,52 +125,52 @@ const activeApprovalItems = computed(() => ({
 
 const activeApprovalPanel = computed(() => ({
     approved: {
-        title: 'Yeu cau da duyet',
-        description: 'Cac yeu cau da duoc Admin phe duyet',
+        title: 'Yêu cầu đã duyệt',
+        description: 'Các yêu cầu đã được Admin phê duyệt',
         wrapperClass: 'border-emerald-200 bg-emerald-50/70',
         titleClass: 'text-emerald-900',
         subtitleClass: 'text-emerald-700',
         itemBorderClass: 'border-emerald-200',
         statusBadgeClass: 'bg-emerald-100 text-emerald-800',
-        badgeLabel: 'Duoc duyet',
-        timeLabel: 'Duyet luc:',
+        badgeLabel: 'Được duyệt',
+        timeLabel: 'Duyệt lúc:',
         emptyClass: 'border-emerald-200 text-emerald-800',
-        emptyText: 'Hien chua co yeu cau nao duoc duyet.',
+        emptyText: 'Hiện chưa có yêu cầu nào được duyệt.',
         noteClass: '',
     },
     rejected: {
-        title: 'Yeu cau bi tu choi',
-        description: 'Cac yeu cau da bi tu choi',
+        title: 'Yêu cầu bị từ chối',
+        description: 'Các yêu cầu đã bị từ chối',
         wrapperClass: 'border-rose-200 bg-rose-50/70',
         titleClass: 'text-rose-900',
         subtitleClass: 'text-rose-700',
         itemBorderClass: 'border-rose-200',
         statusBadgeClass: 'bg-rose-100 text-rose-800',
-        badgeLabel: 'Tu choi',
-        timeLabel: 'Xu ly luc:',
+        badgeLabel: 'Từ chối',
+        timeLabel: 'Xử lý lúc:',
         emptyClass: 'border-rose-200 text-rose-800',
-        emptyText: 'Hien chua co yeu cau nao bi tu choi.',
+        emptyText: 'Hiện chưa có yêu cầu nào bị từ chối.',
         noteClass: 'bg-rose-50 text-rose-900',
     },
     pending: {
-        title: 'Yeu cau cho duyet',
-        description: 'Cac yeu cau dang cho Admin xu ly',
+        title: 'Yêu cầu chờ duyệt',
+        description: 'Các yêu cầu đang chờ Admin xử lý',
         wrapperClass: 'border-amber-200 bg-amber-50/70',
         titleClass: 'text-amber-900',
         subtitleClass: 'text-amber-700',
         itemBorderClass: 'border-amber-200',
         statusBadgeClass: 'bg-amber-100 text-amber-800',
-        badgeLabel: 'Cho duyet',
-        timeLabel: 'Gui luc:',
+        badgeLabel: 'Chờ duyệt',
+        timeLabel: 'Gửi lúc:',
         emptyClass: 'border-amber-200 text-amber-800',
-        emptyText: 'Hien chua co yeu cau nao dang cho duyet.',
+        emptyText: 'Hiện chưa có yêu cầu nào đang chờ duyệt.',
         noteClass: '',
     },
 }[activeApprovalTab.value]))
 
 const requestTypeLabel = (type) => ({
-    user_create: 'Tao tai khoan',
-    user_salary_change: 'Doi luong co ban',
+    user_create: 'Tạo tài khoản',
+    user_salary_change: 'Đổi lương cơ bản',
 }[type] || '-')
 
 const requestHeadline = (item) => {

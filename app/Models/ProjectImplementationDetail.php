@@ -60,4 +60,14 @@ class ProjectImplementationDetail extends Model
     {
         return $this->hasMany(ProjectDetailLog::class, 'implementation_detail_id');
     }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(ProjectAttachment::class, 'implementation_detail_id');
+    }
+
+    public function comments(): HasMany
+    {
+        return $this->hasMany(ProjectDetailComment::class, 'implementation_detail_id');
+    }
 }

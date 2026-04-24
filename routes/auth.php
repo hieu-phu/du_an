@@ -83,6 +83,9 @@ Route::middleware('auth')->group(function () {
         ->name('phone.update');
 
     Route::put('password', [PasswordController::class, 'update'])->name('password.update');
+    Route::post('password/verify-otp', [PasswordController::class, 'verifyOtp'])->name('password.change-otp.verify');
+    Route::post('password/resend-otp', [PasswordController::class, 'resendOtp'])->name('password.change-otp.resend');
+    Route::delete('password/change-otp', [PasswordController::class, 'cancelOtp'])->name('password.change-otp.cancel');
 
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
         ->name('logout');

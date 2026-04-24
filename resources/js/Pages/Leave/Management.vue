@@ -1,35 +1,35 @@
 <template>
-  <Head title="Quan ly nghi phep" />
+  <Head title="Quản lý nghỉ phép" />
 
   <AdminLayout>
-    <PageBreadcrumb title="Quan ly nghi phep" :items="[{ text: 'Cham cong', link: null }, { text: 'Nghi phep', link: null }]" />
+    <PageBreadcrumb title="Quản lý nghỉ phép" :items="[{ text: 'Chấm công', link: null }, { text: 'Nghỉ phép', link: null }]" />
 
     <section class="mb-4 rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm text-blue-900">
-      <span class="font-semibold">Tong quan:</span> {{ summaryScopeLabel }}
+      <span class="font-semibold">Tổng quan:</span> {{ summaryScopeLabel }}
     </section>
 
     <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-      <SummaryCard label="Duoc huong" :value="formatDays(summary.total_entitled)" />
-      <SummaryCard label="Da su dung" :value="formatDays(summary.total_used)" />
-      <SummaryCard label="Dang cho duyet" :value="formatDays(summary.total_pending)" />
-      <SummaryCard label="Con kha dung" :value="formatDays(summary.total_available)" />
+      <SummaryCard label="Được hưởng" :value="formatDays(summary.total_entitled)" />
+      <SummaryCard label="Đã sử dụng" :value="formatDays(summary.total_used)" />
+      <SummaryCard label="Đang chờ duyệt" :value="formatDays(summary.total_pending)" />
+      <SummaryCard label="Còn khả dụng" :value="formatDays(summary.total_available)" />
     </div>
 
     <section class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="flex flex-col gap-1">
-        <h3 class="text-lg font-semibold text-gray-900">Danh muc loai nghi</h3>
+        <h3 class="text-lg font-semibold text-gray-900">Danh mục loại nghỉ</h3>
       </div>
 
       <form class="mt-5 grid grid-cols-1 gap-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-sm" @submit.prevent="submitCreateType">
         <div class="grid grid-cols-1 gap-5 md:grid-cols-12">
           <div class="md:col-span-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            <Field label="Ten loai nghi" :error="createTypeForm.errors.name">
-              <input v-model.trim="createTypeForm.name" class="form-input" placeholder="Nghi phep nam">
+            <Field label="Tên loại nghỉ" :error="createTypeForm.errors.name">
+              <input v-model.trim="createTypeForm.name" class="form-input" placeholder="Nghỉ phép năm">
             </Field>
-            <Field label="So ngay phep/nam" :error="createTypeForm.errors.annual_quota">
+            <Field label="Số ngày phép/năm" :error="createTypeForm.errors.annual_quota">
               <input v-model.number="createTypeForm.annual_quota" class="form-input" type="number" min="0" max="365" step="0.5">
             </Field>
-            <Field label="Toi da/don" :error="createTypeForm.errors.max_days_per_request">
+            <Field label="Tối đa/đơn" :error="createTypeForm.errors.max_days_per_request">
               <div class="relative">
                 <input
                   v-if="createTypeForm.has_request_limit"
@@ -39,39 +39,39 @@
                   min="0.5"
                   max="365"
                   step="0.5"
-                  placeholder="So ngay"
+                  placeholder="Số ngày"
                 >
                 <input
                   v-else
                   class="form-input form-input-readonly"
                   type="text"
-                  value="Khong gioi han"
+                  value="Không giới hạn"
                   readonly
                 >
               </div>
             </Field>
-            <Field label="Mo ta" :error="createTypeForm.errors.description">
-              <input v-model.trim="createTypeForm.description" class="form-input" placeholder="Mo ta ngan">
+            <Field label="Mô tả" :error="createTypeForm.errors.description">
+              <input v-model.trim="createTypeForm.description" class="form-input" placeholder="Mô tả ngắn">
             </Field>
           </div>
 
           <div class="md:col-span-4">
-            <OptionGroup title="Trang thai va quy dinh" description="Cau hinh cac quy tac cho loai nghi nay.">
+            <OptionGroup title="Trạng thái và quy định" description="Cấu hình các quy tắc cho loại nghỉ này.">
               <div class="grid grid-cols-1 gap-2">
-                <OptionCheck v-model="createTypeForm.is_active" label="Dang dung" description="Cho phep su dung." />
-                <OptionCheck v-model="createTypeForm.is_paid" label="Co luong" description="Co tinh luong." />
+                <OptionCheck v-model="createTypeForm.is_active" label="Đang dùng" description="Cho phép sử dụng." />
+                <OptionCheck v-model="createTypeForm.is_paid" label="Có lương" description="Có tính lương." />
                 <OptionCheck
                   v-model="createTypeForm.deducts_balance"
-                  label="Tru quy"
-                  description="Tru phep ton."
+                  label="Trừ quỹ"
+                  description="Trừ phép tồn."
                   :disabled="!createTypeForm.is_paid"
                 />
-                <OptionCheck v-model="createTypeForm.requires_attachment" label="Can minh chung" description="Bat buoc tep." />
-                <OptionCheck v-model="createTypeForm.has_request_limit" label="Gioi han/don" description="So ngay toi da." />
+                <OptionCheck v-model="createTypeForm.requires_attachment" label="Cần minh chứng" description="Bắt buộc tệp." />
+                <OptionCheck v-model="createTypeForm.has_request_limit" label="Giới hạn/đơn" description="Số ngày tối đa." />
                 <OptionCheck
                   v-model="createTypeForm.prorate_by_hire_date"
                   label="Prorate"
-                  description="Theo ngay vao."
+                  description="Theo ngày vào."
                   :disabled="!canProrate(createTypeForm)"
                 />
               </div>
@@ -83,10 +83,10 @@
           <button class="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60 shadow-md shadow-blue-200" :disabled="createTypeForm.processing">
             <template v-if="createTypeForm.processing">
               <svg class="h-4 w-4 animate-spin text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-              Dang them...
+              Đang thêm...
             </template>
             <template v-else>
-              Them loai nghi
+              Thêm loại nghỉ
             </template>
           </button>
         </div>
@@ -95,12 +95,12 @@
       <TableShell class="mt-5">
         <thead>
           <tr class="text-left">
-            <th class="p-2">Loai nghi</th>
-            <th class="p-2">Quy tac</th>
-            <th class="p-2">So ngay phep/nam</th>
-            <th class="p-2">Toi da moi don</th>
-            <th class="p-2">Trang thai</th>
-            <th class="p-2">Tac vu</th>
+            <th class="p-2">Loại nghỉ</th>
+            <th class="p-2">Quy tắc</th>
+            <th class="p-2">Số ngày phép/năm</th>
+            <th class="p-2">Tối đa mỗi đơn</th>
+            <th class="p-2">Trạng thái</th>
+            <th class="p-2">Tác vụ</th>
           </tr>
         </thead>
         <tbody>
@@ -110,19 +110,19 @@
               <div class="text-xs text-gray-500">{{ item.code }}</div>
             </td>
             <td class="p-2 text-sm">
-              <div>{{ item.is_paid ? 'Co luong' : 'Khong luong' }}</div>
-              <div class="text-gray-500">{{ item.deducts_balance ? 'Tru quy phep' : 'Khong tru quy' }}{{ item.requires_attachment ? ' | Can minh chung' : '' }}</div>
+              <div>{{ item.is_paid ? 'Có lương' : 'Không lương' }}</div>
+              <div class="text-gray-500">{{ item.deducts_balance ? 'Trừ quỹ phép' : 'Không trừ quỹ' }}{{ item.requires_attachment ? ' | Cần minh chứng' : '' }}</div>
             </td>
             <td class="p-2">{{ formatDays(item.annual_quota) }}</td>
-            <td class="p-2">{{ item.max_days_per_request === null ? 'Khong gioi han' : formatDays(item.max_days_per_request) }}</td>
+            <td class="p-2">{{ item.max_days_per_request === null ? 'Không giới hạn' : formatDays(item.max_days_per_request) }}</td>
             <td class="p-2">
               <span :class="item.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'" class="rounded-full px-3 py-1 text-xs font-semibold">
-                {{ item.is_active ? 'Dang dung' : 'Ngung dung' }}
+                {{ item.is_active ? 'Đang dùng' : 'Ngừng dùng' }}
               </span>
             </td>
             <td class="p-2 space-x-2">
-              <button type="button" class="rounded border px-3 py-1 text-sm" @click="openEditType(item)">Sua</button>
-              <button type="button" class="rounded border px-3 py-1 text-sm" @click="toggleType(item.id)">{{ item.is_active ? 'Ngung' : 'Kich hoat' }}</button>
+              <button type="button" class="rounded border px-3 py-1 text-sm" @click="openEditType(item)">Sửa</button>
+              <button type="button" class="rounded border px-3 py-1 text-sm" @click="toggleType(item.id)">{{ item.is_active ? 'Ngừng' : 'Kích hoạt' }}</button>
             </td>
           </tr>
         </tbody>
@@ -131,71 +131,71 @@
 
     <section class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="flex flex-col gap-1">
-        <h3 class="text-lg font-semibold text-gray-900">So du phep nhan vien</h3>
+        <h3 class="text-lg font-semibold text-gray-900">Số dư phép nhân viên</h3>
       </div>
 
       <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-4">
-        <Field label="Nam">
+        <Field label="Năm">
           <input v-model.number="filterForm.year" class="form-input" type="number" min="2000" max="2100" @change="applyFilters">
         </Field>
-        <Field label="Nhan vien">
+        <Field label="Nhân viên">
           <select v-model="filterForm.employee_profile_id" class="form-input" @change="applyFilters">
-            <option :value="null">Tat ca</option>
+            <option :value="null">Tất cả</option>
             <option v-for="employee in employees" :key="employee.id" :value="employee.id">{{ employee.label }}</option>
           </select>
         </Field>
-        <Field label="Loai nghi">
+        <Field label="Loại nghỉ">
           <select v-model="filterForm.leave_type_id" class="form-input" @change="applyFilters">
-            <option :value="null">Tat ca</option>
+            <option :value="null">Tất cả</option>
             <option v-for="type in leave_types" :key="type.id" :value="type.id">{{ type.name }}</option>
           </select>
         </Field>
       </div>
 
       <form class="mt-5 grid grid-cols-1 gap-4 rounded-xl border border-blue-100 bg-blue-50/70 p-4 md:grid-cols-4" @submit.prevent="submitGrant">
-        <div class="text-sm font-semibold text-blue-900 md:col-span-4">Tao/cap nhat so du tu dong</div>
-        <Field label="Nhan vien" :error="grantForm.errors.employee_profile_id">
+        <div class="text-sm font-semibold text-blue-900 md:col-span-4">Tạo/cập nhật số dư tự động</div>
+        <Field label="Nhân viên" :error="grantForm.errors.employee_profile_id">
           <select v-model="grantForm.employee_profile_id" class="form-input">
-            <option value="">Chon nhan vien</option>
+            <option value="">Chọn nhân viên</option>
             <option v-for="employee in employees" :key="employee.id" :value="employee.id">{{ employee.label }}</option>
           </select>
         </Field>
-        <Field label="Loai nghi" :error="grantForm.errors.leave_type_id">
+        <Field label="Loại nghỉ" :error="grantForm.errors.leave_type_id">
           <select v-model="grantForm.leave_type_id" class="form-input">
-            <option value="">Chon loai nghi</option>
-            <option v-for="type in active_leave_types" :key="type.id" :value="type.id">{{ type.name }} - {{ formatDays(type.annual_quota) }}/nam</option>
+            <option value="">Chọn loại nghỉ</option>
+            <option v-for="type in active_leave_types" :key="type.id" :value="type.id">{{ type.name }} - {{ formatDays(type.annual_quota) }}/năm</option>
           </select>
         </Field>
-        <Field label="Nam" :error="grantForm.errors.year">
+        <Field label="Năm" :error="grantForm.errors.year">
           <input v-model.number="grantForm.year" class="form-input" type="number" min="2000" max="2100">
         </Field>
         <div class="flex items-end justify-end">
           <button class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" :disabled="grantForm.processing">
-            Tao so du tu dong
+            Tạo số dư tự động
           </button>
         </div>
       </form>
 
       <form class="mt-4 grid grid-cols-1 gap-4 rounded-xl border border-emerald-100 bg-emerald-50/70 p-4 md:grid-cols-4" @submit.prevent="submitBulkGrant">
-        <div class="text-sm font-semibold text-emerald-900 md:col-span-4">Cap/dong bo hang loat</div>
-        <Field label="Nam" :error="bulkGrantForm.errors.year">
+        <div class="text-sm font-semibold text-emerald-900 md:col-span-4">Cấp/đồng bộ hàng loạt</div>
+        <Field label="Năm" :error="bulkGrantForm.errors.year">
           <input v-model.number="bulkGrantForm.year" class="form-input" type="number" min="2000" max="2100">
         </Field>
-        <Field label="Nhan vien">
+        <Field label="Nhân viên">
           <select v-model="bulkGrantForm.employee_profile_id" class="form-input">
-            <option :value="null">Tat ca nhan vien</option>
+            <option :value="null">Tất cả nhân viên</option>
             <option v-for="employee in employees" :key="employee.id" :value="employee.id">{{ employee.label }}</option>
           </select>
         </Field>
-        <Field label="Loai nghi">
+        <Field label="Loại nghỉ">
           <select v-model="bulkGrantForm.leave_type_id" class="form-input">
-            <option :value="null">Tat ca loai nghi</option>
+            <option :value="null">Tất cả loại nghỉ</option>
             <option v-for="type in active_leave_types" :key="type.id" :value="type.id">{{ type.name }}</option>
           </select>
         </Field>
         <div class="flex items-end justify-end">
           <button class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" :disabled="bulkGrantForm.processing">
-            Dong bo hang loat
+            Đồng bộ hàng loạt
           </button>
         </div>
       </form>
@@ -203,15 +203,15 @@
       <TableShell class="mt-5">
         <thead>
           <tr class="text-left">
-            <th class="p-2">Nhan vien</th>
-            <th class="p-2">Loai nghi</th>
-            <th class="p-2">Nam</th>
-            <th class="p-2">Duoc huong</th>
-            <th class="p-2">Dieu chinh</th>
-            <th class="p-2">Da dung</th>
-            <th class="p-2">Cho duyet</th>
-            <th class="p-2">Con lai</th>
-            <th class="p-2">Tac vu</th>
+            <th class="p-2">Nhân viên</th>
+            <th class="p-2">Loại nghỉ</th>
+            <th class="p-2">Năm</th>
+            <th class="p-2">Được hưởng</th>
+            <th class="p-2">Điều chỉnh</th>
+            <th class="p-2">Đã dùng</th>
+            <th class="p-2">Chờ duyệt</th>
+            <th class="p-2">Còn lại</th>
+            <th class="p-2">Tác vụ</th>
           </tr>
         </thead>
         <tbody>
@@ -228,7 +228,7 @@
             <td class="p-2">{{ formatDays(item.pending_days) }}</td>
             <td class="p-2 font-semibold text-emerald-700">{{ formatDays(item.available_days) }}</td>
             <td class="p-2">
-              <button type="button" class="rounded border px-3 py-1 text-sm" @click="openAdjust(item)">Dieu chinh</button>
+              <button type="button" class="rounded border px-3 py-1 text-sm" @click="openAdjust(item)">Điều chỉnh</button>
             </td>
           </tr>
         </tbody>
@@ -236,7 +236,7 @@
       <LocalPagination
         v-if="balances.length"
         class="mt-4"
-        label="so du"
+        label="số dư"
         :total="balances.length"
         :page="pagination.balances"
         :per-page="perPage.balances"
@@ -247,17 +247,17 @@
     </section>
 
     <section class="rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
-      <h3 class="text-lg font-semibold text-gray-900">Lich su bien dong quy phep</h3>
+      <h3 class="text-lg font-semibold text-gray-900">Lịch sử biến động quỹ phép</h3>
       <TableShell class="mt-5">
         <thead>
           <tr class="text-left">
-            <th class="p-2">Thoi gian</th>
-            <th class="p-2">Nhan vien</th>
-            <th class="p-2">Loai nghi</th>
-            <th class="p-2">Loai bien dong</th>
-            <th class="p-2">So ngay</th>
-            <th class="p-2">Con lai sau GD</th>
-            <th class="p-2">Ghi chu</th>
+            <th class="p-2">Thời gian</th>
+            <th class="p-2">Nhân viên</th>
+            <th class="p-2">Loại nghỉ</th>
+            <th class="p-2">Loại biến động</th>
+            <th class="p-2">Số ngày</th>
+            <th class="p-2">Còn lại sau GD</th>
+            <th class="p-2">Ghi chú</th>
           </tr>
         </thead>
         <tbody>
@@ -275,7 +275,7 @@
       <LocalPagination
         v-if="recent_transactions.length"
         class="mt-4"
-        label="giao dich"
+        label="giao dịch"
         :total="recent_transactions.length"
         :page="pagination.transactions"
         :per-page="perPage.transactions"
@@ -289,7 +289,7 @@
       <form class="w-full max-w-5xl transform overflow-hidden rounded-3xl bg-white shadow-2xl transition-all" @submit.prevent="submitEditType">
         <div class="flex items-center justify-between bg-gray-50/50 px-8 py-6 border-b border-gray-100">
           <div>
-            <h3 class="text-xl font-bold text-gray-900">Chinh sua loai nghi</h3>
+            <h3 class="text-xl font-bold text-gray-900">Chỉnh sửa loại nghỉ</h3>
             <p class="mt-1 text-sm text-gray-500 font-medium">{{ editingType.name }}</p>
           </div>
           <button type="button" class="group flex h-10 w-10 items-center justify-center rounded-full transition hover:bg-gray-200" @click="closeEditType">
@@ -300,13 +300,13 @@
         <div class="grid grid-cols-1 gap-0 xl:grid-cols-12">
           <div class="xl:col-span-8 p-8 space-y-8">
             <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              <Field label="Ten loai nghi" :error="editTypeForm.errors.name">
+              <Field label="Tên loại nghỉ" :error="editTypeForm.errors.name">
                 <input v-model.trim="editTypeForm.name" class="form-input">
               </Field>
-              <Field label="So ngay phep/nam" :error="editTypeForm.errors.annual_quota">
+              <Field label="Số ngày phép/năm" :error="editTypeForm.errors.annual_quota">
                 <input v-model.number="editTypeForm.annual_quota" class="form-input" type="number" min="0" max="365" step="0.5">
               </Field>
-              <Field label="Toi da/don" :error="editTypeForm.errors.max_days_per_request">
+              <Field label="Tối đa/đơn" :error="editTypeForm.errors.max_days_per_request">
                 <input
                   v-if="editTypeForm.has_request_limit"
                   v-model.number="editTypeForm.max_days_per_request"
@@ -315,49 +315,49 @@
                   min="0.5"
                   max="365"
                   step="0.5"
-                  placeholder="So ngay"
+                  placeholder="Số ngày"
                 >
                 <input
                   v-else
                   class="form-input form-input-readonly"
                   type="text"
-                  value="Khong gioi han"
+                  value="Không giới hạn"
                   readonly
                 >
               </Field>
-              <Field label="Mo ta" :error="editTypeForm.errors.description">
-                <input v-model.trim="editTypeForm.description" class="form-input" placeholder="Ghi chu ngan">
+              <Field label="Mô tả" :error="editTypeForm.errors.description">
+                <input v-model.trim="editTypeForm.description" class="form-input" placeholder="Ghi chú ngắn">
               </Field>
             </div>
 
             <div class="rounded-2xl bg-blue-50/50 p-4 border border-blue-100/50">
               <div class="flex items-center gap-3 text-blue-800">
                 <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                <p class="text-sm font-semibold">Huong dan quy dac</p>
+                <p class="text-sm font-semibold">Hướng dẫn quy tắc</p>
               </div>
               <p class="mt-1 text-xs text-blue-600/80 leading-relaxed">
-                Dam bao ma loai la duy nhat va ten goi ro rang. Cac thiet lap ben phai se anh huong truc tiep den quyen loi va luong cua nhan vien khi su dung loai nghi nay.
+                Đảm bảo mã loại là duy nhất và tên gọi rõ ràng. Các thiết lập bên phải sẽ ảnh hưởng trực tiếp đến quyền lợi và lương của nhân viên khi sử dụng loại nghỉ này.
               </p>
             </div>
           </div>
 
           <div class="xl:col-span-4 bg-gray-50/30 p-8 border-l border-gray-100">
-            <OptionGroup title="Trang thai va quy dinh" description="Cau hinh nang cao de tranh dat nham rule.">
+            <OptionGroup title="Trạng thái và quy định" description="Cấu hình nâng cao để tránh đặt nhầm rule.">
               <div class="grid grid-cols-1 gap-3">
-                <OptionCheck v-model="editTypeForm.is_active" label="Dang dung" description="Cho phep nhan vien tiep tuc dung." />
-                <OptionCheck v-model="editTypeForm.is_paid" label="Co luong" description="Ngay nghi duoc tinh luong." />
+                <OptionCheck v-model="editTypeForm.is_active" label="Đang dùng" description="Cho phép nhân viên tiếp tục dùng." />
+                <OptionCheck v-model="editTypeForm.is_paid" label="Có lương" description="Ngày nghỉ được tính lương." />
                 <OptionCheck
                   v-model="editTypeForm.deducts_balance"
-                  label="Tru quy"
-                  description="Tru vao quy phep con lai."
+                  label="Trừ quỹ"
+                  description="Trừ vào quỹ phép còn lại."
                   :disabled="!editTypeForm.is_paid"
                 />
-                <OptionCheck v-model="editTypeForm.requires_attachment" label="Can minh chung" description="Bat buoc dinh kem tai lieu." />
-                <OptionCheck v-model="editTypeForm.has_request_limit" label="Gioi han/don" description="Nhap so ngay toi da." />
+                <OptionCheck v-model="editTypeForm.requires_attachment" label="Cần minh chứng" description="Bắt buộc đính kèm tài liệu." />
+                <OptionCheck v-model="editTypeForm.has_request_limit" label="Giới hạn/đơn" description="Nhập số ngày tối đa." />
                 <OptionCheck
                   v-model="editTypeForm.prorate_by_hire_date"
                   label="Prorate"
-                  description="Cap phat theo ngay vao lam."
+                  description="Cấp phát theo ngày vào làm."
                   :disabled="!canProrate(editTypeForm)"
                 />
               </div>
@@ -366,9 +366,9 @@
         </div>
 
         <div class="flex items-center justify-end gap-3 bg-gray-50/50 px-8 py-6 border-t border-gray-100">
-          <button type="button" class="rounded-xl border border-gray-300 px-6 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50" @click="closeEditType">Huy</button>
+          <button type="button" class="rounded-xl border border-gray-300 px-6 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50" @click="closeEditType">Hủy</button>
           <button class="rounded-xl bg-blue-600 px-8 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:opacity-60 shadow-lg shadow-blue-200" :disabled="editTypeForm.processing">
-            {{ editTypeForm.processing ? 'Dang luu...' : 'Luu thay doi' }}
+            {{ editTypeForm.processing ? 'Đang lưu...' : 'Lưu thay đổi' }}
           </button>
         </div>
       </form>
@@ -376,19 +376,19 @@
 
     <div v-if="adjustingBalance" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <form class="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl" @submit.prevent="submitAdjust">
-        <h3 class="text-lg font-semibold text-gray-900">Dieu chinh quy phep</h3>
+        <h3 class="text-lg font-semibold text-gray-900">Điều chỉnh quỹ phép</h3>
         <p class="mt-1 text-sm text-gray-500">{{ adjustingBalance.employee_name }} - {{ adjustingBalance.leave_type_name }}</p>
         <div class="mt-4 space-y-4">
-          <Field label="So ngay dieu chinh (+ tang, - giam)" :error="adjustForm.errors.days">
+          <Field label="Số ngày điều chỉnh (+ tăng, - giảm)" :error="adjustForm.errors.days">
             <input v-model.number="adjustForm.days" class="form-input" type="number" step="0.5">
           </Field>
-          <Field label="Ly do dieu chinh" :error="adjustForm.errors.note">
+          <Field label="Lý do điều chỉnh" :error="adjustForm.errors.note">
             <textarea v-model.trim="adjustForm.note" class="form-input min-h-[88px]"></textarea>
           </Field>
         </div>
         <div class="mt-5 flex justify-end gap-3">
-          <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700" @click="closeAdjust">Huy</button>
-          <button class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" :disabled="adjustForm.processing">Luu dieu chinh</button>
+          <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700" @click="closeAdjust">Hủy</button>
+          <button class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" :disabled="adjustForm.processing">Lưu điều chỉnh</button>
         </div>
       </form>
     </div>
@@ -453,12 +453,12 @@ const adjustForm = useForm({
 const summaryScopeLabel = computed(() => {
   const employee = props.employees.find((item) => Number(item.id) === Number(filterForm.employee_profile_id))
   const leaveType = props.leave_types.find((item) => Number(item.id) === Number(filterForm.leave_type_id))
-  const parts = [`nam ${filterForm.year}`]
+  const parts = [`năm ${filterForm.year}`]
 
-  parts.push(employee ? `nhan vien ${employee.label}` : 'tat ca nhan vien')
-  parts.push(leaveType ? `loai nghi ${leaveType.name}` : 'tat ca loai nghi')
+  parts.push(employee ? `nhân viên ${employee.label}` : 'tất cả nhân viên')
+  parts.push(leaveType ? `loại nghỉ ${leaveType.name}` : 'tất cả loại nghỉ')
 
-  return `Dang xem theo ${parts.join(', ')}`
+  return `Đang xem theo ${parts.join(', ')}`
 })
 
 const paginatedBalances = computed(() => paginateItems(props.balances, 'balances'))
@@ -677,7 +677,7 @@ function submitAdjust() {
 
 function formatDays(value) {
   const number = Number(value || 0)
-  return `${Number.isInteger(number) ? number : number.toFixed(1)} ngay`
+  return `${Number.isInteger(number) ? number : number.toFixed(1)} ngày`
 }
 
 function formatDateTime(value) {
@@ -687,11 +687,11 @@ function formatDateTime(value) {
 
 function transactionLabel(type) {
   return {
-    grant: 'Tao/cap nhat tu dong',
-    adjust: 'Dieu chinh',
-    pending: 'Giu cho duyet',
-    approve: 'Da duyet',
-    reject: 'Hoan do tu choi',
+    grant: 'Tạo/cập nhật tự động',
+    adjust: 'Điều chỉnh',
+    pending: 'Giữ chờ duyệt',
+    approve: 'Đã duyệt',
+    reject: 'Hoàn đồ từ chối',
   }[type] || type
 }
 
@@ -772,7 +772,7 @@ const LocalPagination = {
     page: { type: Number, required: true },
     perPage: { type: Number, required: true },
     options: { type: Array, default: () => [10, 20, 50] },
-    label: { type: String, default: 'ban ghi' },
+    label: { type: String, default: 'bản ghi' },
   },
   emits: ['page', 'per-page'],
   setup(componentProps, { emit }) {
@@ -795,9 +795,9 @@ const LocalPagination = {
     ].join(' ')
 
     return () => h('div', { class: 'flex flex-col gap-3 border-t border-gray-100 pt-4 md:flex-row md:items-center md:justify-between' }, [
-      h('div', { class: 'text-sm font-medium text-gray-600' }, `Hien thi ${from.value}-${to.value} / ${componentProps.total} ${componentProps.label}`),
+      h('div', { class: 'text-sm font-medium text-gray-600' }, `Hiển thị ${from.value}-${to.value} / ${componentProps.total} ${componentProps.label}`),
       h('div', { class: 'flex flex-wrap items-center gap-2' }, [
-        h('label', { class: 'text-sm text-gray-600' }, 'Moi trang'),
+        h('label', { class: 'text-sm text-gray-600' }, 'Mỗi trang'),
         h('select', {
           class: 'rounded-lg border border-gray-300 px-3 py-2 text-sm',
           value: componentProps.perPage,

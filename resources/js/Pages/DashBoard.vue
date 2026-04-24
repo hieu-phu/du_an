@@ -7,8 +7,8 @@
     <div class="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h2 class="text-xl font-semibold text-gray-900">Tong quan he thong</h2>
-          <p class="mt-1 text-sm text-gray-500">Chuc vu hien tai: {{ positionLabel }}</p>
+          <h2 class="text-xl font-semibold text-gray-900">Tổng quan hệ thống</h2>
+          <p class="mt-1 text-sm text-gray-500">Chức vụ hiện tại: {{ positionLabel }}</p>
         </div>
 
         <div v-if="permissions['attendance.mine.action']" class="flex flex-wrap gap-3">
@@ -18,7 +18,7 @@
             :disabled="attendanceForm.processing"
             class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
           >
-            {{ attendanceForm.processing ? 'Dang xu ly...' : 'Check in' }}
+            {{ attendanceForm.processing ? 'Đang xử lý...' : 'Check in' }}
           </button>
           <button
             v-if="canCheckOut"
@@ -26,7 +26,7 @@
             :disabled="attendanceForm.processing"
             class="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-600 disabled:opacity-60"
           >
-            {{ attendanceForm.processing ? 'Dang xu ly...' : 'Check out' }}
+            {{ attendanceForm.processing ? 'Đang xử lý...' : 'Check out' }}
           </button>
         </div>
       </div>
@@ -34,11 +34,11 @@
       <div v-if="todayAttendance" class="mt-4 rounded-lg bg-gray-50 p-4 text-sm text-gray-700">
         <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <div class="flex items-center gap-2">
-            <span class="text-gray-500">Ngay:</span>
+            <span class="text-gray-500">Ngày:</span>
             <span class="font-medium">{{ formatDate(todayAttendance.work_date) }}</span>
           </div>
           <div class="flex items-center gap-2">
-            <span class="text-gray-500">Vao:</span>
+            <span class="text-gray-500">Vào:</span>
             <span class="font-medium text-blue-600">{{ formatDateTime(todayAttendance.check_in_at) }}</span>
           </div>
           <div class="flex items-center gap-2">
@@ -46,9 +46,9 @@
             <span class="font-medium text-amber-600">{{ formatDateTime(todayAttendance.check_out_at) }}</span>
           </div>
           <div class="flex items-center gap-2">
-            <span class="text-gray-500">Trang thai:</span>
+            <span class="text-gray-500">Trạng thái:</span>
             <span :class="['rounded-full px-2 py-0.5 text-xs font-semibold', getStatusClass(todayAttendance.day_status || todayAttendance.status)]">
-              {{ todayAttendance.status_label || 'Chua cham cong' }}
+              {{ todayAttendance.status_label || 'Chưa chấm công' }}
             </span>
           </div>
         </div>
@@ -57,7 +57,7 @@
 
     <div v-if="warnings && warnings.length > 0" class="mb-6 overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
       <div class="flex items-center gap-2 border-b border-red-100 bg-red-50/50 px-4 py-3">
-        <h3 class="text-sm font-bold uppercase tracking-wider text-red-900">Thong bao quan trong</h3>
+        <h3 class="text-sm font-bold uppercase tracking-wider text-red-900">Thông báo quan trọng</h3>
         <span class="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-red-200 text-[10px] font-bold text-red-800">
           {{ warnings.length }}
         </span>
@@ -97,19 +97,19 @@
 
     <div class="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
       <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
-        <h3 class="text-lg font-semibold text-gray-900">Tong hop du an</h3>
+        <h3 class="text-lg font-semibold text-gray-900">Tổng hợp dự án</h3>
         <div class="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-3">
           <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
-            <div class="text-xs text-gray-500">Tong nhan su</div>
+            <div class="text-xs text-gray-500">Tổng nhân sự</div>
             <div class="mt-1 text-xl font-semibold text-gray-900">{{ dashboardSummary.total_employees || 0 }}</div>
           </div>
           <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
-            <div class="text-xs text-gray-500">Tong du an</div>
+            <div class="text-xs text-gray-500">Tổng dự án</div>
             <div class="mt-1 text-xl font-semibold text-gray-900">{{ dashboardSummary.total_projects || 0 }}</div>
           </div>
         </div>
         <div class="mt-4">
-          <div class="mb-2 text-sm font-semibold text-gray-800">So luong du an theo trang thai</div>
+          <div class="mb-2 text-sm font-semibold text-gray-800">Số lượng dự án theo trạng thái</div>
           <div class="flex flex-wrap gap-2">
             <div
               v-for="item in projectStatusCounts"
@@ -119,46 +119,46 @@
               <span>{{ item.label }}</span>
               <span class="font-semibold text-gray-900">{{ item.count }}</span>
             </div>
-            <div v-if="!projectStatusCounts.length" class="text-sm text-gray-500">Khong co du lieu du an.</div>
+            <div v-if="!projectStatusCounts.length" class="text-sm text-gray-500">Không có dữ liệu dự án.</div>
           </div>
         </div>
       </div>
 
       <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
         <h3 class="text-lg font-semibold text-gray-900">
-          Bao cao cham cong thang {{ attendanceMonthReport.month || '-' }}/{{ attendanceMonthReport.year || '-' }}
+          Báo cáo chấm công tháng {{ attendanceMonthReport.month || '-' }}/{{ attendanceMonthReport.year || '-' }}
         </h3>
         <div class="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
           <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
-            <div class="text-xs text-gray-500">Tong ban ghi</div>
+            <div class="text-xs text-gray-500">Tổng bản ghi</div>
             <div class="mt-1 text-xl font-semibold text-gray-900">{{ attendanceMonthReport.total_records || 0 }}</div>
           </div>
           <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
-            <div class="text-xs text-gray-500">Dung gio</div>
+            <div class="text-xs text-gray-500">Đúng giờ</div>
             <div class="mt-1 text-xl font-semibold text-emerald-700">{{ attendanceMonthReport.on_time_records || 0 }}</div>
           </div>
           <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
-            <div class="text-xs text-gray-500">Di muon</div>
+            <div class="text-xs text-gray-500">Đi muộn</div>
             <div class="mt-1 text-xl font-semibold text-amber-700">{{ attendanceMonthReport.late_records || 0 }}</div>
           </div>
           <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
-            <div class="text-xs text-gray-500">Ve som</div>
+            <div class="text-xs text-gray-500">Về sớm</div>
             <div class="mt-1 text-xl font-semibold text-orange-700">{{ attendanceMonthReport.early_leave_records || 0 }}</div>
           </div>
           <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
-            <div class="text-xs text-gray-500">Nghi phep</div>
+            <div class="text-xs text-gray-500">Nghỉ phép</div>
             <div class="mt-1 text-xl font-semibold text-sky-700">{{ attendanceMonthReport.leave_records || 0 }}</div>
           </div>
           <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
-            <div class="text-xs text-gray-500">Nghi khong phep</div>
+            <div class="text-xs text-gray-500">Nghỉ không phép</div>
             <div class="mt-1 text-xl font-semibold text-rose-700">{{ attendanceMonthReport.unpaid_leave_records || 0 }}</div>
           </div>
           <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
-            <div class="text-xs text-gray-500">Vang mat</div>
+            <div class="text-xs text-gray-500">Vắng mặt</div>
             <div class="mt-1 text-xl font-semibold text-slate-700">{{ attendanceMonthReport.absent_records || 0 }}</div>
           </div>
           <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
-            <div class="text-xs text-gray-500">Tong gio lam</div>
+            <div class="text-xs text-gray-500">Tổng giờ làm</div>
             <div class="mt-1 text-sm font-semibold text-gray-900">{{ formatMinutesToHours(attendanceMonthReport.total_worked_minutes) }}</div>
           </div>
         </div>
@@ -166,15 +166,15 @@
     </div>
 
     <div class="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
-      <h3 class="text-lg font-semibold text-gray-900">Tien do tung du an dang trien khai</h3>
+      <h3 class="text-lg font-semibold text-gray-900">Tiến độ từng dự án đang triển khai</h3>
       <div class="mt-4 overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50">
             <tr>
-              <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Du an</th>
-              <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Trang thai</th>
-              <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Tien do</th>
-              <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Dau viec</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Dự án</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Trạng thái</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Tiến độ</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Đầu việc</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
@@ -195,10 +195,10 @@
                   </div>
                 </div>
               </td>
-              <td class="px-4 py-3 text-sm text-gray-700">{{ item.completed_tasks }}/{{ item.total_tasks }} hoan thanh</td>
+              <td class="px-4 py-3 text-sm text-gray-700">{{ item.completed_tasks }}/{{ item.total_tasks }} hoàn thành</td>
             </tr>
             <tr v-if="!activeProjectProgress.length">
-              <td colspan="4" class="px-4 py-6 text-center text-sm text-gray-500">Khong co du an dang trien khai.</td>
+              <td colspan="4" class="px-4 py-6 text-center text-sm text-gray-500">Không có dự án đang triển khai.</td>
             </tr>
           </tbody>
         </table>
@@ -206,7 +206,7 @@
     </div>
 
     <div class="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
-      <h3 class="text-lg font-semibold text-gray-900">Dieu huong nhanh</h3>
+      <h3 class="text-lg font-semibold text-gray-900">Điều hướng nhanh</h3>
       <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         <Link
           v-for="item in quickLinks"
@@ -239,7 +239,7 @@ const attendanceForm = useForm({})
 const permissions = computed(() => page.props.auth?.permissions || {})
 const positionCapabilities = computed(() => page.props.auth?.position_capabilities || {})
 const isDepartmentHead = computed(() => !!page.props.auth?.user?.is_department_head)
-const positionLabel = computed(() => page.props.auth?.user?.position_name || (page.props.auth?.user?.authority_level ? `Rank ${page.props.auth.user.authority_level}` : 'Chua thiet lap'))
+const positionLabel = computed(() => page.props.auth?.user?.position_name || (page.props.auth?.user?.authority_level ? `Rank ${page.props.auth.user.authority_level}` : 'Chưa thiết lập'))
 
 const attendanceActionBlocked = computed(() => {
   const dayStatus = String(props.todayAttendance?.day_status || '')
@@ -263,31 +263,31 @@ const quickLinks = computed(() => {
   const links = []
 
   if (permissions.value['profile.view']) {
-    links.push({ label: 'Ho so ca nhan', path: '/my-profile' })
+    links.push({ label: 'Hồ sơ cá nhân', path: '/my-profile' })
   }
 
   if (permissions.value['attendance.mine.view']) {
-    links.push({ label: 'Cong cua toi', path: '/my-attendance' })
+    links.push({ label: 'Công của tôi', path: '/my-attendance' })
   }
 
-  links.push({ label: 'Bao cao tong hop', path: '/reports' })
+  links.push({ label: 'Báo cáo tổng hợp', path: '/reports' })
 
   if (permissions.value['users.view']) {
-    links.push({ label: 'Nhan su', path: '/users' })
+    links.push({ label: 'Nhân sự', path: '/users' })
   }
 
   if (permissions.value['attendance.manage.view']) {
-    links.push({ label: 'Bao cao cham cong', path: '/attendance/reports' })
+    links.push({ label: 'Báo cáo chấm công', path: '/attendance/reports' })
   }
 
   if (permissions.value['projects.all.view'] || positionCapabilities.value.manage_projects || isDepartmentHead.value) {
-    links.push({ label: 'Du an', path: '/projects' })
+    links.push({ label: 'Dự án', path: '/projects' })
   } else if (permissions.value['projects.mine.view']) {
-    links.push({ label: 'Du an cua toi', path: '/my-projects' })
+    links.push({ label: 'Dự án của tôi', path: '/my-projects' })
   }
 
   if (permissions.value['departments.view']) {
-    links.push({ label: 'Phong ban', path: '/departments' })
+    links.push({ label: 'Phòng ban', path: '/departments' })
   }
 
   return links
@@ -315,7 +315,7 @@ function formatMinutesToHours(minutes) {
   const totalMinutes = Number(minutes || 0)
   const hours = Math.floor(totalMinutes / 60)
   const remainMinutes = totalMinutes % 60
-  return `${hours} gio ${remainMinutes} phut`
+  return `${hours} giờ ${remainMinutes} phút`
 }
 
 function projectStatusClass(status) {
