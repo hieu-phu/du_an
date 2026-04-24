@@ -245,6 +245,7 @@
                 </div>
             </template>
         </CustomModal>
+        <ActionDialog ref="actionDialogRef" />
     </AdminLayout>
 </template>
 
@@ -256,6 +257,8 @@ import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import Pagination from '@/components/tables/Pagination.vue'
 import CustomModal from '@/components/modals/CustomModal.vue'
+import ActionDialog from '@/components/ui/ActionDialog.vue'
+import { useActionDialog } from '@/composables/useActionDialog'
 
 const props = defineProps({
     approvalRequests: { type: Object, required: true },
@@ -271,6 +274,7 @@ const breadcrumbItems = [
 const selectedRequest = ref(null)
 const page = usePage()
 const currentUserId = page.props.auth?.user?.id
+const { actionDialogRef, openPrompt } = useActionDialog()
 
 const requestTypeLabel = (type) => ({
     user_create: 'Tạo tài khoản',
@@ -326,8 +330,18 @@ const openDetail = (item) => {
     selectedRequest.value = item
 }
 
-const approve = (item) => {
-    const reviewNote = window.prompt('Ghi chu duyet (co the bo trong):', '')
+const approve = async (item) => {
+    const reviewNote = await openPrompt({
+        title: 'Duyệt yêu cầu nhân sự',
+        message: 'Nhập ghi chú duyệt nếu cần.',
+        inputLabel: 'Ghi chú duyệt',
+        inputType: 'textarea',
+        defaultValue: '',
+        okText: 'Duyệt',
+        cancelText: 'Đóng',
+        variant: 'primary',
+        eyebrow: 'Nhân sự',
+    })
 
     if (reviewNote === null) {
         return
@@ -340,8 +354,18 @@ const approve = (item) => {
     })
 }
 
-const reject = (item) => {
-    const reviewNote = window.prompt('Ly do tu choi:', '')
+const reject = async (item) => {
+    const reviewNote = await openPrompt({
+        title: 'Từ chối yêu cầu nhân sự',
+        message: 'Nhập lý do từ chối.',
+        inputLabel: 'Lý do từ chối',
+        inputType: 'textarea',
+        defaultValue: '',
+        okText: 'Từ chối',
+        cancelText: 'Đóng',
+        variant: 'danger',
+        eyebrow: 'Nhân sự',
+    })
 
     if (reviewNote === null) {
         return
@@ -354,8 +378,18 @@ const reject = (item) => {
     })
 }
 
-const cancel = (item) => {
-    const reviewNote = window.prompt('Ghi chu huy yeu cau (tuy chon):', '')
+const cancel = async (item) => {
+    const reviewNote = await openPrompt({
+        title: 'Hủy yêu cầu nhân sự',
+        message: 'Nhập ghi chú hủy nếu cần.',
+        inputLabel: 'Ghi chú hủy',
+        inputType: 'textarea',
+        defaultValue: '',
+        okText: 'Hủy yêu cầu',
+        cancelText: 'Đóng',
+        variant: 'warning',
+        eyebrow: 'Nhân sự',
+    })
     if (reviewNote === null) {
         return
     }

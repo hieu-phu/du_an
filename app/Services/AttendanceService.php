@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\ApprovalDecision;
 use App\Models\AttendanceApproval;
 use App\Models\AttendanceEvent;
 use App\Models\AttendanceMonthLock;
@@ -27,6 +28,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
+
 class AttendanceService extends BaseService
 {
     private const TIMEZONE = 'Asia/Ho_Chi_Minh';
@@ -38,11 +40,14 @@ class AttendanceService extends BaseService
     private const DEFAULT_EARLY_LEAVE_GRACE_MINUTES = 5;
     private const FULL_WORK_UNIT_MINUTES = 480; // 8h
     private const HALF_WORK_UNIT_MINUTES = 240; // 4h
+    private const AUTO_ABSENCE_MARK_AFTER_DAYS = 2;
+    private const UNEXPLAINED_ABSENCE_TIMEOUT_DAYS = 2;
 
     public function __construct(
         protected AttendanceRepository $attendanceRepository,
         protected NotificationService $notificationService,
-        protected LeaveManagementService $leaveService
+        protected LeaveManagementService $leaveService,
+        protected ApprovalDecisionNotifier $approvalDecisionNotifier,
     ) {}
 
     public function checkIn(int $employeeProfileId, ?string $ipAddress, ?string $userAgent): AttendanceRecord
@@ -53,6 +58,11 @@ class AttendanceService extends BaseService
             $profile = EmployeeProfile::query()->with(['department', 'defaultWorkShift'])->findOrFail($employeeProfileId);
 
             $this->ensureMonthNotLocked($profile, $now);
+
+            $openRecord = $this->findLatestOpenAttendanceRecord($employeeProfileId);
+            if ($openRecord) {
+                throw new \RuntimeException('Ban chua check-out ca truoc.');
+            }
 
             $existingRecord = $this->baseRecordQuery()
                 ->where('employee_profile_id', $employeeProfileId)
@@ -111,15 +121,11 @@ class AttendanceService extends BaseService
     {
         return $this->handleTransaction(function () use ($employeeProfileId, $ipAddress, $userAgent) {
             $now = now(self::TIMEZONE);
-            $today = $now->toDateString();
 
-            $record = $this->baseRecordQuery()
-                ->where('employee_profile_id', $employeeProfileId)
-                ->whereDate('work_date', $today)
-                ->first();
+            $record = $this->findLatestOpenAttendanceRecord($employeeProfileId);
 
             if (!$record) {
-                throw new \RuntimeException('Ban chua check-in hom nay.');
+                throw new \RuntimeException('Ban chua check-in ca dang mo.');
             }
 
             if ($record->check_out_at) {
@@ -127,14 +133,15 @@ class AttendanceService extends BaseService
             }
 
             $record->loadMissing(['employeeProfile.department', 'workShift']);
-            $this->ensureMonthNotLocked($record->employeeProfile, $now);
+            $recordWorkDate = Carbon::parse($record->work_date, self::TIMEZONE);
+            $this->ensureMonthNotLocked($record->employeeProfile, $recordWorkDate);
 
             $checkInTime = Carbon::parse($record->check_in_at, self::TIMEZONE);
-            $workShift = $record->workShift ?: $this->resolveWorkShift($record->employeeProfile, $now);
+            $workShift = $record->workShift ?: $this->resolveWorkShift($record->employeeProfile, $recordWorkDate);
             $workedMinutes = $this->calculateWorkedMinutes($checkInTime, $now, $this->shiftConfigFromWorkShift($workShift));
             $lateMinutes = $this->determineLateMinutes($checkInTime, $workShift);
             $earlyLeaveMinutes = $this->determineEarlyLeaveMinutes($now, $workShift);
-            $overtimeMinutes = $this->resolveApprovedOvertimeMinutesForDate($employeeProfileId, $today);
+            $overtimeMinutes = $this->resolveApprovedOvertimeMinutesForDate($employeeProfileId, $recordWorkDate->toDateString());
             $dayStatus = $this->determineDayStatus($checkInTime, $now, $workShift);
             $record->update([
                 'check_out_at' => $now,
@@ -274,7 +281,10 @@ class AttendanceService extends BaseService
             $this->refreshMonthlySummary($record->fresh());
             $this->audit('attendance', 'confirm', "Confirm attendance record #{$record->id}", 'attendance_records', $record->id);
 
-            return $record->fresh(['employeeProfile.user', 'employeeProfile.department', 'employeeProfile.position', 'confirmer']);
+            $record = $record->fresh(['employeeProfile.user', 'employeeProfile.department', 'employeeProfile.position', 'confirmer']);
+            $this->approvalDecisionNotifier->notifyAttendanceRecordDecision($record, ApprovalDecision::APPROVED, null, $note, $approver);
+
+            return $record;
         });
     }
 
@@ -335,7 +345,10 @@ class AttendanceService extends BaseService
 
             $this->audit('attendance', 'reject', "Reject attendance record #{$record->id}", 'attendance_records', $record->id);
 
-            return $record->fresh(['employeeProfile.user', 'employeeProfile.department', 'employeeProfile.position', 'rejecter']);
+            $record = $record->fresh(['employeeProfile.user', 'employeeProfile.department', 'employeeProfile.position', 'rejecter']);
+            $this->approvalDecisionNotifier->notifyAttendanceRecordDecision($record, ApprovalDecision::REJECTED, null, $note, $approver);
+
+            return $record;
         });
     }
 
@@ -536,6 +549,7 @@ class AttendanceService extends BaseService
             ->orderByDesc('work_date')
             ->orderBy('employee_profile_id')
             ->get());
+        $records = $this->appendSyntheticAbsencesForReport($records, $user, $filters);
         $reportRecords = $records->map(fn (AttendanceRecord $record) => $this->transformReportRecord($record))->values();
 
         return [
@@ -554,6 +568,77 @@ class AttendanceService extends BaseService
             'month_lock' => $this->getMonthLockPayload($filters['month'], $filters['year']),
             'can_view_all' => AccessMatrix::canManageAllAttendance($user),
         ];
+    }
+
+    private function appendSyntheticAbsencesForReport(Collection $records, User $viewer, array $filters): Collection
+    {
+        [$periodStart, $periodEnd] = $this->resolveReportSynthesisPeriod((int) $filters['month'], (int) $filters['year']);
+
+        if (!$periodStart || !$periodEnd || $periodEnd->lt($periodStart)) {
+            return $this->sortReportRecords($records);
+        }
+
+        $profiles = $this->visibleEmployeeProfilesForReport($viewer, $filters);
+
+        if ($profiles->isEmpty()) {
+            return $this->sortReportRecords($records);
+        }
+
+        $existingKeys = $records->mapWithKeys(function (AttendanceRecord $record) {
+            return [$this->attendanceRecordMapKey(
+                (int) $record->employee_profile_id,
+                $this->attendanceRecordDateString($record)
+            ) => true];
+        });
+
+        $virtualRecords = collect();
+
+        foreach ($profiles as $profile) {
+            $profileStart = $periodStart->copy();
+            $profileEnd = $periodEnd->copy();
+
+            if ($profile->hire_date) {
+                $hireDate = Carbon::parse($profile->hire_date, self::TIMEZONE)->startOfDay();
+                if ($hireDate->gt($profileStart)) {
+                    $profileStart = $hireDate;
+                }
+            }
+
+            if ($profile->termination_date) {
+                $terminationDate = Carbon::parse($profile->termination_date, self::TIMEZONE)->startOfDay();
+                if ($terminationDate->lt($profileEnd)) {
+                    $profileEnd = $terminationDate;
+                }
+            }
+
+            if ($profileEnd->lt($profileStart)) {
+                continue;
+            }
+
+            for ($cursor = $profileStart->copy(); $cursor->lte($profileEnd); $cursor->addDay()) {
+                if ($this->isPaidHolidayDate($cursor) || !$this->isExpectedWorkingDateForProfile($profile, $cursor)) {
+                    continue;
+                }
+
+                $recordDate = $cursor->toDateString();
+                $recordKey = $this->attendanceRecordMapKey((int) $profile->id, $recordDate);
+
+                if ($existingKeys->has($recordKey)) {
+                    continue;
+                }
+
+                $virtualRecord = $this->makeSyntheticAbsentRecord($profile, $cursor);
+
+                if (!$this->syntheticAbsentMatchesReportKeyword($virtualRecord, $filters['keyword'] ?? '')) {
+                    continue;
+                }
+
+                $existingKeys->put($recordKey, true);
+                $virtualRecords->push($virtualRecord);
+            }
+        }
+
+        return $this->sortReportRecords($records->concat($virtualRecords));
     }
     public function submitAttendanceRequest(User $user, array $payload): AttendanceRequest|OvertimeRequest
     {
@@ -735,7 +820,10 @@ class AttendanceService extends BaseService
 
             $this->audit('attendance', 'cancel_request', "Cancel approval request #{$approvalRequest->id}", 'approval_requests', $approvalRequest->id);
 
-            return $approvalRequest->fresh(['requester', 'reviewer', 'target']);
+            $approvalRequest = $approvalRequest->fresh(['requester', 'reviewer', 'target']);
+            $this->approvalDecisionNotifier->notifyApprovalRequestDecision($approvalRequest, ApprovalDecision::CANCELLED, null, $reviewNote, $actor);
+
+            return $approvalRequest;
         });
     }
 
@@ -1030,7 +1118,16 @@ class AttendanceService extends BaseService
 
             $this->audit('attendance', 'review_request_' . $decision, "Review approval request #{$approvalRequest->id}", 'approval_requests', $approvalRequest->id);
 
-            return $approvalRequest->fresh(['requester', 'reviewer', 'target']);
+            $approvalRequest = $approvalRequest->fresh(['requester', 'reviewer', 'target']);
+            $this->approvalDecisionNotifier->notifyApprovalRequestDecision(
+                $approvalRequest,
+                ApprovalDecision::from($decision),
+                null,
+                $note,
+                $reviewer
+            );
+
+            return $approvalRequest;
         });
     }
 
@@ -1167,46 +1264,121 @@ class AttendanceService extends BaseService
 
     public function markAbsencesForDate(Carbon|string|null $date = null): int
     {
-        $workDate = $date instanceof Carbon
-            ? $date->copy()->timezone(self::TIMEZONE)->startOfDay()
-            : Carbon::parse($date ?? now(self::TIMEZONE)->toDateString(), self::TIMEZONE)->startOfDay();
+        return $this->syncMissingAttendanceRecords($date, $date);
+    }
 
-        if ($workDate->isWeekend()) {
-            return 0;
-        }
+    public function syncMissingAttendanceRecords(Carbon|string|null $from = null, Carbon|string|null $to = null): int
+    {
+        $startDate = $from instanceof Carbon
+            ? $from->copy()->timezone(self::TIMEZONE)->startOfDay()
+            : Carbon::parse(
+                $from ?? now(self::TIMEZONE)->copy()->subDays($this->autoAbsenceMarkAfterDays())->toDateString(),
+                self::TIMEZONE
+            )->startOfDay();
+        $endDate = $to instanceof Carbon
+            ? $to->copy()->timezone(self::TIMEZONE)->startOfDay()
+            : Carbon::parse($to ?? $startDate->toDateString(), self::TIMEZONE)->startOfDay();
 
-        if (Holiday::query()->whereDate('holiday_date', $workDate->toDateString())->exists()) {
-            return 0;
+        if ($endDate->lt($startDate)) {
+            [$startDate, $endDate] = [$endDate, $startDate];
         }
 
         $profiles = EmployeeProfile::query()
             ->whereIn('employment_status', ['active', 'probation'])
-            ->whereDoesntHave('attendanceRecords', function (Builder $query) use ($workDate) {
-                $query->whereDate('work_date', $workDate->toDateString());
-            })
-            ->with('user:id,status')
+            ->with(['user:id,status', 'department'])
             ->get()
             ->filter(fn (EmployeeProfile $profile) => $profile->user?->status === 'active');
 
-        foreach ($profiles as $profile) {
-            $record = AttendanceRecord::query()->create([
-                'employee_profile_id' => $profile->id,
-                'work_date' => $workDate->toDateString(),
-                'attendance_status' => 'absent',
-                'approval_status' => 'pending',
-                'day_status' => 'absent',
-                'worked_minutes' => 0,
-                'is_confirmed' => false,
-                'missing_check_in' => false,
-                'missing_check_out' => false,
-                'note' => 'Auto marked absent',
-            ]);
+        $createdCount = 0;
 
-            $this->refreshMonthlySummary($record);
-            $this->audit('attendance', 'mark_absent', "Auto mark absent attendance record #{$record->id}", 'attendance_records', $record->id);
+        for ($cursor = $startDate->copy(); $cursor->lte($endDate); $cursor->addDay()) {
+            if ($this->isPaidHolidayDate($cursor)) {
+                continue;
+            }
+
+            foreach ($profiles as $profile) {
+                if (!$this->shouldCreateAttendanceRecordForProfileOnDate($profile, $cursor)) {
+                    continue;
+                }
+
+                $existingRecord = AttendanceRecord::query()
+                    ->where('employee_profile_id', $profile->id)
+                    ->whereDate('work_date', $cursor->toDateString())
+                    ->exists();
+
+                if ($existingRecord) {
+                    continue;
+                }
+
+                $this->createAbsentAttendanceRecord($profile, $cursor);
+                $createdCount++;
+            }
         }
 
-        return $profiles->count();
+        return $createdCount;
+    }
+
+    public function closeUnexplainedAbsences(int $days = 0, Carbon|string|null $asOf = null): int
+    {
+        $resolvedDays = $days > 0 ? max(1, $days) : $this->unexplainedAbsenceTimeoutDays();
+        $asOfDate = $asOf instanceof Carbon
+            ? $asOf->copy()->timezone(self::TIMEZONE)->startOfDay()
+            : Carbon::parse($asOf ?? now(self::TIMEZONE)->toDateString(), self::TIMEZONE)->startOfDay();
+        $cutoffDate = $asOfDate->copy()->subDays($resolvedDays)->toDateString();
+        $closedCount = 0;
+
+        $records = AttendanceRecord::query()
+            ->with(['employeeProfile.user', 'employeeProfile.position', 'rejecter'])
+            ->whereDate('work_date', '<=', $cutoffDate)
+            ->where('attendance_status', 'absent')
+            ->where('day_status', 'absent')
+            ->where('approval_status', 'pending')
+            ->where('is_confirmed', false)
+            ->orderBy('id')
+            ->get();
+
+        foreach ($records as $record) {
+            if ($this->hasOpenAttendanceExplanationForDate((int) $record->employee_profile_id, $this->attendanceRecordDateString($record))) {
+                continue;
+            }
+
+            $reviewNote = sprintf(
+                'He thong khong duyet cong sau %d ngay vi chua co don giai trinh hop le.',
+                $resolvedDays
+            );
+
+            $record->update([
+                'approval_status' => 'rejected',
+                'is_confirmed' => false,
+                'confirmed_by' => null,
+                'confirmed_at' => null,
+                'rejected_by' => null,
+                'rejected_at' => $asOfDate->copy(),
+                'approval_note' => $reviewNote,
+            ]);
+
+            $this->refreshMonthlySummary($record->fresh());
+            $this->audit(
+                'attendance',
+                'auto_close_absence',
+                "Auto close unexplained absence record #{$record->id} after {$resolvedDays} day(s)",
+                'attendance_records',
+                $record->id
+            );
+
+            $record = $record->fresh(['employeeProfile.user', 'employeeProfile.department', 'employeeProfile.position', 'rejecter']);
+            $this->approvalDecisionNotifier->notifyAttendanceRecordDecision(
+                $record,
+                ApprovalDecision::REJECTED,
+                null,
+                $reviewNote,
+                null
+            );
+
+            $closedCount++;
+        }
+
+        return $closedCount;
     }
 
     private function buildScopedQuery(array $filters, bool $pendingOnly = false, ?User $actor = null): Builder
@@ -1522,6 +1694,27 @@ class AttendanceService extends BaseService
             ->all();
     }
 
+    private function visibleEmployeeProfilesForReport(User $viewer, array $filters): Collection
+    {
+        $query = EmployeeProfile::query()
+            ->with(['user:id,name,status', 'department:id,name', 'position:id,name,authority_level'])
+            ->whereHas('user', fn (Builder $builder) => $builder->where('status', 'active'));
+
+        if (!empty($filters['employee_profile_id'])) {
+            $query->whereKey((int) $filters['employee_profile_id']);
+        }
+
+        if (AccessMatrix::canManageAllAttendance($viewer)) {
+            $this->applyReviewerVisibilityToEmployeeQuery($query, $viewer);
+        } else {
+            $query->whereKey($viewer->employeeProfile?->id ?? 0);
+        }
+
+        return $query
+            ->orderBy('employee_code')
+            ->get();
+    }
+
     private function baseRecordQuery(): Builder
     {
         return AttendanceRecord::query()->with([
@@ -1541,6 +1734,146 @@ class AttendanceService extends BaseService
             $checkInAt instanceof Carbon ? $checkInAt->copy() : Carbon::parse($checkInAt, self::TIMEZONE),
             null
         ) > 0 ? 'late' : 'on_time';
+    }
+
+    private function resolveReportSynthesisPeriod(int $month, int $year): array
+    {
+        $monthStart = Carbon::create($year, $month, 1, 0, 0, 0, self::TIMEZONE)->startOfDay();
+        $monthEnd = $monthStart->copy()->endOfMonth()->startOfDay();
+        $today = now(self::TIMEZONE)->startOfDay();
+
+        if ($monthStart->gt($today)) {
+            return [null, null];
+        }
+
+        if ($monthStart->isSameMonth($today) && $monthStart->year === $today->year) {
+            return [$monthStart, $today->copy()->subDay()];
+        }
+
+        return [$monthStart, $monthEnd];
+    }
+
+    private function makeSyntheticAbsentRecord(EmployeeProfile $profile, Carbon $workDate): AttendanceRecord
+    {
+        $workShift = $this->resolveWorkShift($profile, $workDate);
+        $shiftSnapshot = $this->buildShiftSnapshot($workShift);
+        $record = new AttendanceRecord([
+            'employee_profile_id' => $profile->id,
+            'work_shift_id' => $workShift?->id,
+            'work_date' => $workDate->toDateString(),
+            'worked_minutes' => 0,
+            'late_minutes' => 0,
+            'early_leave_minutes' => 0,
+            'overtime_minutes' => 0,
+            'missing_check_in' => false,
+            'missing_check_out' => false,
+            'attendance_status' => 'absent',
+            'approval_status' => 'pending',
+            'day_status' => 'absent',
+            'is_confirmed' => false,
+            'note' => 'Virtual absent record for report',
+            'shift_snapshot' => $shiftSnapshot,
+        ]);
+
+        $latestRequest = $this->findLatestAttendanceRequestForDate((int) $profile->id, $workDate->toDateString());
+
+        if ($latestRequest?->status === 'approved') {
+            [$attendanceStatus, $dayStatus, $lateMinutes, $earlyLeaveMinutes, $workedMinutes] = $this->applyApprovedAttendanceRequestRule(
+                $latestRequest,
+                'absent',
+                'absent',
+                0,
+                0,
+                0,
+                $this->resolveStandardMinutesFromShiftConfig($shiftSnapshot)
+            );
+
+            $record->forceFill([
+                'attendance_status' => $attendanceStatus,
+                'day_status' => $dayStatus,
+                'worked_minutes' => $workedMinutes,
+                'late_minutes' => $lateMinutes,
+                'early_leave_minutes' => $earlyLeaveMinutes,
+                'approval_status' => 'approved',
+                'is_confirmed' => true,
+                'approval_note' => $latestRequest->reason,
+                'note' => 'Virtual record for approved attendance request',
+            ]);
+        } elseif (
+            $latestRequest?->status !== 'pending'
+            && $this->shouldAutoRejectSyntheticAbsentRecord($workDate)
+        ) {
+            $record->forceFill([
+                'approval_status' => 'rejected',
+                'approval_note' => sprintf(
+                    'He thong khong duyet cong sau %d ngay vi chua co don giai trinh hop le.',
+                    $this->unexplainedAbsenceTimeoutDays()
+                ),
+                'rejected_at' => now(self::TIMEZONE),
+                'note' => 'Virtual absent record auto-closed for report',
+            ]);
+        }
+
+        $record->setRelation('employeeProfile', $profile);
+        $record->setRelation('workShift', $workShift);
+
+        return $record;
+    }
+
+    private function shouldAutoRejectSyntheticAbsentRecord(Carbon $workDate): bool
+    {
+        return $workDate->copy()->startOfDay()->lte(
+            now(self::TIMEZONE)->startOfDay()->subDays($this->unexplainedAbsenceTimeoutDays())
+        );
+    }
+
+    private function syntheticAbsentMatchesReportKeyword(AttendanceRecord $record, ?string $keyword): bool
+    {
+        $keyword = trim((string) $keyword);
+
+        if ($keyword === '') {
+            return true;
+        }
+
+        $haystack = mb_strtolower(implode(' ', array_filter([
+            (string) ($record->employeeProfile?->user?->name ?? ''),
+            (string) ($record->employeeProfile?->employee_code ?? ''),
+            'absent',
+            'vang',
+            'vắng',
+            'tu y nghi',
+            'chua co don',
+        ])));
+
+        return str_contains($haystack, mb_strtolower($keyword));
+    }
+
+    private function attendanceRecordMapKey(int $employeeProfileId, string $workDate): string
+    {
+        return $employeeProfileId . '|' . $workDate;
+    }
+
+    private function attendanceRecordDateString(AttendanceRecord $record): string
+    {
+        return $record->work_date instanceof Carbon
+            ? $record->work_date->toDateString()
+            : Carbon::parse((string) $record->work_date, self::TIMEZONE)->toDateString();
+    }
+
+    private function sortReportRecords(Collection $records): Collection
+    {
+        return $records
+            ->sort(function (AttendanceRecord $left, AttendanceRecord $right) {
+                $leftDate = $this->attendanceRecordDateString($left);
+                $rightDate = $this->attendanceRecordDateString($right);
+
+                if ($leftDate !== $rightDate) {
+                    return strcmp($rightDate, $leftDate);
+                }
+
+                return ((int) $left->employee_profile_id) <=> ((int) $right->employee_profile_id);
+            })
+            ->values();
     }
 
     private function reconcileRecords(Collection $records): Collection
@@ -1729,6 +2062,35 @@ class AttendanceService extends BaseService
             ->orderByDesc('applied_at')
             ->orderByDesc('id')
             ->first();
+    }
+
+    private function hasOpenAttendanceExplanationForDate(int $employeeProfileId, string $workDate): bool
+    {
+        $hasPendingAttendanceRequest = AttendanceRequest::query()
+            ->where('employee_profile_id', $employeeProfileId)
+            ->where('status', 'pending')
+            ->where(function (Builder $query) use ($workDate) {
+                $query
+                    ->whereDate('request_date', $workDate)
+                    ->orWhere(function (Builder $rangeQuery) use ($workDate) {
+                        $rangeQuery
+                            ->whereNotNull('from_date')
+                            ->whereNotNull('to_date')
+                            ->whereDate('from_date', '<=', $workDate)
+                            ->whereDate('to_date', '>=', $workDate);
+                    });
+            })
+            ->exists();
+
+        if ($hasPendingAttendanceRequest) {
+            return true;
+        }
+
+        return OvertimeRequest::query()
+            ->where('employee_profile_id', $employeeProfileId)
+            ->where('status', 'pending')
+            ->whereDate('work_date', $workDate)
+            ->exists();
     }
 
     private function applyApprovedAttendanceRequestRule(
@@ -4440,8 +4802,9 @@ class AttendanceService extends BaseService
         $endTime = $shiftConfig['end_time'] ?? sprintf('%02d:%02d:00', self::WORK_END_HOUR, self::WORK_END_MINUTE);
         [$startHour, $startMinute] = array_map('intval', explode(':', substr((string) $startTime, 0, 5)));
         [$endHour, $endMinute] = array_map('intval', explode(':', substr((string) $endTime, 0, 5)));
-        $start = $dateTime->copy()->startOfDay()->setTime($startHour, $startMinute);
-        $end = $dateTime->copy()->startOfDay()->setTime($endHour, $endMinute);
+        $baseDate = $this->resolveShiftBoundaryBaseDate($dateTime, $shiftConfig);
+        $start = $baseDate->copy()->setTime($startHour, $startMinute);
+        $end = $baseDate->copy()->setTime($endHour, $endMinute);
 
         if (
             (bool) ($shiftConfig['is_overnight'] ?? false)
@@ -4462,6 +4825,26 @@ class AttendanceService extends BaseService
         $point = $baseDate->copy()->startOfDay()->setTime($hour, $minute);
 
         return $nextDay ? $point->addDay() : $point;
+    }
+
+    private function resolveShiftBoundaryBaseDate(Carbon $dateTime, array $shiftConfig): Carbon
+    {
+        $baseDate = $dateTime->copy()->startOfDay();
+        $startTime = (string) ($shiftConfig['start_time'] ?? sprintf('%02d:%02d:00', self::WORK_START_HOUR, self::WORK_START_MINUTE));
+        $endTime = (string) ($shiftConfig['end_time'] ?? sprintf('%02d:%02d:00', self::WORK_END_HOUR, self::WORK_END_MINUTE));
+        $isOvernight = (bool) ($shiftConfig['is_overnight'] ?? false)
+            && $this->minutesOfDay($endTime) <= $this->minutesOfDay($startTime);
+
+        if ($isOvernight) {
+            $currentMinutes = ((int) $dateTime->copy()->timezone(self::TIMEZONE)->format('H') * 60)
+                + (int) $dateTime->copy()->timezone(self::TIMEZONE)->format('i');
+
+            if ($currentMinutes <= $this->minutesOfDay($endTime)) {
+                $baseDate->subDay();
+            }
+        }
+
+        return $baseDate;
     }
 
     private function resolveTimeForRecordDate(AttendanceRecord $record, string $time): Carbon
@@ -4662,6 +5045,71 @@ class AttendanceService extends BaseService
         [, $shiftEnd] = $this->shiftBoundaries($dateTime->copy(), $workShift);
 
         return $shiftEnd;
+    }
+
+    private function findLatestOpenAttendanceRecord(int $employeeProfileId): ?AttendanceRecord
+    {
+        return $this->baseRecordQuery()
+            ->where('employee_profile_id', $employeeProfileId)
+            ->whereNotNull('check_in_at')
+            ->whereNull('check_out_at')
+            ->orderByDesc('check_in_at')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    private function shouldCreateAttendanceRecordForProfileOnDate(EmployeeProfile $profile, Carbon $workDate): bool
+    {
+        if ($profile->hire_date) {
+            $hireDate = Carbon::parse($profile->hire_date, self::TIMEZONE)->startOfDay();
+            if ($workDate->lt($hireDate)) {
+                return false;
+            }
+        }
+
+        if ($profile->termination_date) {
+            $terminationDate = Carbon::parse($profile->termination_date, self::TIMEZONE)->startOfDay();
+            if ($workDate->gt($terminationDate)) {
+                return false;
+            }
+        }
+
+        return $this->isExpectedWorkingDateForProfile($profile, $workDate);
+    }
+
+    private function createAbsentAttendanceRecord(EmployeeProfile $profile, Carbon $workDate): AttendanceRecord
+    {
+        $workShift = $this->resolveWorkShift($profile, $workDate->copy());
+
+        $record = AttendanceRecord::query()->create([
+            'employee_profile_id' => $profile->id,
+            'work_shift_id' => $workShift?->id,
+            'work_date' => $workDate->toDateString(),
+            'attendance_status' => 'absent',
+            'approval_status' => 'pending',
+            'day_status' => 'absent',
+            'worked_minutes' => 0,
+            'is_confirmed' => false,
+            'missing_check_in' => false,
+            'missing_check_out' => false,
+            'note' => 'Auto marked missing attendance pending review',
+            'shift_snapshot' => $this->buildShiftSnapshot($workShift),
+        ]);
+
+        $this->refreshMonthlySummary($record);
+        $this->audit('attendance', 'mark_absent', "Auto mark absent attendance record #{$record->id}", 'attendance_records', $record->id);
+
+        return $record;
+    }
+
+    private function autoAbsenceMarkAfterDays(): int
+    {
+        return max(1, (int) config('attendance.auto_mark_after_days', self::AUTO_ABSENCE_MARK_AFTER_DAYS));
+    }
+
+    private function unexplainedAbsenceTimeoutDays(): int
+    {
+        return max(1, (int) config('attendance.auto_close_after_days', self::UNEXPLAINED_ABSENCE_TIMEOUT_DAYS));
     }
 
     private function isAuthorityLevelFourOrHigher(?User $user): bool

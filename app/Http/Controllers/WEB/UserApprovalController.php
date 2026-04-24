@@ -5,6 +5,7 @@ namespace App\Http\Controllers\WEB;
 use App\Http\Controllers\Controller;
 use App\Models\ApprovalRequest;
 use App\Services\UserApprovalService;
+use App\Support\AccessMatrix;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -16,18 +17,22 @@ class UserApprovalController extends Controller
 
     public function index(Request $request)
     {
+        abort_unless(AccessMatrix::canAccessUserApprovals($request->user()), 403);
+
         $filters = $request->only(['status', 'request_type', 'per_page']);
         $perPage = $request->integer('per_page', 15);
 
         return Inertia::render('User/Approvals', [
-            'approvalRequests' => $this->userApprovalService->getApprovalRequests($filters, $perPage),
+            'approvalRequests' => $this->userApprovalService->getApprovalRequests($filters, $perPage, $request->user()),
             'filters' => $filters,
-            'stats' => $this->userApprovalService->getApprovalStats(),
+            'stats' => $this->userApprovalService->getApprovalStats($request->user()),
         ]);
     }
 
     public function approve(Request $request, ApprovalRequest $approvalRequest)
     {
+        abort_unless(AccessMatrix::canAccessUserApprovals($request->user()), 403);
+
         $validated = $request->validate([
             'review_note' => ['nullable', 'string', 'max:1000'],
         ]);
@@ -45,6 +50,8 @@ class UserApprovalController extends Controller
 
     public function reject(Request $request, ApprovalRequest $approvalRequest)
     {
+        abort_unless(AccessMatrix::canAccessUserApprovals($request->user()), 403);
+
         $validated = $request->validate([
             'review_note' => ['nullable', 'string', 'max:1000'],
         ]);
@@ -62,6 +69,8 @@ class UserApprovalController extends Controller
 
     public function cancel(Request $request, ApprovalRequest $approvalRequest)
     {
+        abort_unless(AccessMatrix::canAccessUserApprovals($request->user()), 403);
+
         $validated = $request->validate([
             'review_note' => ['nullable', 'string', 'max:1000'],
         ]);

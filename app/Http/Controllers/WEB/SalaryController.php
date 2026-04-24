@@ -1270,14 +1270,35 @@ class SalaryController extends Controller
     {
         $startTime = (string) ($snapshot['start_time'] ?? '08:00:00');
         $endTime = (string) ($snapshot['end_time'] ?? '17:30:00');
-        $start = $this->resolveTimePoint($dateTime, $startTime);
+        $baseDate = $this->resolveShiftBoundaryBaseDate($dateTime, $snapshot);
+        $start = $this->resolveTimePoint($baseDate, $startTime);
         $end = $this->resolveTimePoint(
-            $dateTime,
+            $baseDate,
             $endTime,
             (bool) ($snapshot['is_overnight'] ?? false) && $this->minutesOfDay($endTime) <= $this->minutesOfDay($startTime)
         );
 
         return [$start, $end];
+    }
+
+    private function resolveShiftBoundaryBaseDate(Carbon $dateTime, array $snapshot): Carbon
+    {
+        $baseDate = $dateTime->copy()->startOfDay();
+        $startTime = (string) ($snapshot['start_time'] ?? '08:00:00');
+        $endTime = (string) ($snapshot['end_time'] ?? '17:30:00');
+        $isOvernight = (bool) ($snapshot['is_overnight'] ?? false)
+            && $this->minutesOfDay($endTime) <= $this->minutesOfDay($startTime);
+
+        if ($isOvernight) {
+            $currentMinutes = ((int) $dateTime->copy()->timezone(self::TIMEZONE)->format('H') * 60)
+                + (int) $dateTime->copy()->timezone(self::TIMEZONE)->format('i');
+
+            if ($currentMinutes <= $this->minutesOfDay($endTime)) {
+                $baseDate->subDay();
+            }
+        }
+
+        return $baseDate;
     }
 
     private function resolveBreakOverlapMinutes(AttendanceRecord $record, array $snapshot): int

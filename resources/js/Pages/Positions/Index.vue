@@ -5,6 +5,8 @@ import { toast } from 'vue3-toastify'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import Modal from '@/components/ui/Modal.vue'
+import ActionDialog from '@/components/ui/ActionDialog.vue'
+import { useActionDialog } from '@/composables/useActionDialog'
 const props = defineProps({
     positions: { type: Array, default: () => [] },
     filters: { type: Object, default: () => ({}) },
@@ -14,6 +16,7 @@ const props = defineProps({
     authorityLevelCatalog: { type: Array, default: () => [] },
 })
 const page = usePage()
+const { actionDialogRef, openAlert, openConfirm } = useActionDialog()
 const positionCapabilities = computed(() => page.props.auth?.position_capabilities || {})
 const canManageAuthorityLevels = computed(() => positionCapabilities.value.manage_positions === true)
 const canCreateCustomCapabilities = computed(() => props.canCreateCustomCapabilities === true)
@@ -115,7 +118,9 @@ const capabilityMinAuthority = {
     transfer_employee: 4,
     approve_attendance: 4,
     approve_leave: 4,
-    approve_requests: 4,
+    approve_user_requests: 4,
+    approve_department_requests: 4,
+    approve_salary_requests: 4,
 }
 const impliedCapabilities = {
     manage_salary: ['view_salary'],
@@ -335,9 +340,17 @@ const submitAuthorityLevel = () => {
         },
     })
 }
-const toggleAuthorityLevel = (level) => {
+const toggleAuthorityLevel = async (level) => {
     const nextAction = level.is_active ? 'khóa' : 'mở'
-    if (!window.confirm(`Bạn có chắc muốn ${nextAction} mức "${level.name}"?`)) return
+    const confirmed = await openConfirm({
+        title: 'Xác nhận mức quyền hạn',
+        message: `Bạn có chắc muốn ${nextAction} mức "${level.name}"?`,
+        okText: 'Xác nhận',
+        cancelText: 'Đóng',
+        variant: level.is_active ? 'danger' : 'warning',
+        eyebrow: 'Quyền hạn',
+    })
+    if (!confirmed) return
     router.put(route('positions.authority-levels.toggle', level.id), {}, {
         preserveScroll: true,
         onSuccess: () => toast.success(`Đã ${nextAction} mức quyền hạn.`),
@@ -357,21 +370,43 @@ watch(() => form.authority_level, (nextLevel, prevLevel) => {
 watch(() => form.capabilities, () => {
     applyImpliedCapabilities()
 }, { deep: true })
-const toggleStatus = (position) => {
+const toggleStatus = async (position) => {
     const nextAction = position.is_active ? 'khóa' : 'mở lại'
-    if (!window.confirm(`Bạn có chắc muốn ${nextAction} chức vụ "${position.name}"?`)) return
+    const confirmed = await openConfirm({
+        title: 'Xác nhận trạng thái chức vụ',
+        message: `Bạn có chắc muốn ${nextAction} chức vụ "${position.name}"?`,
+        okText: 'Xác nhận',
+        cancelText: 'Đóng',
+        variant: position.is_active ? 'danger' : 'warning',
+        eyebrow: 'Chức vụ',
+    })
+    if (!confirmed) return
     router.put(route('positions.toggle', position.id), {}, {
         preserveScroll: true,
         onSuccess: () => toast.success(`Đã ${nextAction} chức vụ.`),
         onError: () => toast.error(`Không thể ${nextAction} chức vụ.`),
     })
 }
-const confirmDelete = (position) => {
+const confirmDelete = async (position) => {
     if (position.employee_profiles_count > 0) {
-        window.alert(`Chức vụ "${position.name}" đang có ${position.employee_profiles_count} nhân viên. Không thể xóa.`)
+        await openAlert({
+            title: 'Không thể xóa chức vụ',
+            message: `Chức vụ "${position.name}" đang có ${position.employee_profiles_count} nhân viên. Không thể xóa.`,
+            okText: 'Đã hiểu',
+            variant: 'warning',
+            eyebrow: 'Chức vụ',
+        })
         return
     }
-    if (!window.confirm(`Bạn có chắc muốn xóa chức vụ "${position.name}"?`)) return
+    const confirmed = await openConfirm({
+        title: 'Xóa chức vụ',
+        message: `Bạn có chắc muốn xóa chức vụ "${position.name}"?`,
+        okText: 'Xóa chức vụ',
+        cancelText: 'Đóng',
+        variant: 'danger',
+        eyebrow: 'Chức vụ',
+    })
+    if (!confirmed) return
     router.delete(route('positions.destroy', position.id), {
         preserveScroll: true,
         onSuccess: () => toast.success('Đã xóa chức vụ.'),
@@ -980,5 +1015,6 @@ const canTogglePosition = (position) => position?.can_toggle !== false
                 </div>
             </div>
         </Modal>
+        <ActionDialog ref="actionDialogRef" />
     </AdminLayout>
 </template>

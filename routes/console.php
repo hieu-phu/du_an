@@ -22,8 +22,8 @@ Artisan::command('attendance:mark-absent {date?}', function (?string $date = nul
     $this->info("Marked {$markedCount} attendance record(s) as absent.");
 })->purpose('Auto mark absent employees who did not check in for a workday');
 
-Artisan::command('attendance:close-unexplained-absences {--days=2} {--as-of=}', function () {
-    $days = max(1, (int) $this->option('days'));
+Artisan::command('attendance:close-unexplained-absences {--days=} {--as-of=}', function () {
+    $days = max(1, (int) ($this->option('days') ?: config('attendance.auto_close_after_days', 2)));
     $asOf = $this->option('as-of')
         ? Carbon::parse((string) $this->option('as-of'), 'Asia/Ho_Chi_Minh')
         : null;
@@ -31,6 +31,28 @@ Artisan::command('attendance:close-unexplained-absences {--days=2} {--as-of=}', 
 
     $this->info("Closed {$closedCount} unexplained absence record(s) after {$days} day(s).");
 })->purpose('Auto reject unexplained absences that have no active attendance request after a timeout');
+
+Artisan::command('attendance:sync-missing-records {--from=} {--to=} {--auto-close}', function () {
+    $from = $this->option('from')
+        ? Carbon::parse((string) $this->option('from'), 'Asia/Ho_Chi_Minh')
+        : null;
+    $to = $this->option('to')
+        ? Carbon::parse((string) $this->option('to'), 'Asia/Ho_Chi_Minh')
+        : $from;
+
+    $createdCount = app(AttendanceService::class)->syncMissingAttendanceRecords($from, $to);
+
+    $this->info("Synced {$createdCount} missing attendance record(s).");
+
+    if ((bool) $this->option('auto-close')) {
+        $closedCount = app(AttendanceService::class)->closeUnexplainedAbsences(
+            (int) config('attendance.auto_close_after_days', 2),
+            Carbon::now('Asia/Ho_Chi_Minh')
+        );
+
+        $this->info("Closed {$closedCount} unexplained absence record(s) after sync.");
+    }
+})->purpose('Backfill missing attendance records for a date range and optionally auto-close overdue absences');
 
 Artisan::command('positions:sync-capabilities-pivot {--dry-run}', function () {
     $dryRun = (bool) $this->option('dry-run');
@@ -89,12 +111,12 @@ Artisan::command('feedbacks:escalate-stale {--hours=}', function () {
     $this->info("Escalated {$count} stale feedback message(s) older than {$hours} hour(s).");
 })->purpose('Escalate unreplied feedback messages to the next superior level after a timeout');
 
-Schedule::command('attendance:mark-absent ' . Carbon::now('Asia/Ho_Chi_Minh')->subDays(2)->toDateString())
+Schedule::command('attendance:mark-absent ' . Carbon::now('Asia/Ho_Chi_Minh')->subDays((int) config('attendance.auto_mark_after_days', 2))->toDateString())
     ->dailyAt('09:00')
     ->timezone('Asia/Ho_Chi_Minh')
     ->withoutOverlapping();
 
-Schedule::command('attendance:close-unexplained-absences --days=2')
+Schedule::command('attendance:close-unexplained-absences --days=' . (int) config('attendance.auto_close_after_days', 2))
     ->dailyAt('09:10')
     ->timezone('Asia/Ho_Chi_Minh')
     ->withoutOverlapping();

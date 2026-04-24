@@ -44,7 +44,7 @@ class DepartmentController extends Controller
     {
         $validated = $this->validateDepartment($request);
 
-        if (AccessMatrix::canApproveRequests($request->user())) {
+        if (AccessMatrix::canApproveDepartmentRequests($request->user())) {
             $this->departmentService->store($validated);
 
             return redirect()->back()->with('success', 'Phòng ban đã được tạo thành công.');
@@ -68,7 +68,7 @@ class DepartmentController extends Controller
         $department = Department::query()->findOrFail($id);
         $validated = $this->validateDepartment($request, $department->id);
 
-        if (AccessMatrix::canApproveRequests($request->user())) {
+        if (AccessMatrix::canApproveDepartmentRequests($request->user())) {
             $this->departmentService->update($department->id, $validated);
 
             return redirect()->back()->with('success', 'Phòng ban đã được cập nhật thành công.');
@@ -101,7 +101,7 @@ class DepartmentController extends Controller
     {
         $wasActive = (bool) $department->is_active;
 
-        if (AccessMatrix::canApproveRequests(request()->user())) {
+        if (AccessMatrix::canApproveDepartmentRequests(request()->user())) {
             $this->departmentService->toggleStatus($department->id);
 
             return redirect()->back()->with(
@@ -153,7 +153,7 @@ class DepartmentController extends Controller
             ->where('status', 'active')
             ->with('employeeProfile.position')
             ->get(['id'])
-            ->filter(fn (User $user) => AccessMatrix::canApproveRequests($user))
+            ->filter(fn (User $user) => AccessMatrix::canApproveDepartmentRequests($user))
             ->pluck('id')
             ->values()
             ->all();

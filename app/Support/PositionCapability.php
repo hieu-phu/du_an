@@ -36,6 +36,9 @@ final class PositionCapability
     public const TRANSFER_EMPLOYEE = 'transfer_employee';
 
     public const APPROVE_REQUESTS = 'approve_requests';
+    public const APPROVE_USER_REQUESTS = 'approve_user_requests';
+    public const APPROVE_DEPARTMENT_REQUESTS = 'approve_department_requests';
+    public const APPROVE_SALARY_REQUESTS = 'approve_salary_requests';
     public const SIGN_DOCUMENTS = 'sign_documents';
 
     public const VIEW_REPORTS = 'view_reports';
@@ -191,10 +194,20 @@ final class PositionCapability
                 'name' => 'Dieu chuyen nhan su',
                 'description' => 'Chuyen nhan vien sang phong ban khac',
             ],
-            self::APPROVE_REQUESTS => [
+            self::APPROVE_USER_REQUESTS => [
                 'module' => 'approval',
-                'name' => 'Duyet yeu cau',
-                'description' => 'Phe duyet cac yeu cau tu nhan vien',
+                'name' => 'Duyet yeu cau nhan su',
+                'description' => 'Phe duyet tao moi va cap nhat yeu cau nhan su',
+            ],
+            self::APPROVE_DEPARTMENT_REQUESTS => [
+                'module' => 'approval',
+                'name' => 'Duyet yeu cau phong ban',
+                'description' => 'Phe duyet tao moi, cap nhat va khoa/mo phong ban',
+            ],
+            self::APPROVE_SALARY_REQUESTS => [
+                'module' => 'approval',
+                'name' => 'Duyet yeu cau luong',
+                'description' => 'Phe duyet thay doi luong co ban',
             ],
             self::SIGN_DOCUMENTS => [
                 'module' => 'approval',

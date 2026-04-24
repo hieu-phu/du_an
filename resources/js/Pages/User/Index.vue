@@ -25,11 +25,11 @@
                         :startIcon="CheckCirleIcon"
                         class="w-full whitespace-nowrap sm:w-auto border-blue-600 text-blue-600 hover:bg-blue-50"
                     >
-                        Duyệt tài khoản
+                        Duyệt yêu cầu nhân sự
                     </Button>
 
                     <Button
-                        v-if="!canApproveRequests"
+                        v-if="!canApproveUserRequests"
                         @click="goToRequests"
                         size="md"
                         variant="outline"
@@ -100,7 +100,26 @@
             <template #cell-employment="{ item }">
                 <div class="space-y-1 text-sm">
                     <div>{{ formatDate(item.hire_date) }}</div>
-                    <div class="text-gray-500 dark:text-gray-400">{{ formatCurrency(item.base_salary) }}</div>
+                    <div class="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                        <span>{{ formatCurrency(item.base_salary) }}</span>
+                        <button
+                            v-if="canAdjustSalary(item)"
+                            type="button"
+                            class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-blue-200 bg-blue-50 text-blue-600 transition hover:border-blue-300 hover:bg-blue-100 hover:text-blue-700"
+                            title="Chỉnh lương"
+                            @click="openSalaryModal(item)"
+                        >
+                            <EditButtonIcon class="h-4 w-4" />
+                        </button>
+                    </div>
+                    <button
+                        v-if="canAdjustSalary(item)"
+                        type="button"
+                        class="hidden"
+                        @click="openSalaryModal(item)"
+                    >
+                        Chỉnh lương
+                    </button>
                     <div class="text-xs text-indigo-600 dark:text-indigo-400">{{ getEmploymentTypeText(item.employment_type) }}</div>
                 </div>
             </template>
@@ -154,6 +173,62 @@
             :update-route="route('web.users.update', ':id')"
             @success="handleModalSuccess"
         />
+
+        <CustomModal
+            v-if="isSalaryModalOpen && selectedSalaryUser"
+            title="Chỉnh lương cơ bản"
+            @close="closeSalaryModal"
+            :custom_class="['relative', 'w-full', 'max-w-[520px]', 'rounded-xl', 'bg-white', 'shadow-2xl']"
+        >
+            <template #body>
+                <form @submit.prevent="submitSalaryUpdate">
+                    <div class="space-y-4 px-6 py-5">
+                        <div class="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                            <div class="font-semibold text-blue-800">{{ selectedSalaryUser.name }}</div>
+                            <div class="mt-1">Lương hiện tại: {{ formatCurrency(selectedSalaryUser.base_salary) }}</div>
+                        </div>
+
+                        <FormInput
+                            v-model="salaryDisplay"
+                            label="Lương cơ bản mới"
+                            type="text"
+                            placeholder="Nhập lương cơ bản mới"
+                            :error="salaryForm.errors.base_salary"
+                            unit="VND"
+                            @update:modelValue="handleSalaryInput"
+                        />
+
+                        <div>
+                            <label class="mb-1.5 block text-sm font-medium text-gray-700">Lý do</label>
+                            <textarea
+                                v-model="salaryForm.reason"
+                                rows="3"
+                                placeholder="Nhập lý do điều chỉnh hoặc ghi chú duyệt"
+                                class="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none"
+                            />
+                            <p v-if="salaryForm.errors.reason" class="mt-1 text-xs text-rose-600">{{ salaryForm.errors.reason }}</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
+                        <button
+                            type="button"
+                            class="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700"
+                            @click="closeSalaryModal"
+                        >
+                            Hủy bỏ
+                        </button>
+                        <button
+                            type="submit"
+                            :disabled="salaryForm.processing"
+                            class="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                        >
+                            {{ canApproveSalaryRequests ? 'Cập nhật lương' : 'Gửi yêu cầu lương' }}
+                        </button>
+                    </div>
+                </form>
+            </template>
+        </CustomModal>
 
         <CustomModal
             v-if="isDetailModalOpen && selectedUser"
@@ -311,7 +386,7 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
-import { router, usePage } from '@inertiajs/vue3'
+import { router, useForm, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import SearchPage from '@/components/features/SearchPage.vue'
@@ -321,6 +396,7 @@ import Pagination from '@/components/tables/Pagination.vue'
 import UserFormModal from '@/components/users/UserFormModal.vue'
 import CustomModal from '@/components/modals/CustomModal.vue'
 import FormSelect from '@/components/forms/FormSelect.vue'
+import FormInput from '@/components/ui/FormInput.vue'
 import { toast } from 'vue3-toastify'
 import AddIcon from '@/icons/AddIcon.vue'
 import EditButtonIcon from '@/icons/EditButtonIcon.vue'
@@ -342,35 +418,46 @@ const props = defineProps({
 const page = usePage()
 const permissions = computed(() => page.props.auth?.permissions || {})
 const currentAuthorityLevel = computed(() => Number(page.props.auth?.user?.authority_level || 0))
-const canApproveRequests = computed(() => page.props.auth?.position_capabilities?.approve_requests === true)
+const canApproveUserRequests = computed(() => page.props.auth?.position_capabilities?.approve_user_requests === true)
+const canApproveSalaryRequests = computed(() => page.props.auth?.position_capabilities?.approve_salary_requests === true)
+const canManageSalary = computed(() =>
+    page.props.auth?.position_capabilities?.manage_salary === true || canApproveSalaryRequests.value
+)
 
 const title = props.pageTitle
 const isUserModalOpen = ref(false)
 const isUserEditMode = ref(false)
 const isDetailModalOpen = ref(false)
+const isSalaryModalOpen = ref(false)
 const selectedUser = ref(null)
+const selectedSalaryUser = ref(null)
 const imageErrors = ref({})
+const salaryDisplay = ref('')
 const overrideForm = ref({
     capability_code: '',
     effect: 'allow',
     reason: '',
     expires_at: '',
 })
+const salaryForm = useForm({
+    base_salary: '',
+    reason: '',
+})
 
 const createButtonText = computed(() => {
     if (props.pageKey === 'employees') {
-        return canApproveRequests.value ? 'Nhân sự' : 'Tạo nhân sự'
+        return canApproveUserRequests.value ? 'Nhân sự' : 'Tạo nhân sự'
     }
 
-    return canApproveRequests.value ? 'Tài khoản' : 'Tạo tài khoản'
+    return canApproveUserRequests.value ? 'Tài khoản' : 'Tạo tài khoản'
 })
 
 const createButtonTitle = computed(() => {
     if (props.pageKey === 'employees') {
-        return canApproveRequests.value ? 'Thêm nhân sự mới' : 'Tạo nhân sự'
+        return canApproveUserRequests.value ? 'Thêm nhân sự mới' : 'Tạo nhân sự'
     }
 
-    return canApproveRequests.value ? 'Thêm tài khoản mới' : 'Tạo tài khoản'
+    return canApproveUserRequests.value ? 'Thêm tài khoản mới' : 'Tạo tài khoản'
 })
 
 const detailModalClasses = [
@@ -490,7 +577,9 @@ const getCapabilityLabel = (capability) => ({
     manage_departments: 'Quản lý phòng ban',
     manage_positions: 'Quản lý chức vụ',
     transfer_employee: 'Điều chuyển nhân sự',
-    approve_requests: 'Duyệt yêu cầu',
+    approve_user_requests: 'Duyệt yêu cầu nhân sự',
+    approve_department_requests: 'Duyệt yêu cầu phòng ban',
+    approve_salary_requests: 'Duyệt yêu cầu lương',
     sign_documents: 'Ký tài liệu',
     view_reports: 'Xem báo cáo',
     export_reports: 'Xuất báo cáo',
@@ -532,6 +621,8 @@ const canManageUser = (user) => {
     return true
 }
 
+const canAdjustSalary = (user) => canManageSalary.value && canManageUser(user)
+
 const canManageOverrides = computed(() =>
     !!selectedUser.value
     && canManageUser(selectedUser.value)
@@ -550,6 +641,14 @@ const effectOptionItems = [
     { value: 'deny', label: 'Tu choi' },
 ]
 
+const formatNumber = (value) => new Intl.NumberFormat('vi-VN').format(Number(value))
+
+const handleSalaryInput = (value) => {
+    const digitsOnly = String(value ?? '').replace(/\D/g, '')
+    salaryForm.base_salary = digitsOnly
+    salaryDisplay.value = digitsOnly ? formatNumber(digitsOnly) : ''
+}
+
 const refreshDetailUser = (userId) => {
     const query = {
         ...props.filters,
@@ -563,6 +662,17 @@ const refreshDetailUser = (userId) => {
         preserveScroll: true,
         replace: true,
     })
+}
+
+const resolveFirstErrorMessage = (errors = {}) => {
+    const first = Object.values(errors || {}).find((value) => {
+        if (Array.isArray(value)) return value.length > 0
+        return typeof value === 'string' && value.trim() !== ''
+    })
+
+    if (Array.isArray(first)) return first[0] || 'Vui lòng kiểm tra lại thông tin.'
+    if (typeof first === 'string' && first.trim() !== '') return first
+    return 'Vui lòng kiểm tra lại thông tin.'
 }
 
 const resetOverrideForm = () => {
@@ -687,10 +797,32 @@ const openEditUserModal = async (user) => {
     isUserModalOpen.value = true
 }
 
+const openSalaryModal = (user) => {
+    if (!canAdjustSalary(user)) return
+
+    selectedSalaryUser.value = user
+    salaryForm.reset()
+    salaryForm.clearErrors()
+    salaryForm.base_salary = user?.base_salary ? String(Number(user.base_salary)) : '0'
+    salaryDisplay.value = formatNumber(Number(salaryForm.base_salary || 0))
+    salaryForm.reason = ''
+    isSalaryModalOpen.value = true
+}
+
 const openDetailModal = (user) => {
     selectedUser.value = user
     resetOverrideForm()
     isDetailModalOpen.value = true
+}
+
+const closeSalaryModal = () => {
+    isSalaryModalOpen.value = false
+    selectedSalaryUser.value = null
+    salaryForm.reset()
+    salaryForm.clearErrors()
+    salaryForm.base_salary = ''
+    salaryForm.reason = ''
+    salaryDisplay.value = ''
 }
 
 const goToApprovals = () => {
@@ -707,6 +839,26 @@ const closeDetailModal = () => {
 }
 
 const handleModalSuccess = () => {}
+
+const submitSalaryUpdate = () => {
+    if (!selectedSalaryUser.value?.id) return
+
+    salaryForm.transform(() => ({
+        base_salary: salaryForm.base_salary === '' ? 0 : Number(salaryForm.base_salary),
+        reason: salaryForm.reason || null,
+    })).put(route('web.users.salary', selectedSalaryUser.value.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            toast.success(
+                canApproveSalaryRequests.value
+                    ? 'Đã cập nhật lương cơ bản.'
+                    : 'Đã gửi yêu cầu đổi lương cho Admin duyệt.'
+            )
+            closeSalaryModal()
+        },
+        onError: (errors) => toast.error(resolveFirstErrorMessage(errors)),
+    })
+}
 
 watch(() => props.detailUser, (detailUser) => {
     if (!detailUser) return

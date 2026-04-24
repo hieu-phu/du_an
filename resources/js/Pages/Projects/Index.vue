@@ -804,6 +804,7 @@
         </div>
       </div>
     </Modal>
+    <ActionDialog ref="actionDialogRef" />
   </AdminLayout>
 </template>
 
@@ -815,6 +816,8 @@ import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import Modal from '@/components/ui/Modal.vue'
 import Pagination from '@/components/tables/Pagination.vue'
+import ActionDialog from '@/components/ui/ActionDialog.vue'
+import { useActionDialog } from '@/composables/useActionDialog'
 
 const props = defineProps({
   projects: { type: Array, default: () => [] },
@@ -833,6 +836,7 @@ const props = defineProps({
   can_manage_implementation_details: { type: Boolean, default: false },
   can_edit_implementation_schedule: { type: Boolean, default: false },
 })
+const { actionDialogRef, openConfirm } = useActionDialog()
 
 const isFormModalOpen = ref(false)
 const isDetailModalOpen = ref(false)
@@ -1033,9 +1037,17 @@ function submitOptions(successMessage) {
   }
 }
 
-function toggleLock(project) {
+async function toggleLock(project) {
   const action = project.is_locked ? 'mo khoa' : 'khoa'
-  if (!window.confirm(`Ban co chac muon ${action} du an "${project.name}"?`)) {
+  const confirmed = await openConfirm({
+    title: project.is_locked ? 'Mở khóa dự án' : 'Khóa dự án',
+    message: `Bạn có chắc muốn ${action} dự án "${project.name}"?`,
+    okText: 'Xác nhận',
+    cancelText: 'Đóng',
+    variant: project.is_locked ? 'warning' : 'danger',
+    eyebrow: 'Dự án',
+  })
+  if (!confirmed) {
     return
   }
 
@@ -1117,10 +1129,18 @@ function addRoleToProject() {
   })
 }
 
-function removeRoleFromProject(role) {
+async function removeRoleFromProject(role) {
   if (!selectedProject.value) return
   if (!role?.id) return
-  if (!window.confirm(`Ban co chac muon xoa vai tro "${role.name}"?`)) return
+  const confirmed = await openConfirm({
+    title: 'Xóa vai trò dự án',
+    message: `Bạn có chắc muốn xóa vai trò "${role.name}"?`,
+    okText: 'Xóa vai trò',
+    cancelText: 'Đóng',
+    variant: 'danger',
+    eyebrow: 'Dự án',
+  })
+  if (!confirmed) return
 
   router.delete(route('projects.roles.destroy', [selectedProject.value.id, role.id]), {
     preserveScroll: true,
@@ -1246,9 +1266,17 @@ function toggleImplementationLock(detail) {
   })
 }
 
-function removeImplementationDetail(detail) {
+async function removeImplementationDetail(detail) {
   if (!selectedProject.value) return
-  if (!window.confirm('Ban co chac muon xoa dau viec nay?')) return
+  const confirmed = await openConfirm({
+    title: 'Xóa đầu việc',
+    message: 'Bạn có chắc muốn xóa đầu việc này?',
+    okText: 'Xóa đầu việc',
+    cancelText: 'Đóng',
+    variant: 'danger',
+    eyebrow: 'Triển khai',
+  })
+  if (!confirmed) return
 
   router.delete(route('projects.implementation-details.destroy', [selectedProject.value.id, detail.id]), {
     preserveState: false,
@@ -1280,9 +1308,17 @@ function updateMemberRole(member) {
   })
 }
 
-function removeMemberFromProject(member) {
+async function removeMemberFromProject(member) {
   if (!selectedProject.value) return
-  if (!window.confirm('Ban co chac muon loai nhan su nay khoi du an?')) return
+  const confirmed = await openConfirm({
+    title: 'Loại nhân sự khỏi dự án',
+    message: 'Bạn có chắc muốn loại nhân sự này khỏi dự án?',
+    okText: 'Xác nhận loại',
+    cancelText: 'Đóng',
+    variant: 'danger',
+    eyebrow: 'Dự án',
+  })
+  if (!confirmed) return
 
   router.delete(route('projects.members.destroy', [selectedProject.value.id, member.id]), {
     preserveScroll: true,

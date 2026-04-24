@@ -6,6 +6,8 @@ import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import Pagination from '@/components/tables/Pagination.vue'
 import Modal from '@/components/ui/Modal.vue'
+import ActionDialog from '@/components/ui/ActionDialog.vue'
+import { useActionDialog } from '@/composables/useActionDialog'
 
 const props = defineProps({
     approvalRequests: { type: Object, required: true },
@@ -16,6 +18,7 @@ const props = defineProps({
 const selectedRequest = ref(null)
 const page = usePage()
 const currentUserId = page.props.auth?.user?.id
+const { actionDialogRef, openPrompt } = useActionDialog()
 
 const statusLabel = (status) => ({
     pending: 'Cho duyet',
@@ -60,8 +63,18 @@ const openDetail = (item) => {
     selectedRequest.value = item
 }
 
-const approve = (item) => {
-    const reviewNote = window.prompt('Ghi chu duyet (co the bo trong):', '')
+const approve = async (item) => {
+    const reviewNote = await openPrompt({
+        title: 'Duyệt yêu cầu phòng ban',
+        message: 'Nhập ghi chú duyệt nếu cần.',
+        inputLabel: 'Ghi chú duyệt',
+        inputType: 'textarea',
+        defaultValue: '',
+        okText: 'Duyệt',
+        cancelText: 'Đóng',
+        variant: 'primary',
+        eyebrow: 'Phòng ban',
+    })
     if (reviewNote === null) return
 
     router.post(route('web.department-approvals.approve', item.id), { review_note: reviewNote }, {
@@ -71,8 +84,18 @@ const approve = (item) => {
     })
 }
 
-const reject = (item) => {
-    const reviewNote = window.prompt('Ly do tu choi:', '')
+const reject = async (item) => {
+    const reviewNote = await openPrompt({
+        title: 'Từ chối yêu cầu phòng ban',
+        message: 'Nhập lý do từ chối.',
+        inputLabel: 'Lý do từ chối',
+        inputType: 'textarea',
+        defaultValue: '',
+        okText: 'Từ chối',
+        cancelText: 'Đóng',
+        variant: 'danger',
+        eyebrow: 'Phòng ban',
+    })
     if (reviewNote === null) return
 
     router.post(route('web.department-approvals.reject', item.id), { review_note: reviewNote }, {
@@ -82,8 +105,18 @@ const reject = (item) => {
     })
 }
 
-const cancel = (item) => {
-    const reviewNote = window.prompt('Ghi chu huy yeu cau (tuy chon):', '')
+const cancel = async (item) => {
+    const reviewNote = await openPrompt({
+        title: 'Hủy yêu cầu phòng ban',
+        message: 'Nhập ghi chú hủy nếu cần.',
+        inputLabel: 'Ghi chú hủy',
+        inputType: 'textarea',
+        defaultValue: '',
+        okText: 'Hủy yêu cầu',
+        cancelText: 'Đóng',
+        variant: 'warning',
+        eyebrow: 'Phòng ban',
+    })
     if (reviewNote === null) return
 
     router.post(route('web.department-approvals.cancel', item.id), { review_note: reviewNote }, {
@@ -301,5 +334,6 @@ const cancel = (item) => {
                 </div>
             </div>
         </Modal>
+        <ActionDialog ref="actionDialogRef" />
     </AdminLayout>
 </template>

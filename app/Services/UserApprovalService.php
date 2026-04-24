@@ -10,6 +10,7 @@ use App\Models\ApprovalRequest;
 use App\Models\SalaryHistory;
 use App\Models\User;
 use App\Models\Ward;
+use App\Enums\ApprovalDecision;
 use App\Support\AccessMatrix;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
@@ -23,7 +24,7 @@ class UserApprovalService extends BaseService
 
     public function __construct(
         protected UserService $userService,
-        protected NotificationService $notificationService
+        protected ApprovalDecisionNotifier $approvalDecisionNotifier,
     ) {}
 
     public function submitCreateRequest(array $validatedData): ApprovalRequest
@@ -127,11 +128,13 @@ class UserApprovalService extends BaseService
         });
     }
 
-    public function getApprovalRequests(array $filters = [], int $perPage = 15): LengthAwarePaginator
+    public function getApprovalRequests(array $filters = [], int $perPage = 15, ?User $viewer = null): LengthAwarePaginator
     {
+        $requestTypes = $this->approvableRequestTypesFor($viewer ?? $this->user());
+
         return ApprovalRequest::query()
             ->with(['requester:id,name,email', 'reviewer:id,name,email', 'changes'])
-            ->whereIn('request_type', [self::REQUEST_TYPE_CREATE_USER, self::REQUEST_TYPE_SALARY_CHANGE])
+            ->whereIn('request_type', $requestTypes)
             ->when(!empty($filters['status']), fn ($query) => $query->where('status', $filters['status']))
             ->when(!empty($filters['request_type']), fn ($query) => $query->where('request_type', $filters['request_type']))
             ->latest()
@@ -159,10 +162,11 @@ class UserApprovalService extends BaseService
             ]);
     }
 
-    public function getApprovalStats(): array
+    public function getApprovalStats(?User $viewer = null): array
     {
+        $requestTypes = $this->approvableRequestTypesFor($viewer ?? $this->user());
         $baseQuery = ApprovalRequest::query()
-            ->whereIn('request_type', [self::REQUEST_TYPE_CREATE_USER, self::REQUEST_TYPE_SALARY_CHANGE]);
+            ->whereIn('request_type', $requestTypes);
 
         return [
             'total' => (clone $baseQuery)->count(),
@@ -210,6 +214,7 @@ class UserApprovalService extends BaseService
     {
         return $this->handleTransaction(function () use ($approvalRequest, $reviewNote) {
             $this->assertPendingApprovalRequest($approvalRequest);
+            $this->assertCanReviewApprovalRequest($approvalRequest, $this->user());
             $payload = $this->decodePayload($approvalRequest->loadMissing('changes'));
 
             if ($approvalRequest->request_type === self::REQUEST_TYPE_CREATE_USER) {
@@ -225,7 +230,7 @@ class UserApprovalService extends BaseService
                     'review_note' => $reviewNote,
                 ]);
 
-                $this->notifyRequesterDecision($approvalRequest, true, $reviewNote);
+                $this->notifyRequesterDecision($approvalRequest, ApprovalDecision::APPROVED, $reviewNote);
 
                 return $user;
             }
@@ -266,7 +271,7 @@ class UserApprovalService extends BaseService
                     'review_note' => $reviewNote,
                 ]);
 
-                $this->notifyRequesterDecision($approvalRequest, true, $reviewNote);
+                $this->notifyRequesterDecision($approvalRequest, ApprovalDecision::APPROVED, $reviewNote);
 
                 return $user;
             }
@@ -280,11 +285,8 @@ class UserApprovalService extends BaseService
     public function reject(ApprovalRequest $approvalRequest, ?string $reviewNote = null): void
     {
         $this->handleTransaction(function () use ($approvalRequest, $reviewNote) {
-            if ($approvalRequest->status !== 'pending') {
-                throw ValidationException::withMessages([
-                    'approval' => 'Yeu cau nay da duoc xu ly.',
-                ]);
-            }
+            $this->assertPendingApprovalRequest($approvalRequest);
+            $this->assertCanReviewApprovalRequest($approvalRequest, $this->user());
 
             $approvalRequest->update([
                 'status' => 'rejected',
@@ -293,7 +295,7 @@ class UserApprovalService extends BaseService
                 'review_note' => $reviewNote,
             ]);
 
-            $this->notifyRequesterDecision($approvalRequest, false, $reviewNote);
+            $this->notifyRequesterDecision($approvalRequest, ApprovalDecision::REJECTED, $reviewNote);
         });
     }
 
@@ -306,7 +308,7 @@ class UserApprovalService extends BaseService
                 ]);
             }
 
-            if ((int) $approvalRequest->requested_by !== (int) $actor->id && !AccessMatrix::canApproveRequests($actor)) {
+            if ((int) $approvalRequest->requested_by !== (int) $actor->id && !$this->canReviewApprovalRequest($approvalRequest, $actor)) {
                 throw ValidationException::withMessages([
                     'approval' => 'Ban khong duoc phep huy yeu cau nay.',
                 ]);
@@ -318,6 +320,8 @@ class UserApprovalService extends BaseService
                 'reviewed_at' => now(),
                 'review_note' => $note ?: 'Requester cancelled approval request',
             ]);
+
+            $this->notifyRequesterDecision($approvalRequest, ApprovalDecision::CANCELLED, $note);
         });
     }
 
@@ -395,6 +399,41 @@ class UserApprovalService extends BaseService
         }
     }
 
+    private function approvableRequestTypesFor(?User $viewer): array
+    {
+        $requestTypes = [];
+
+        if (AccessMatrix::canApproveUserRequests($viewer)) {
+            $requestTypes[] = self::REQUEST_TYPE_CREATE_USER;
+        }
+
+        if (AccessMatrix::canApproveSalaryRequests($viewer)) {
+            $requestTypes[] = self::REQUEST_TYPE_SALARY_CHANGE;
+        }
+
+        return !empty($requestTypes) ? $requestTypes : ['__none__'];
+    }
+
+    private function canReviewApprovalRequest(ApprovalRequest $approvalRequest, ?User $actor): bool
+    {
+        return match ((string) $approvalRequest->request_type) {
+            self::REQUEST_TYPE_CREATE_USER => AccessMatrix::canApproveUserRequests($actor),
+            self::REQUEST_TYPE_SALARY_CHANGE => AccessMatrix::canApproveSalaryRequests($actor),
+            default => false,
+        };
+    }
+
+    private function assertCanReviewApprovalRequest(ApprovalRequest $approvalRequest, ?User $actor): void
+    {
+        if ($this->canReviewApprovalRequest($approvalRequest, $actor)) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'approval' => 'Ban khong co quyen xu ly loai yeu cau nay.',
+        ]);
+    }
+
     private function mapChangesForDisplay(Collection $changes): array
     {
         return $changes->map(function ($change) {
@@ -432,43 +471,14 @@ class UserApprovalService extends BaseService
         };
     }
 
-    private function notifyRequesterDecision(ApprovalRequest $approvalRequest, bool $approved, ?string $reviewNote = null): void
+    private function notifyRequesterDecision(ApprovalRequest $approvalRequest, ApprovalDecision $decision, ?string $reviewNote = null): void
     {
-        if (!$approvalRequest->requested_by) {
-            return;
-        }
-
-        $approvalRequest->loadMissing('requester:id,name');
-        $reviewerName = $this->user()?->name ?? 'Admin';
-        $decisionLabel = $approved ? 'duoc duyet' : 'bi tu choi';
-        $title = $approved ? 'Yeu cau da duoc duyet' : 'Yeu cau bi tu choi';
-
-        $this->notificationService->create(
-            $approvalRequest->requested_by,
-            $title,
-            "Yeu cau {$this->requestTypeLabel($approvalRequest->request_type)} cua ban {$decisionLabel} boi {$reviewerName}.",
-            [
-                'approval_request_id' => $approvalRequest->id,
-                'request_type' => $approvalRequest->request_type,
-                'decision' => $approved ? 'approved' : 'rejected',
-                'review_note' => $reviewNote,
-                'action_url' => '/users/employee-requests',
-            ],
+        $this->approvalDecisionNotifier->notifyApprovalRequestDecision(
+            $approvalRequest,
+            $decision,
             '/users/employee-requests',
-            null,
-            'approval',
-            $this->user()?->id,
-            ApprovalRequest::class,
-            $approvalRequest->id
+            $reviewNote,
+            $this->user()
         );
-    }
-
-    private function requestTypeLabel(string $requestType): string
-    {
-        return match ($requestType) {
-            self::REQUEST_TYPE_CREATE_USER => 'tao tai khoan',
-            self::REQUEST_TYPE_SALARY_CHANGE => 'doi luong co ban',
-            default => 'phe duyet',
-        };
     }
 }

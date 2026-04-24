@@ -120,6 +120,7 @@
         </template>
       </DataTable>
     </div>
+
     <div class="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-theme-sm">
       <div class="mb-4">
         <h3 class="text-lg font-semibold text-gray-900">Chi tiết tăng ca</h3>
@@ -155,6 +156,111 @@
         </template>
       </DataTable>
     </div>
+
+    <CustomModal
+      v-if="monthLockConfirm.open"
+      title="Xác nhận thao tác bảng công"
+      :custom_class="monthLockModalClasses"
+      @close="closeMonthLockConfirm"
+    >
+      <template #body>
+        <div class="space-y-5 px-6 pb-6">
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Xem trước xác nhận</p>
+                <h4 class="mt-2 text-xl font-semibold text-slate-900">
+                  {{ monthLockConfirm.action === 'lock' ? 'Khóa bảng công theo tháng' : 'Mở khóa bảng công theo tháng' }}
+                </h4>
+                <p class="mt-2 text-sm leading-6 text-slate-600">
+                  Modal này mới dựng phần giao diện confirm. Chưa gắn vào chức năng xử lý thật.
+                </p>
+              </div>
+              <span
+                :class="monthLockConfirm.action === 'lock' ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-amber-200 bg-amber-50 text-amber-700'"
+                class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold"
+              >
+                {{ monthLockConfirm.action === 'lock' ? 'Chuẩn bị khóa' : 'Chuẩn bị mở khóa' }}
+              </span>
+            </div>
+          </div>
+
+          <div class="grid gap-3 md:grid-cols-3">
+            <div class="rounded-xl border border-gray-200 bg-white p-4">
+              <div class="text-xs font-medium uppercase tracking-wide text-gray-500">Kỳ công</div>
+              <div class="mt-2 text-lg font-semibold text-gray-900">{{ monthLockPeriodLabel }}</div>
+            </div>
+            <div class="rounded-xl border border-gray-200 bg-white p-4">
+              <div class="text-xs font-medium uppercase tracking-wide text-gray-500">Trạng thái hiện tại</div>
+              <div class="mt-2">
+                <span
+                  :class="month_lock?.is_locked ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'"
+                  class="inline-flex rounded-full px-3 py-1 text-sm font-semibold"
+                >
+                  {{ month_lock?.is_locked ? 'Đang khóa' : 'Đang mở' }}
+                </span>
+              </div>
+            </div>
+            <div class="rounded-xl border border-gray-200 bg-white p-4">
+              <div class="text-xs font-medium uppercase tracking-wide text-gray-500">Trạng thái sau thao tác</div>
+              <div class="mt-2">
+                <span
+                  :class="monthLockConfirm.action === 'lock' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'"
+                  class="inline-flex rounded-full px-3 py-1 text-sm font-semibold"
+                >
+                  {{ monthLockConfirm.action === 'lock' ? 'Sẽ chuyển sang khóa' : 'Sẽ chuyển sang mở khóa' }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-semibold text-gray-700">
+              {{ monthLockConfirm.action === 'lock' ? 'Ghi chú khóa tháng' : 'Ghi chú mở khóa' }}
+            </label>
+            <textarea
+              v-model="monthLockConfirm.note"
+              rows="4"
+              class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              :placeholder="monthLockConfirm.action === 'lock' ? 'Ví dụ: khóa kỳ công sau khi HR đã rà soát xong.' : 'Ví dụ: mở khóa để điều chỉnh lại công của nhân sự.'"
+            />
+            <p class="mt-2 text-xs text-gray-500">Ghi chú sẽ được gửi cùng thao tác khóa hoặc mở khóa bảng công.</p>
+            <p v-if="monthLockForm.errors.note" class="mt-2 text-xs font-medium text-rose-600">{{ monthLockForm.errors.note }}</p>
+          </div>
+
+          <div class="rounded-xl border border-dashed border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+            Xác nhận sẽ gọi trực tiếp tới chức năng khóa hoặc mở khóa tháng của hệ thống.
+          </div>
+
+          <div class="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              :disabled="monthLockForm.processing"
+              class="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+              @click="closeMonthLockConfirm"
+            >
+              Đóng
+            </button>
+            <button
+              type="button"
+              :disabled="monthLockForm.processing"
+              :class="monthLockConfirm.action === 'lock'
+                ? 'rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300'
+                : 'rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-amber-300'"
+              @click="confirmMonthLockPreview"
+            >
+              {{
+                monthLockForm.processing
+                  ? 'Đang xử lý...'
+                  : monthLockConfirm.action === 'lock'
+                    ? 'Xác nhận khóa tháng'
+                    : 'Xác nhận mở khóa'
+              }}
+            </button>
+          </div>
+        </div>
+      </template>
+    </CustomModal>
   </AdminLayout>
 </template>
 
@@ -164,6 +270,7 @@ import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import DataTable from '@/components/tables/DataTable.vue'
+import CustomModal from '@/components/modals/CustomModal.vue'
 
 const props = defineProps({
   filters: { type: Object, required: true },
@@ -177,13 +284,33 @@ const props = defineProps({
 
 const page = usePage()
 const canManageMonthLock = computed(() => page.props.auth?.position_capabilities?.approve_attendance === true)
-const monthLockForm = useForm({ month: props.filters.month, year: props.filters.year, note: '' })
 const filterForm = reactive({
   month: props.filters.month,
   year: props.filters.year,
   employee_profile_id: props.filters.employee_profile_id,
   keyword: props.filters.keyword || '',
 })
+const monthLockConfirm = reactive({
+  open: false,
+  action: 'lock',
+  note: '',
+})
+const monthLockForm = useForm({
+  month: props.filters.month,
+  year: props.filters.year,
+  note: '',
+})
+const monthLockModalClasses = [
+  'relative',
+  'w-full',
+  'max-w-[720px]',
+  'flex',
+  'flex-col',
+  'rounded-2xl',
+  'bg-white',
+  'overflow-hidden',
+  'max-h-[90vh]',
+]
 
 const columns = computed(() => {
   const baseColumns = [
@@ -211,7 +338,6 @@ const columns = computed(() => {
   ]
 })
 
-
 const overtimeColumns = computed(() => {
   const baseColumns = [
     { label: 'Ngày tăng ca', key: 'work_date' },
@@ -236,6 +362,7 @@ const overtimeColumns = computed(() => {
     ...baseColumns,
   ]
 })
+
 const summaryCards = computed(() => [
   { label: 'Tổng bản ghi công', value: props.summary.total_records ?? 0 },
   { label: 'Ngày làm', value: props.summary.present_records ?? 0 },
@@ -268,6 +395,7 @@ const exportQuery = computed(() => ({
 
 const exportExcelUrl = computed(() => route('attendance.reports.export.excel', exportQuery.value))
 const exportPdfUrl = computed(() => route('attendance.reports.export.pdf', exportQuery.value))
+const monthLockPeriodLabel = computed(() => `Tháng ${String(filterForm.month).padStart(2, '0')}/${filterForm.year}`)
 
 function applyFilters() {
   router.get(route('attendance.reports'), exportQuery.value, {
@@ -277,14 +405,32 @@ function applyFilters() {
 }
 
 function toggleMonthLock(action) {
+  monthLockConfirm.open = true
+  monthLockConfirm.action = action
+  monthLockConfirm.note = props.month_lock?.note || ''
+  monthLockForm.clearErrors()
+}
+
+function closeMonthLockConfirm() {
+  if (monthLockForm.processing) return
+  monthLockConfirm.open = false
+}
+
+function confirmMonthLockPreview() {
   monthLockForm.month = filterForm.month
   monthLockForm.year = filterForm.year
-  const note = window.prompt(action === 'lock' ? 'Ghi chú khóa tháng:' : 'Ghi chú mở khóa:', props.month_lock?.note || '')
-  if (note === null) return
-  monthLockForm.note = note
-  monthLockForm.post(route(action === 'lock' ? 'attendance.month-locks.lock' : 'attendance.month-locks.unlock'), {
-    preserveScroll: true,
-  })
+  monthLockForm.note = monthLockConfirm.note
+
+  monthLockForm.post(
+    route(monthLockConfirm.action === 'lock' ? 'attendance.month-locks.lock' : 'attendance.month-locks.unlock'),
+    {
+      preserveState: true,
+      preserveScroll: true,
+      onSuccess: () => {
+        monthLockConfirm.open = false
+      },
+    }
+  )
 }
 
 function formatDate(value) {
@@ -413,4 +559,3 @@ function requestRowClass(item) {
   return ''
 }
 </script>
-

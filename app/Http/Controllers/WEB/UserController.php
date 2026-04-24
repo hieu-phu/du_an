@@ -10,14 +10,17 @@ use App\Models\AuthorityLevel;
 use App\Models\Department;
 use App\Models\Position;
 use App\Models\PositionCapability as PositionCapabilityModel;
+use App\Models\SalaryHistory;
 use App\Models\User;
 use App\Models\UserPositionCapabilityOverride;
+use App\Services\ApprovalDecisionNotifier;
 use App\Services\NotificationService;
 use App\Services\UserApprovalService;
 use App\Services\UserService;
 use App\Support\AccessMatrix;
 use App\Support\PositionCapability;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -30,7 +33,8 @@ class UserController extends Controller
     public function __construct(
         protected UserService $userService,
         protected UserApprovalService $userApprovalService,
-        protected NotificationService $notificationService
+        protected NotificationService $notificationService,
+        protected ApprovalDecisionNotifier $approvalDecisionNotifier,
     ) {}
 
     public function index(Request $request)
@@ -149,7 +153,7 @@ class UserController extends Controller
             $validated = $request->validated();
             $this->assertAssignablePosition($request->user(), (int) ($validated['position_id'] ?? 0));
 
-            if (AccessMatrix::canApproveRequests($request->user())) {
+            if (AccessMatrix::canApproveUserRequests($request->user())) {
                 $this->userService->createUser(
                     $validated,
                     $request->file('avatar')
@@ -187,36 +191,11 @@ class UserController extends Controller
 
         try {
             $validated = $request->validated();
-            $requester = $request->user();
-            $salaryRequestSubmitted = false;
             $newPositionId = (int) ($validated['position_id'] ?? 0);
             $currentPositionId = (int) ($user->employeeProfile?->position_id ?? 0);
 
             if ($newPositionId > 0 && $newPositionId !== $currentPositionId) {
                 $this->assertAssignablePosition($request->user(), $newPositionId);
-            }
-
-            $hasSalaryInPayload = array_key_exists('base_salary', $validated);
-            $currentSalary = (float) ($user->employeeProfile?->base_salary ?? 0);
-            $requestedSalary = (float) ($validated['base_salary'] ?? $currentSalary);
-            $salaryChanged = $hasSalaryInPayload && round($requestedSalary, 2) !== round($currentSalary, 2);
-
-            if ($requester && !AccessMatrix::canApproveRequests($requester) && $salaryChanged) {
-                if (!$requester->hasPositionCapability(\App\Support\PositionCapability::MANAGE_SALARY)) {
-                    throw ValidationException::withMessages([
-                        'base_salary' => 'Ban khong co quyen de xuat thay doi luong.',
-                    ]);
-                }
-
-                $this->userApprovalService->submitSalaryChangeRequest(
-                    $user,
-                    $requestedSalary,
-                    'HR de nghi thay doi luong co ban'
-                );
-
-                // HR khong duoc sua luong truc tiep: giu nguyen luong hien tai, cho admin duyet.
-                $validated['base_salary'] = $currentSalary;
-                $salaryRequestSubmitted = true;
             }
 
             $this->userService->updateUser(
@@ -225,16 +204,99 @@ class UserController extends Controller
                 $request->file('avatar')
             );
 
-            $successMessage = $salaryRequestSubmitted
-                ? 'Da cap nhat thong tin va gui yeu cau doi luong cho Admin duyet.'
-                : 'Cap nhat nhan su thanh cong!';
-
-            return redirect()->back()->with('success', $successMessage);
+            return redirect()->back()->with('success', 'Cap nhat nhan su thanh cong!');
         } catch (ValidationException $e) {
             return back()->withInput()->withErrors($e->errors());
         } catch (\Exception $e) {
             return back()->withInput()->withErrors([
                 'error' => 'Cap nhat that bai: ' . $e->getMessage(),
+            ]);
+        }
+    }
+
+    public function updateSalary(Request $request, User $user)
+    {
+        $this->ensureManageableUser($request->user(), $user);
+
+        $actor = $request->user();
+
+        abort_unless(
+            $actor?->hasAnyPositionCapability([
+                PositionCapability::MANAGE_SALARY,
+                PositionCapability::APPROVE_SALARY_REQUESTS,
+            ]),
+            403
+        );
+
+        $validated = $request->validate([
+            'base_salary' => ['required', 'numeric', 'min:0'],
+            'reason' => ['nullable', 'string', 'max:500'],
+        ], [
+            'base_salary.required' => 'Vui long nhap luong co ban.',
+            'base_salary.numeric' => 'Luong co ban phai la so.',
+            'base_salary.min' => 'Luong co ban khong duoc am.',
+            'reason.max' => 'Ly do khong duoc vuot qua 500 ky tu.',
+        ]);
+
+        try {
+            $user->loadMissing('employeeProfile');
+            $profile = $user->employeeProfile;
+
+            if (!$profile) {
+                throw ValidationException::withMessages([
+                    'base_salary' => 'Nhan su nay chua co ho so nhan vien de cap nhat luong.',
+                ]);
+            }
+
+            $currentSalary = round((float) ($profile->base_salary ?? 0), 2);
+            $requestedSalary = round((float) $validated['base_salary'], 2);
+
+            if ($requestedSalary === $currentSalary) {
+                throw ValidationException::withMessages([
+                    'base_salary' => 'Luong moi trung voi luong hien tai, khong can cap nhat.',
+                ]);
+            }
+
+            if (!AccessMatrix::canApproveSalaryRequests($actor)) {
+                $this->userApprovalService->submitSalaryChangeRequest(
+                    $user,
+                    $requestedSalary,
+                    $validated['reason'] ?? 'HR de nghi thay doi luong co ban'
+                );
+
+                return redirect()->back()->with('success', 'Da gui yeu cau doi luong cho Admin duyet.');
+            }
+
+            DB::transaction(function () use ($profile, $requestedSalary, $currentSalary, $actor, $validated, $user) {
+                $profile->update([
+                    'base_salary' => $requestedSalary,
+                ]);
+
+                SalaryHistory::query()->create([
+                    'employee_profile_id' => $profile->id,
+                    'old_salary' => $currentSalary,
+                    'new_salary' => $requestedSalary,
+                    'currency' => 'VND',
+                    'effective_date' => now()->toDateString(),
+                    'approved_by' => $actor?->id,
+                    'note' => $validated['reason'] ?? 'Cap nhat luong truc tiep tu danh sach nhan su',
+                ]);
+
+                $this->approvalDecisionNotifier->notifyDirectSalaryUpdate(
+                    $user->fresh('employeeProfile'),
+                    $currentSalary,
+                    $requestedSalary,
+                    $validated['reason'] ?? null,
+                    $actor
+                );
+            });
+
+            return redirect()->back()->with('success', 'Da cap nhat luong co ban.');
+        } catch (ValidationException $e) {
+            return back()->withInput()->withErrors($e->errors());
+        } catch (\Exception $e) {
+            return back()->withInput()->withErrors([
+                'error' => 'Cap nhat luong that bai: ' . $e->getMessage(),
             ]);
         }
     }
@@ -458,7 +520,7 @@ class UserController extends Controller
             return $positionLevel;
         }
 
-        if (AccessMatrix::canApproveRequests($actor)) {
+        if (AccessMatrix::canApproveAnyRequest($actor)) {
             return $this->resolveMaxAuthorityLevel();
         }
 
@@ -498,6 +560,9 @@ class UserController extends Controller
 
         $sensitiveCapabilities = [
             PositionCapability::APPROVE_REQUESTS,
+            PositionCapability::APPROVE_USER_REQUESTS,
+            PositionCapability::APPROVE_DEPARTMENT_REQUESTS,
+            PositionCapability::APPROVE_SALARY_REQUESTS,
             PositionCapability::MANAGE_POSITIONS,
             PositionCapability::MANAGE_DEPARTMENTS,
             PositionCapability::MANAGE_SALARY,
@@ -521,7 +586,7 @@ class UserController extends Controller
             ->when($excludeUserId, fn ($query) => $query->whereKeyNot($excludeUserId))
             ->with('employeeProfile.position')
             ->get(['id'])
-            ->filter(fn (User $user) => AccessMatrix::canApproveRequests($user))
+            ->filter(fn (User $user) => AccessMatrix::canApproveUserRequests($user))
             ->pluck('id')
             ->values()
             ->all();

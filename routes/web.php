@@ -262,6 +262,7 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
         Route::get('/employee-requests', [UserController::class, 'employeeRequests'])->name('employee-requests');
         Route::post('/', [UserController::class, 'store'])->name('store');
         Route::put('/{user}', [UserController::class, 'update'])->name('update');
+        Route::put('/{user}/salary', [UserController::class, 'updateSalary'])->name('salary');
         Route::put('/{user}/toggle', [UserController::class, 'toggleStatus'])->name('toggle');
         Route::put('/{user}/account-status', [UserController::class, 'updateAccountStatus'])->name('account-status');
         Route::post('/{user}/capability-overrides', [UserController::class, 'upsertCapabilityOverride'])
@@ -317,14 +318,14 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
             ->name('attendance.catalogs.assignments.toggle');
     });
 
-    Route::middleware(['position.capability:' . PositionCapability::APPROVE_REQUESTS])->group(function () {
-        Route::prefix('users/approvals')->name('web.user-approvals.')->group(function () {
-            Route::get('/', [UserApprovalController::class, 'index'])->name('index');
-            Route::post('/{approvalRequest}/approve', [UserApprovalController::class, 'approve'])->name('approve');
-            Route::post('/{approvalRequest}/reject', [UserApprovalController::class, 'reject'])->name('reject');
-            Route::post('/{approvalRequest}/cancel', [UserApprovalController::class, 'cancel'])->name('cancel');
-        });
+    Route::prefix('users/approvals')->name('web.user-approvals.')->group(function () {
+        Route::get('/', [UserApprovalController::class, 'index'])->name('index');
+        Route::post('/{approvalRequest}/approve', [UserApprovalController::class, 'approve'])->name('approve');
+        Route::post('/{approvalRequest}/reject', [UserApprovalController::class, 'reject'])->name('reject');
+        Route::post('/{approvalRequest}/cancel', [UserApprovalController::class, 'cancel'])->name('cancel');
+    });
 
+    Route::middleware(['position.capability:' . PositionCapability::APPROVE_DEPARTMENT_REQUESTS])->group(function () {
         Route::prefix('departments/approvals')->name('web.department-approvals.')->group(function () {
             Route::get('/', [DepartmentApprovalController::class, 'index'])->name('index');
             Route::post('/{approvalRequest}/approve', [DepartmentApprovalController::class, 'approve'])->name('approve');

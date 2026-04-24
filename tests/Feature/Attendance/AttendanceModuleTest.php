@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Attendance;
 
+use App\Jobs\SendApprovalDecisionEmailJob;
 use App\Models\AttendanceApproval;
 use App\Models\AttendanceAdjustment;
 use App\Models\AttendanceEvent;
@@ -26,6 +27,7 @@ use App\Models\User;
 use App\Models\WorkShift;
 use App\Support\PositionCapability as Capability;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class AttendanceModuleTest extends TestCase
@@ -343,6 +345,7 @@ class AttendanceModuleTest extends TestCase
         ]);
 
         $employee->employeeProfile->update([
+            'hire_date' => '2026-04-01',
             'default_work_shift_id' => $shift->id,
         ]);
 
@@ -437,8 +440,13 @@ class AttendanceModuleTest extends TestCase
 
     public function test_hr_can_confirm_attendance_record(): void
     {
+        Queue::fake();
+
         $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Two');
         $hr = $this->makeUserWithAuthorityProfile('hr', 'HR Two');
+        $employee->employeeProfile->update([
+            'reports_to_user_id' => $hr->id,
+        ]);
 
         $record = AttendanceRecord::query()->create([
             'employee_profile_id' => $employee->employeeProfile->id,
@@ -465,6 +473,75 @@ class AttendanceModuleTest extends TestCase
             'status' => 'approved',
         ]);
         $this->assertSame(1, AttendanceApproval::query()->count());
+        $this->assertDatabaseHas('approval_decision_deliveries', [
+            'module' => 'attendance',
+            'reference_type' => AttendanceRecord::class,
+            'reference_id' => $record->id,
+            'recipient_user_id' => $employee->id,
+            'decision' => 'approved',
+            'status' => 'queued',
+        ]);
+        Queue::assertPushed(SendApprovalDecisionEmailJob::class, 1);
+    }
+
+    public function test_reviewing_attendance_request_queues_email_notification_for_requester(): void
+    {
+        Queue::fake();
+
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Attendance Mail');
+        $admin = $this->makeUserWithAuthorityProfile('admin', 'Admin Attendance Mail');
+
+        $leaveType = LeaveType::query()->create([
+            'code' => 'MAIL_LEAVE',
+            'name' => 'Nghi phep mail',
+            'is_paid' => true,
+            'deducts_balance' => false,
+            'requires_attachment' => false,
+            'is_active' => true,
+        ]);
+
+        $approvalRequest = ApprovalRequest::query()->create([
+            'request_type' => 'leave',
+            'target_type' => AttendanceRequest::class,
+            'target_id' => 0,
+            'requested_by' => $employee->id,
+            'status' => 'pending',
+            'reason' => 'Xin nghi phep de test mail',
+            'submitted_at' => now(),
+        ]);
+
+        $attendanceRequest = AttendanceRequest::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'approval_request_id' => $approvalRequest->id,
+            'request_type' => 'leave',
+            'leave_type_id' => $leaveType->id,
+            'leave_type' => 'paid',
+            'status' => 'pending',
+            'from_date' => '2026-04-15',
+            'to_date' => '2026-04-15',
+            'reason' => 'Xin nghi phep de test mail',
+        ]);
+
+        $approvalRequest->update([
+            'target_id' => $attendanceRequest->id,
+        ]);
+
+        app(\App\Services\AttendanceService::class)->reviewApprovalRequest(
+            $approvalRequest->fresh('target'),
+            $admin,
+            'approved',
+            'Duyet nghi phep gui mail'
+        );
+
+        $this->assertDatabaseHas('approval_decision_deliveries', [
+            'module' => 'attendance',
+            'reference_type' => ApprovalRequest::class,
+            'reference_id' => $approvalRequest->id,
+            'recipient_user_id' => $employee->id,
+            'decision' => 'approved',
+            'status' => 'queued',
+        ]);
+        Queue::assertPushed(SendApprovalDecisionEmailJob::class, 1);
     }
 
     public function test_approval_payload_includes_shift_and_standard_minutes(): void
@@ -903,6 +980,44 @@ class AttendanceModuleTest extends TestCase
 
         $this->assertSame(0, count(data_get($forcedPage, 'props.records', [])));
         $this->assertSame(0, count(data_get($forcedPage, 'props.overtime_details', [])));
+    }
+
+    public function test_attendance_report_synthesizes_absent_rows_for_missing_past_working_days(): void
+    {
+        Carbon::setTestNow(Carbon::create(2026, 4, 24, 8, 39, 0, 'Asia/Ho_Chi_Minh'));
+
+        $hrViewer = $this->makeUserWithAuthorityProfile('hr', 'HR Missing Absent Viewer');
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Missing Absent Row');
+
+        $employee->employeeProfile->update([
+            'reports_to_user_id' => $hrViewer->id,
+            'hire_date' => '2026-04-23',
+        ]);
+
+        $response = $this->actingAs($hrViewer)->get(route('attendance.reports', [
+            'month' => 4,
+            'year' => 2026,
+        ]));
+
+        $response->assertOk();
+        $response->assertViewHas('page');
+
+        $page = $response->viewData('page');
+        $records = collect(data_get($page, 'props.records', []));
+        $absentRow = $records->first(fn (array $row) =>
+            data_get($row, 'employee_name') === $employee->name
+            && data_get($row, 'work_date') === '2026-04-23'
+        );
+
+        $this->assertNotNull($absentRow);
+        $this->assertSame('absent', data_get($absentRow, 'day_status'));
+        $this->assertSame('missing_attendance', data_get($absentRow, 'violation_status'));
+        $this->assertSame('needs_verification', data_get($absentRow, 'display_approval_status'));
+
+        $this->assertDatabaseMissing('attendance_records', [
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-23',
+        ]);
     }
 
     public function test_dashboard_counts_only_subordinate_attendance_and_pending_approvals(): void
@@ -2387,6 +2502,7 @@ class AttendanceModuleTest extends TestCase
         ]);
 
         $employee->employeeProfile->update([
+            'hire_date' => '2026-04-01',
             'default_work_shift_id' => $shift->id,
         ]);
 
@@ -2457,6 +2573,244 @@ class AttendanceModuleTest extends TestCase
             'day_status' => 'absent',
             'is_confirmed' => false,
         ]);
+    }
+
+    public function test_employee_can_check_out_overnight_shift_after_midnight_using_open_record_from_previous_day(): void
+    {
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Overnight Checkout');
+
+        $shift = WorkShift::query()->create([
+            'shift_code' => 'SHIFT-NIGHT',
+            'shift_name' => 'Ca dem',
+            'start_time' => '22:00:00',
+            'end_time' => '06:00:00',
+            'break_start_time' => '02:00:00',
+            'break_end_time' => '03:00:00',
+            'standard_minutes' => 420,
+            'half_day_minutes' => 210,
+            'is_overnight' => true,
+            'allows_overtime' => true,
+            'is_active' => true,
+        ]);
+
+        $employee->employeeProfile->update([
+            'hire_date' => '2026-04-01',
+            'default_work_shift_id' => $shift->id,
+        ]);
+
+        Carbon::setTestNow(Carbon::create(2026, 4, 15, 22, 5, 0, 'Asia/Ho_Chi_Minh'));
+
+        $this->actingAs($employee)
+            ->post(route('attendance.check-in'))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        OvertimeRequest::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-15',
+            'start_at' => '2026-04-16 06:00:00',
+            'end_at' => '2026-04-16 07:00:00',
+            'requested_minutes' => 60,
+            'approved_minutes' => 60,
+            'status' => 'approved',
+            'reason' => 'Tang ca sau ca dem',
+            'requested_by' => $employee->id,
+        ]);
+
+        Carbon::setTestNow(Carbon::create(2026, 4, 16, 6, 0, 0, 'Asia/Ho_Chi_Minh'));
+
+        $this->actingAs($employee)
+            ->post(route('attendance.check-out'))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $record = AttendanceRecord::query()
+            ->where('employee_profile_id', $employee->employeeProfile->id)
+            ->whereDate('work_date', '2026-04-15')
+            ->firstOrFail();
+
+        $this->assertSame('2026-04-15', optional($record->work_date)->format('Y-m-d'));
+        $this->assertNotNull($record->check_out_at);
+        $this->assertFalse((bool) $record->missing_check_out);
+        $this->assertSame(60, (int) $record->overtime_minutes);
+        $this->assertDatabaseMissing('attendance_records', [
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-16',
+        ]);
+    }
+
+    public function test_employee_cannot_check_in_when_previous_shift_is_still_open(): void
+    {
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Open Prior Shift');
+
+        AttendanceRecord::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-15',
+            'check_in_at' => '2026-04-15 22:00:00',
+            'check_out_at' => null,
+            'worked_minutes' => 0,
+            'attendance_status' => 'on_time',
+            'approval_status' => 'pending',
+            'day_status' => 'present',
+            'missing_check_in' => false,
+            'missing_check_out' => true,
+            'is_confirmed' => false,
+        ]);
+
+        Carbon::setTestNow(Carbon::create(2026, 4, 16, 8, 0, 0, 'Asia/Ho_Chi_Minh'));
+
+        $this->actingAs($employee)
+            ->post(route('attendance.check-in'))
+            ->assertRedirect()
+            ->assertSessionHasErrors('error');
+
+        $this->assertSame(1, AttendanceRecord::query()->count());
+    }
+
+    public function test_overnight_shift_checkout_uses_record_work_date_for_month_lock_validation(): void
+    {
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Overnight Month Lock');
+
+        $shift = WorkShift::query()->create([
+            'shift_code' => 'SHIFT-NLOCK',
+            'shift_name' => 'Ca dem khoa thang',
+            'start_time' => '22:00:00',
+            'end_time' => '06:00:00',
+            'break_start_time' => '02:00:00',
+            'break_end_time' => '03:00:00',
+            'standard_minutes' => 420,
+            'half_day_minutes' => 210,
+            'is_overnight' => true,
+            'is_active' => true,
+        ]);
+
+        AttendanceRecord::query()->create([
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_shift_id' => $shift->id,
+            'work_date' => '2026-04-30',
+            'check_in_at' => '2026-04-30 22:00:00',
+            'check_out_at' => null,
+            'worked_minutes' => 0,
+            'attendance_status' => 'on_time',
+            'approval_status' => 'pending',
+            'day_status' => 'present',
+            'missing_check_in' => false,
+            'missing_check_out' => true,
+            'is_confirmed' => false,
+            'shift_snapshot' => [
+                'start_time' => '22:00:00',
+                'end_time' => '06:00:00',
+                'break_start_time' => '02:00:00',
+                'break_end_time' => '03:00:00',
+                'standard_minutes' => 420,
+                'half_day_minutes' => 210,
+                'is_overnight' => true,
+            ],
+        ]);
+
+        AttendanceMonthLock::query()->create([
+            'month' => 5,
+            'year' => 2026,
+            'department_id' => null,
+            'is_locked' => true,
+            'locked_by' => $employee->id,
+            'locked_at' => '2026-05-01 00:00:00',
+            'note' => 'Khoa thang 5',
+        ]);
+
+        Carbon::setTestNow(Carbon::create(2026, 5, 1, 6, 0, 0, 'Asia/Ho_Chi_Minh'));
+
+        $this->actingAs($employee)
+            ->post(route('attendance.check-out'))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $record = AttendanceRecord::query()->whereDate('work_date', '2026-04-30')->firstOrFail();
+        $this->assertNotNull($record->check_out_at);
+    }
+
+    public function test_sync_missing_records_service_can_backfill_and_auto_close_overdue_absences(): void
+    {
+        Queue::fake();
+        Carbon::setTestNow(Carbon::create(2026, 4, 24, 9, 0, 0, 'Asia/Ho_Chi_Minh'));
+
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Sync Missing');
+        $shift = WorkShift::query()->create([
+            'shift_code' => 'SHIFT-SYNC',
+            'shift_name' => 'Ca sync cong',
+            'start_time' => '08:00:00',
+            'end_time' => '17:00:00',
+            'break_start_time' => '12:00:00',
+            'break_end_time' => '13:00:00',
+            'standard_minutes' => 480,
+            'half_day_minutes' => 240,
+            'is_active' => true,
+        ]);
+
+        $employee->employeeProfile->update([
+            'hire_date' => '2026-04-01',
+            'default_work_shift_id' => $shift->id,
+        ]);
+
+        $service = app(\App\Services\AttendanceService::class);
+        $createdCount = $service->syncMissingAttendanceRecords('2026-04-21', '2026-04-22');
+        $closedCount = $service->closeUnexplainedAbsences(2, '2026-04-24');
+
+        $this->assertSame(2, $createdCount);
+        $this->assertSame(2, $closedCount);
+
+        $this->assertDatabaseHas('attendance_records', [
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-21',
+            'attendance_status' => 'absent',
+            'approval_status' => 'rejected',
+        ]);
+        $this->assertDatabaseHas('attendance_records', [
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'work_date' => '2026-04-22',
+            'attendance_status' => 'absent',
+            'approval_status' => 'rejected',
+        ]);
+
+        $this->assertSame(2, \App\Models\ApprovalDecisionDelivery::query()->count());
+    }
+
+    public function test_report_uses_configured_auto_close_timeout_for_synthetic_absences(): void
+    {
+        config(['attendance.auto_close_after_days' => 3]);
+        Carbon::setTestNow(Carbon::create(2026, 4, 24, 9, 0, 0, 'Asia/Ho_Chi_Minh'));
+
+        $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Config Timeout');
+        $admin = $this->makeUserWithAuthorityProfile('admin', 'Admin Config Timeout');
+        $shift = WorkShift::query()->create([
+            'shift_code' => 'SHIFT-CONFIG',
+            'shift_name' => 'Ca config timeout',
+            'start_time' => '08:00:00',
+            'end_time' => '17:00:00',
+            'break_start_time' => '12:00:00',
+            'break_end_time' => '13:00:00',
+            'standard_minutes' => 480,
+            'half_day_minutes' => 240,
+            'is_active' => true,
+        ]);
+
+        $employee->employeeProfile->update([
+            'hire_date' => '2026-04-22',
+            'default_work_shift_id' => $shift->id,
+        ]);
+
+        $report = app(\App\Services\AttendanceService::class)->buildReportData($admin, [
+            'month' => 4,
+            'year' => 2026,
+            'employee_profile_id' => $employee->employeeProfile->id,
+        ]);
+
+        $statuses = collect($report['records'])
+            ->pluck('display_approval_status', 'work_date')
+            ->all();
+
+        $this->assertSame('needs_verification', $statuses['2026-04-22'] ?? null);
+        $this->assertSame('needs_verification', $statuses['2026-04-23'] ?? null);
     }
 
     public function test_attendance_payload_starts_from_employee_hire_date(): void
@@ -2533,6 +2887,7 @@ class AttendanceModuleTest extends TestCase
     public function test_close_unexplained_absences_rejects_absent_records_after_two_days_without_request(): void
     {
         Carbon::setTestNow(Carbon::create(2026, 4, 22, 9, 10, 0, 'Asia/Ho_Chi_Minh'));
+        Queue::fake();
 
         $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Auto Reject Absence');
 
@@ -2559,11 +2914,13 @@ class AttendanceModuleTest extends TestCase
         $this->assertFalse((bool) $record->is_confirmed);
         $this->assertNotNull($record->rejected_at);
         $this->assertStringContainsString('khong duyet cong sau 2 ngay', $record->approval_note);
+        $this->assertSame(1, \App\Models\ApprovalDecisionDelivery::query()->count());
     }
 
     public function test_close_unexplained_absences_keeps_records_with_pending_request_open(): void
     {
         Carbon::setTestNow(Carbon::create(2026, 4, 22, 9, 10, 0, 'Asia/Ho_Chi_Minh'));
+        Queue::fake();
 
         $employee = $this->makeUserWithAuthorityProfile('employee', 'Employee Pending Absence Request');
 
@@ -2599,6 +2956,7 @@ class AttendanceModuleTest extends TestCase
         $this->assertSame('pending', $record->approval_status);
         $this->assertFalse((bool) $record->is_confirmed);
         $this->assertNull($record->rejected_at);
+        Queue::assertNothingPushed();
     }
 
     public function test_confirming_absent_pending_record_requires_leave_request_instead_of_auto_approving_unpaid_leave(): void
@@ -4496,7 +4854,9 @@ class AttendanceModuleTest extends TestCase
                 Capability::APPROVE_ATTENDANCE,
                 Capability::VIEW_ALL_ATTENDANCE,
                 Capability::EXPORT_ATTENDANCE,
-                Capability::APPROVE_REQUESTS,
+                Capability::APPROVE_USER_REQUESTS,
+                Capability::APPROVE_DEPARTMENT_REQUESTS,
+                Capability::APPROVE_SALARY_REQUESTS,
                 Capability::VIEW_ALL_PROJECTS,
             ];
         }

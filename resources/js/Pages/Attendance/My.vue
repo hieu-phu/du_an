@@ -519,6 +519,7 @@
         </div>
       </div>
     </Modal>
+    <ActionDialog ref="actionDialogRef" />
   </AdminLayout>
 </template>
 
@@ -530,6 +531,8 @@ import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import DataTable from '@/components/tables/DataTable.vue'
 import InputDate from '@/components/forms/InputDate.vue'
 import Modal from '@/components/ui/Modal.vue'
+import ActionDialog from '@/components/ui/ActionDialog.vue'
+import { useActionDialog } from '@/composables/useActionDialog'
 
 const props = defineProps({
   filters: { type: Object, required: true },
@@ -546,6 +549,7 @@ const props = defineProps({
 })
 
 const page = usePage()
+const { actionDialogRef, openConfirm } = useActionDialog()
 const attachmentInput = ref(null)
 const selectedSubmittedRequest = ref(null)
 const selectedSmartContext = ref(null)
@@ -980,10 +984,17 @@ function canCancelSubmittedRequest(item) {
   return item?.status === 'pending' && !!item?.approval_request_id
 }
 
-function cancelSubmittedRequest(item) {
+async function cancelSubmittedRequest(item) {
   if (!canCancelSubmittedRequest(item)) return
 
-  const confirmed = window.confirm('Huy don dang cho duyet nay?')
+  const confirmed = await openConfirm({
+    title: 'Hủy đơn chấm công',
+    message: 'Bạn có chắc muốn hủy đơn đang chờ duyệt này?',
+    okText: 'Xác nhận hủy',
+    cancelText: 'Đóng',
+    variant: 'danger',
+    eyebrow: 'Xác nhận',
+  })
   if (!confirmed) return
 
   router.delete(route('attendance.requests.destroy', item.approval_request_id), {

@@ -19,10 +19,11 @@
                         <InputDate v-model="form.date_of_birth" label="Ngày sinh" placeholder="Chọn ngày sinh" :error="form.errors.date_of_birth" />
                         <InputDate v-model="form.hire_date" label="Ngày vào làm" placeholder="Chọn ngày vào làm" :required="true" :error="form.errors.hire_date" />
                         <FormInput
+                            v-if="!isEditMode"
                             v-model="salaryDisplay"
-                            label="Lương cơ bản"
+                            label="Lương khởi điểm"
                             type="text"
-                            placeholder="Nhập lương cơ bản"
+                            placeholder="Nhập lương khởi điểm"
                             :error="form.errors.base_salary"
                             unit="VND"
                             @update:modelValue="handleSalaryInput"
@@ -174,7 +175,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'success'])
 const page = usePage()
-const canApproveRequests = computed(() => page.props.auth?.position_capabilities?.approve_requests === true)
+const canApproveUserRequests = computed(() => page.props.auth?.position_capabilities?.approve_user_requests === true)
 
 const modalClasses = [
     'relative', 'w-full', 'max-w-[900px]',
@@ -230,7 +231,7 @@ const form = useForm({
     termination_date: '',
     department_id: '',
     position_id: '',
-    base_salary: '',
+    base_salary: '0',
     employment_status: 'active',
     employment_type: 'official',
     avatar: null,
@@ -274,7 +275,8 @@ const resetForm = () => {
     form.province_id = ''
     form.ward_id = ''
     wardOptions.value = []
-    salaryDisplay.value = ''
+    form.base_salary = '0'
+    salaryDisplay.value = formatNumber(0)
     lastManualStatus.value = 'active'
 }
 
@@ -296,8 +298,8 @@ const populateForm = (user) => {
     form.termination_date = user.termination_date || ''
     form.department_id = user.department_id || ''
     form.position_id = user.position_id || ''
-    form.base_salary = user.base_salary ? String(Number(user.base_salary)) : ''
-    salaryDisplay.value = form.base_salary ? formatNumber(form.base_salary) : ''
+    form.base_salary = '0'
+    salaryDisplay.value = formatNumber(0)
     form.employment_status = user.employment_status || 'active'
     form.employment_type = user.employment_type || 'official'
     form.password = ''
@@ -358,13 +360,13 @@ const resolveFirstErrorMessage = (errors = {}) => {
 }
 
 const submitForm = () => {
-    const payload = {
-        ...form.data(),
-        base_salary: form.base_salary === '' ? null : Number(form.base_salary),
-    }
-
     if (props.isEditMode && props.userData) {
         const updateUrl = props.updateRoute.replace(':id', props.userData.id)
+        const payload = {
+            ...form.data(),
+        }
+
+        delete payload.base_salary
 
         form.transform(() => ({
             ...payload,
@@ -381,10 +383,15 @@ const submitForm = () => {
         return
     }
 
+    const payload = {
+        ...form.data(),
+        base_salary: form.base_salary === '' ? 0 : Number(form.base_salary),
+    }
+
     form.transform(() => payload).post(props.storeRoute, {
         preserveScroll: true,
         onSuccess: () => {
-            toast.success(canApproveRequests.value ? 'Thêm mới thành công!' : 'Đã gửi yêu cầu cho cấp có thẩm quyền duyệt!')
+            toast.success(canApproveUserRequests.value ? 'Thêm mới thành công!' : 'Đã gửi yêu cầu cho cấp có thẩm quyền duyệt!')
             close()
             emit('success')
         },

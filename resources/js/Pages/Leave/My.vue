@@ -210,6 +210,7 @@
         </template>
       </DataTable>
     </section>
+    <ActionDialog ref="actionDialogRef" />
   </AdminLayout>
 </template>
 
@@ -219,6 +220,8 @@ import { Head, router } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import DataTable from '@/components/tables/DataTable.vue'
+import ActionDialog from '@/components/ui/ActionDialog.vue'
+import { useActionDialog } from '@/composables/useActionDialog'
 
 const LOW_BALANCE_THRESHOLD = 3
 
@@ -229,6 +232,7 @@ const props = defineProps({
   balances: { type: Array, default: () => [] },
   leave_requests: { type: Array, default: () => [] },
 })
+const { actionDialogRef, openConfirm } = useActionDialog()
 
 const filterForm = reactive({
   year: Number(props.filters.year),
@@ -426,10 +430,17 @@ function canCancelLeaveRequest(item) {
   return item?.status === 'pending' && !!item?.approval_request_id
 }
 
-function cancelLeaveRequest(item) {
+async function cancelLeaveRequest(item) {
   if (!canCancelLeaveRequest(item)) return
 
-  const confirmed = window.confirm('Huy don nghi phep dang cho duyet nay?')
+  const confirmed = await openConfirm({
+    title: 'Hủy đơn nghỉ phép',
+    message: 'Bạn có chắc muốn hủy đơn nghỉ phép đang chờ duyệt này?',
+    okText: 'Xác nhận hủy',
+    cancelText: 'Đóng',
+    variant: 'danger',
+    eyebrow: 'Xác nhận',
+  })
   if (!confirmed) return
 
   router.delete(route('attendance.requests.destroy', item.approval_request_id), {

@@ -111,7 +111,9 @@ class UserService extends BaseService
                     'date_of_birth' => $validatedData['date_of_birth'] ?? null,
                     'hire_date' => $validatedData['hire_date'],
                     'termination_date' => $validatedData['termination_date'] ?? null,
-                    'base_salary' => $validatedData['base_salary'] ?? 0,
+                    'base_salary' => array_key_exists('base_salary', $validatedData)
+                        ? ($validatedData['base_salary'] ?? 0)
+                        : ($existingProfile?->base_salary ?? 0),
                     'employment_status' => $validatedData['employment_status'],
                     'employment_type' => $validatedData['employment_type'],
                 ]

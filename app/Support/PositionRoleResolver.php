@@ -22,6 +22,9 @@ class PositionRoleResolver
         PositionCapability::APPROVE_ATTENDANCE => 4,
         PositionCapability::APPROVE_LEAVE => 4,
         PositionCapability::APPROVE_REQUESTS => 4,
+        PositionCapability::APPROVE_USER_REQUESTS => 4,
+        PositionCapability::APPROVE_DEPARTMENT_REQUESTS => 4,
+        PositionCapability::APPROVE_SALARY_REQUESTS => 4,
     ];
 
     public static function normalizeCapabilities(array $capabilities): array

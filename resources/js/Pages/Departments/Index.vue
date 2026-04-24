@@ -5,6 +5,8 @@ import { toast } from 'vue3-toastify'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import Modal from '@/components/ui/Modal.vue'
+import ActionDialog from '@/components/ui/ActionDialog.vue'
+import { useActionDialog } from '@/composables/useActionDialog'
 
 const props = defineProps({
     departments: { type: Array, default: () => [] },
@@ -13,8 +15,9 @@ const props = defineProps({
 })
 
 const page = usePage()
+const { actionDialogRef, openConfirm } = useActionDialog()
 const permissions = computed(() => page.props.auth?.permissions || {})
-const canApproveRequests = computed(() => page.props.auth?.position_capabilities?.approve_requests === true)
+const canApproveRequests = computed(() => page.props.auth?.position_capabilities?.approve_department_requests === true)
 
 const filters = reactive({
     search: props.filters?.search ?? '',
@@ -132,9 +135,16 @@ const submitOptions = () => ({
     },
 })
 
-const toggleStatus = (department) => {
+const toggleStatus = async (department) => {
     const nextAction = department.is_active ? 'khóa' : 'mở lại'
-    const confirmed = window.confirm(`Bạn có chắc muốn ${nextAction} phòng ban "${department.name}"?`)
+    const confirmed = await openConfirm({
+        title: 'Xác nhận thay đổi trạng thái',
+        message: `Bạn có chắc muốn ${nextAction} phòng ban "${department.name}"?`,
+        okText: 'Xác nhận',
+        cancelText: 'Đóng',
+        variant: department.is_active ? 'danger' : 'warning',
+        eyebrow: 'Phòng ban',
+    })
 
     if (!confirmed) {
         return
@@ -411,6 +421,7 @@ const toggleStatus = (department) => {
                 </div>
             </div>
         </Modal>
+        <ActionDialog ref="actionDialogRef" />
     </AdminLayout>
 </template>
 

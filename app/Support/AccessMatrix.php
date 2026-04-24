@@ -61,10 +61,12 @@ class AccessMatrix
             PositionCapability::MANAGE_EMPLOYEES,
         ],
         'users.approvals.view' => [
-            PositionCapability::APPROVE_REQUESTS,
+            PositionCapability::APPROVE_USER_REQUESTS,
+            PositionCapability::APPROVE_SALARY_REQUESTS,
         ],
         'users.approvals.review' => [
-            PositionCapability::APPROVE_REQUESTS,
+            PositionCapability::APPROVE_USER_REQUESTS,
+            PositionCapability::APPROVE_SALARY_REQUESTS,
         ],
         'departments.view' => [
             PositionCapability::MANAGE_DEPARTMENTS,
@@ -73,10 +75,10 @@ class AccessMatrix
             PositionCapability::MANAGE_DEPARTMENTS,
         ],
         'departments.approvals.view' => [
-            PositionCapability::APPROVE_REQUESTS,
+            PositionCapability::APPROVE_DEPARTMENT_REQUESTS,
         ],
         'departments.approvals.review' => [
-            PositionCapability::APPROVE_REQUESTS,
+            PositionCapability::APPROVE_DEPARTMENT_REQUESTS,
         ],
         'positions.view' => [
             PositionCapability::MANAGE_POSITIONS,
@@ -141,6 +143,33 @@ class AccessMatrix
     public static function canApproveRequests(?User $user): bool
     {
         return (bool) ($user?->hasPositionCapability(PositionCapability::APPROVE_REQUESTS));
+    }
+
+    public static function canApproveUserRequests(?User $user): bool
+    {
+        return (bool) ($user?->hasPositionCapability(PositionCapability::APPROVE_USER_REQUESTS));
+    }
+
+    public static function canApproveDepartmentRequests(?User $user): bool
+    {
+        return (bool) ($user?->hasPositionCapability(PositionCapability::APPROVE_DEPARTMENT_REQUESTS));
+    }
+
+    public static function canApproveSalaryRequests(?User $user): bool
+    {
+        return (bool) ($user?->hasPositionCapability(PositionCapability::APPROVE_SALARY_REQUESTS));
+    }
+
+    public static function canApproveAnyRequest(?User $user): bool
+    {
+        return self::canApproveUserRequests($user)
+            || self::canApproveDepartmentRequests($user)
+            || self::canApproveSalaryRequests($user);
+    }
+
+    public static function canAccessUserApprovals(?User $user): bool
+    {
+        return self::canApproveUserRequests($user) || self::canApproveSalaryRequests($user);
     }
 
     public static function canViewAllProjects(?User $user): bool

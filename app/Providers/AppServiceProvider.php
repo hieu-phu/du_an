@@ -111,7 +111,9 @@ class AppServiceProvider extends ServiceProvider
                             'group' => 'Duyệt & Ký kết',
                             'icon' => '✅',
                             'items' => [
-                                ['key' => PositionCapability::APPROVE_REQUESTS, 'label' => 'Duyệt yêu cầu chung', 'desc' => 'Phê duyệt các yêu cầu từ nhân viên'],
+                                ['key' => PositionCapability::APPROVE_USER_REQUESTS, 'label' => 'Duyệt yêu cầu nhân sự', 'desc' => 'Phê duyệt tạo mới và thay đổi thông tin nhân sự'],
+                                ['key' => PositionCapability::APPROVE_DEPARTMENT_REQUESTS, 'label' => 'Duyệt yêu cầu phòng ban', 'desc' => 'Phê duyệt tạo, sửa, khóa hoặc mở phòng ban'],
+                                ['key' => PositionCapability::APPROVE_SALARY_REQUESTS, 'label' => 'Duyệt yêu cầu lương', 'desc' => 'Phê duyệt thay đổi lương cơ bản'],
                                 ['key' => PositionCapability::SIGN_DOCUMENTS, 'label' => 'Ký duyệt văn bản', 'desc' => 'Ký và phê duyệt hợp đồng, quyết định'],
                             ],
                         ],

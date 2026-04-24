@@ -438,6 +438,7 @@
         </div>
       </div>
     </Modal>
+    <ActionDialog ref="actionDialogRef" />
   </AdminLayout>
 </template>
 
@@ -450,6 +451,8 @@ import DataTable from '@/components/tables/DataTable.vue'
 import Modal from '@/components/ui/Modal.vue'
 import InputDate from '@/components/forms/InputDate.vue'
 import FormSelect from '@/components/forms/FormSelect.vue'
+import ActionDialog from '@/components/ui/ActionDialog.vue'
+import { useActionDialog } from '@/composables/useActionDialog'
 
 const props = defineProps({
   approval_mode: { type: String, default: 'attendance' },
@@ -464,6 +467,7 @@ const props = defineProps({
 })
 
 const page = usePage()
+const { actionDialogRef, openAlert, openPrompt } = useActionDialog()
 const isLeaveApproval = computed(() => props.approval_mode === 'leave')
 const pageTitle = computed(() => isLeaveApproval.value ? 'Duyệt nghỉ phép' : 'Duyệt chấm công')
 const breadcrumbItems = computed(() => isLeaveApproval.value
@@ -850,11 +854,27 @@ function jumpToCurrentPeriod() {
   filterForm.period = buildPeriodValue(filterForm.year, filterForm.month)
 }
 
-function decide(item, action) {
-  const note = window.prompt(action === 'approve' ? 'Ghi chú duyệt:' : 'Lý do từ chối:', item.approval_note || item.note || '')
+async function decide(item, action) {
+  const note = await openPrompt({
+    title: action === 'approve' ? 'Duyệt bản ghi chấm công' : 'Từ chối bản ghi chấm công',
+    message: action === 'approve' ? 'Nhập ghi chú duyệt.' : 'Nhập lý do từ chối.',
+    inputLabel: action === 'approve' ? 'Ghi chú duyệt' : 'Lý do từ chối',
+    inputType: 'textarea',
+    defaultValue: item.approval_note || item.note || '',
+    okText: action === 'approve' ? 'Duyệt' : 'Từ chối',
+    cancelText: 'Đóng',
+    variant: action === 'approve' ? 'primary' : 'danger',
+    eyebrow: 'Chấm công',
+  })
   if (note === null) return
   if (String(note).trim().length < 5) {
-    window.alert('Ghi chú tối thiểu 5 ký tự.')
+    await openAlert({
+      title: 'Ghi chú chưa hợp lệ',
+      message: 'Ghi chú tối thiểu 5 ký tự.',
+      okText: 'Đã hiểu',
+      variant: 'warning',
+      eyebrow: 'Chấm công',
+    })
     return
   }
   decisionForm.note = String(note).trim()
@@ -862,10 +882,27 @@ function decide(item, action) {
 
   if (action === 'approve' && needsResolvedCheckOut(item)) {
     const suggestedTime = suggestedCheckOutTime(item)
-    const resolvedTime = window.prompt('Bản ghi thiếu check-out. Nhập giờ check-out để admin xác nhận công:', suggestedTime)
+    const resolvedTime = await openPrompt({
+      title: 'Xác nhận giờ check-out',
+      message: 'Bản ghi thiếu check-out. Nhập giờ check-out để admin xác nhận công.',
+      inputLabel: 'Giờ check-out',
+      inputType: 'text',
+      defaultValue: suggestedTime,
+      placeholder: 'HH:mm',
+      okText: 'Lưu giờ',
+      cancelText: 'Đóng',
+      variant: 'warning',
+      eyebrow: 'Chấm công',
+    })
     if (resolvedTime === null) return
     if (!/^\d{2}:\d{2}$/.test(String(resolvedTime).trim())) {
-      window.alert('Giờ check-out phải có định dạng HH:mm.')
+      await openAlert({
+        title: 'Giờ check-out chưa hợp lệ',
+        message: 'Giờ check-out phải có định dạng HH:mm.',
+        okText: 'Đã hiểu',
+        variant: 'warning',
+        eyebrow: 'Chấm công',
+      })
       return
     }
 
@@ -934,13 +971,29 @@ function toggleCurrentPageSelection() {
   selectedRecordIds.value = Array.from(new Set([...selectedRecordIds.value, ...pageIds]))
 }
 
-function approveSelectedRecords() {
+async function approveSelectedRecords() {
   if (!selectedRecordIds.value.length) return
 
-  const note = window.prompt('Ghi chu duyet hang loat:', 'Duyet hang loat')
+  const note = await openPrompt({
+    title: 'Duyệt hàng loạt bản ghi công',
+    message: 'Nhập ghi chú duyệt hàng loạt.',
+    inputLabel: 'Ghi chú duyệt',
+    inputType: 'textarea',
+    defaultValue: 'Duyet hang loat',
+    okText: 'Duyệt hàng loạt',
+    cancelText: 'Đóng',
+    variant: 'primary',
+    eyebrow: 'Chấm công',
+  })
   if (note === null) return
   if (String(note).trim().length < 5) {
-    window.alert('Ghi chu toi thieu 5 ky tu.')
+    await openAlert({
+      title: 'Ghi chú chưa hợp lệ',
+      message: 'Ghi chú tối thiểu 5 ký tự.',
+      okText: 'Đã hiểu',
+      variant: 'warning',
+      eyebrow: 'Chấm công',
+    })
     return
   }
 
@@ -981,13 +1034,29 @@ function toggleCurrentRequestPageSelection() {
   selectedApprovalRequestIds.value = Array.from(new Set([...selectedApprovalRequestIds.value, ...pageIds]))
 }
 
-function approveSelectedRequests() {
+async function approveSelectedRequests() {
   if (!selectedApprovalRequestIds.value.length) return
 
-  const note = window.prompt('Ghi chu duyet hang loat don nghi phep:', 'Duyet hang loat')
+  const note = await openPrompt({
+    title: 'Duyệt hàng loạt đơn nghỉ phép',
+    message: 'Nhập ghi chú duyệt hàng loạt.',
+    inputLabel: 'Ghi chú duyệt',
+    inputType: 'textarea',
+    defaultValue: 'Duyet hang loat',
+    okText: 'Duyệt hàng loạt',
+    cancelText: 'Đóng',
+    variant: 'primary',
+    eyebrow: 'Nghỉ phép',
+  })
   if (note === null) return
   if (String(note).trim().length < 5) {
-    window.alert('Ghi chu toi thieu 5 ky tu.')
+    await openAlert({
+      title: 'Ghi chú chưa hợp lệ',
+      message: 'Ghi chú tối thiểu 5 ký tự.',
+      okText: 'Đã hiểu',
+      variant: 'warning',
+      eyebrow: 'Nghỉ phép',
+    })
     return
   }
 
@@ -1005,11 +1074,27 @@ function suggestedCheckOutTime(item) {
   return item.shift_end_time || '17:30'
 }
 
-function reviewRequest(item, action) {
-  const note = window.prompt(action === 'approve' ? 'Ghi chú duyệt đơn:' : 'Lý do từ chối đơn:', item.reason || '')
+async function reviewRequest(item, action) {
+  const note = await openPrompt({
+    title: action === 'approve' ? 'Duyệt đơn' : 'Từ chối đơn',
+    message: action === 'approve' ? 'Nhập ghi chú duyệt đơn.' : 'Nhập lý do từ chối đơn.',
+    inputLabel: action === 'approve' ? 'Ghi chú duyệt' : 'Lý do từ chối',
+    inputType: 'textarea',
+    defaultValue: item.reason || '',
+    okText: action === 'approve' ? 'Duyệt đơn' : 'Từ chối đơn',
+    cancelText: 'Đóng',
+    variant: action === 'approve' ? 'primary' : 'danger',
+    eyebrow: isLeaveApproval.value ? 'Nghỉ phép' : 'Chấm công',
+  })
   if (note === null) return
   if (String(note).trim().length < 5) {
-    window.alert('Ghi chú tối thiểu 5 ký tự.')
+    await openAlert({
+      title: 'Ghi chú chưa hợp lệ',
+      message: 'Ghi chú tối thiểu 5 ký tự.',
+      okText: 'Đã hiểu',
+      variant: 'warning',
+      eyebrow: isLeaveApproval.value ? 'Nghỉ phép' : 'Chấm công',
+    })
     return
   }
   requestDecisionForm.note = String(note).trim()

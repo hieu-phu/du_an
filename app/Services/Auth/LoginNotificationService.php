@@ -80,7 +80,7 @@ class LoginNotificationService
         string $userAgent,
         string $loggedInAt
     ): void {
-        if (AccessMatrix::canApproveRequests($user)) {
+        if (AccessMatrix::canApproveAnyRequest($user)) {
             return;
         }
 
@@ -90,7 +90,7 @@ class LoginNotificationService
             ->whereNotNull('email')
             ->with('employeeProfile.position')
             ->get(['id', 'name', 'email'])
-            ->filter(fn (User $admin) => AccessMatrix::canApproveRequests($admin));
+            ->filter(fn (User $admin) => AccessMatrix::canApproveAnyRequest($admin));
 
         foreach ($admins as $admin) {
             Mail::to($admin->email)->queue(new AdminUserLoginAlertMail(

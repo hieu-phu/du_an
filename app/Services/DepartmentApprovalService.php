@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ApprovalRequest;
 use App\Models\Department;
 use App\Models\User;
+use App\Enums\ApprovalDecision;
 use App\Support\AccessMatrix;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
@@ -19,7 +20,7 @@ class DepartmentApprovalService extends BaseService
 
     public function __construct(
         protected DepartmentService $departmentService,
-        protected NotificationService $notificationService
+        protected ApprovalDecisionNotifier $approvalDecisionNotifier,
     ) {}
 
     public function submitCreateRequest(array $validatedData): ApprovalRequest
@@ -163,7 +164,7 @@ class DepartmentApprovalService extends BaseService
                 'review_note' => $reviewNote,
             ]);
 
-            $this->notifyRequesterDecision($approvalRequest, true, $reviewNote);
+            $this->notifyRequesterDecision($approvalRequest, ApprovalDecision::APPROVED, $reviewNote);
 
             return $department;
         });
@@ -181,7 +182,7 @@ class DepartmentApprovalService extends BaseService
                 'review_note' => $reviewNote,
             ]);
 
-            $this->notifyRequesterDecision($approvalRequest, false, $reviewNote);
+            $this->notifyRequesterDecision($approvalRequest, ApprovalDecision::REJECTED, $reviewNote);
         });
     }
 
@@ -194,7 +195,7 @@ class DepartmentApprovalService extends BaseService
                 ]);
             }
 
-            if ((int) $approvalRequest->requested_by !== (int) $actor->id && !AccessMatrix::canApproveRequests($actor)) {
+            if ((int) $approvalRequest->requested_by !== (int) $actor->id && !AccessMatrix::canApproveDepartmentRequests($actor)) {
                 throw ValidationException::withMessages([
                     'approval' => 'Ban khong duoc phep huy yeu cau nay.',
                 ]);
@@ -206,6 +207,8 @@ class DepartmentApprovalService extends BaseService
                 'reviewed_at' => now(),
                 'review_note' => $note ?: 'Requester cancelled department approval request',
             ]);
+
+            $this->notifyRequesterDecision($approvalRequest, ApprovalDecision::CANCELLED, $note);
         });
     }
 
@@ -359,43 +362,15 @@ class DepartmentApprovalService extends BaseService
         };
     }
 
-    private function notifyRequesterDecision(ApprovalRequest $approvalRequest, bool $approved, ?string $reviewNote = null): void
+    private function notifyRequesterDecision(ApprovalRequest $approvalRequest, ApprovalDecision $decision, ?string $reviewNote = null): void
     {
-        if (!$approvalRequest->requested_by) {
-            return;
-        }
-
-        $reviewerName = $this->user()?->name ?? 'Admin';
-        $title = $approved ? 'Yeu cau phong ban da duoc duyet' : 'Yeu cau phong ban bi tu choi';
-        $decisionLabel = $approved ? 'duoc duyet' : 'bi tu choi';
-
-        $this->notificationService->create(
-            $approvalRequest->requested_by,
-            $title,
-            "Yeu cau {$this->requestTypeLabel($approvalRequest->request_type)} cua ban {$decisionLabel} boi {$reviewerName}.",
-            [
-                'approval_request_id' => $approvalRequest->id,
-                'request_type' => $approvalRequest->request_type,
-                'decision' => $approved ? 'approved' : 'rejected',
-                'review_note' => $reviewNote,
-                'action_url' => '/departments/approvals',
-            ],
-            '/departments/approvals',
-            null,
-            'approval',
-            $this->user()?->id,
-            ApprovalRequest::class,
-            $approvalRequest->id
+        $this->approvalDecisionNotifier->notifyApprovalRequestDecision(
+            $approvalRequest,
+            $decision,
+            '/departments',
+            $reviewNote,
+            $this->user(),
+            'department'
         );
-    }
-
-    private function requestTypeLabel(string $requestType): string
-    {
-        return match ($requestType) {
-            self::REQUEST_TYPE_CREATE => 'tao phong ban',
-            self::REQUEST_TYPE_UPDATE => 'cap nhat phong ban',
-            self::REQUEST_TYPE_TOGGLE => 'khoa/mo phong ban',
-            default => 'phe duyet phong ban',
-        };
     }
 }

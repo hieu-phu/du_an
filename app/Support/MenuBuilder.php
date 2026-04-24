@@ -15,6 +15,8 @@ class MenuBuilder
         $can = static fn (string $capability): bool => $user->hasPositionCapability($capability);
 
         $canViewAllProjects = $can(PositionCapability::VIEW_ALL_PROJECTS);
+        $canAccessUserApprovals = $can(PositionCapability::APPROVE_USER_REQUESTS) || $can(PositionCapability::APPROVE_SALARY_REQUESTS);
+        $canAccessDepartmentApprovals = $can(PositionCapability::APPROVE_DEPARTMENT_REQUESTS);
 
         $groups = [
             [
@@ -40,15 +42,15 @@ class MenuBuilder
             [
                 'title' => 'Co cau to chuc',
                 'items' => array_values(array_filter([
-                    $can(PositionCapability::MANAGE_EMPLOYEES)
-                        ? self::item('Nhan su', '/users/employees', 'UserGroupIcon', false, [], [
+                    $can(PositionCapability::MANAGE_EMPLOYEES) || $canAccessUserApprovals
+                        ? self::item('Nhan su', $can(PositionCapability::MANAGE_EMPLOYEES) ? '/users/employees' : '/users/approvals', 'UserGroupIcon', false, [], [
                             '/users/employees',
                             '/users/employee-requests',
                             '/users/approvals',
                         ])
                         : null,
-                    $can(PositionCapability::MANAGE_DEPARTMENTS)
-                        ? self::item('Phong ban', '/departments', 'BuildingIcon', false, [], [
+                    $can(PositionCapability::MANAGE_DEPARTMENTS) || $canAccessDepartmentApprovals
+                        ? self::item('Phong ban', $can(PositionCapability::MANAGE_DEPARTMENTS) ? '/departments' : '/departments/approvals', 'BuildingIcon', false, [], [
                             '/departments',
                             '/departments/approvals',
                         ])

@@ -514,6 +514,7 @@
         </template>
       </CustomModal>
     </div>
+    <ActionDialog ref="actionDialogRef" />
   </AdminLayout>
 </template>
 
@@ -525,6 +526,8 @@ import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import InputDate from '@/components/forms/InputDate.vue'
 import Pagination from '@/components/tables/Pagination.vue'
 import CustomModal from '@/components/modals/CustomModal.vue'
+import ActionDialog from '@/components/ui/ActionDialog.vue'
+import { useActionDialog } from '@/composables/useActionDialog'
 
 const props = defineProps({
   filters: { type: Object, required: true },
@@ -536,6 +539,7 @@ const props = defineProps({
   rows: { type: Object, required: true },
   selectedDetail: { type: Object, default: null },
 })
+const { actionDialogRef, openAlert, openConfirm } = useActionDialog()
 
 const filterForm = reactive({
   month: Number(props.filters.month),
@@ -723,8 +727,16 @@ function exportExcel() {
   }))
 }
 
-function lockPeriod() {
-  if (!window.confirm(`Chot ky luong thang ${String(filterForm.month).padStart(2, '0')}/${filterForm.year}? He thong se luu snapshot bang luong hien tai.`)) {
+async function lockPeriod() {
+  const confirmed = await openConfirm({
+    title: 'Chốt kỳ lương',
+    message: `Chốt kỳ lương tháng ${String(filterForm.month).padStart(2, '0')}/${filterForm.year}? Hệ thống sẽ lưu snapshot bảng lương hiện tại.`,
+    okText: 'Chốt kỳ lương',
+    cancelText: 'Đóng',
+    variant: 'danger',
+    eyebrow: 'Bảng lương',
+  })
+  if (!confirmed) {
     return
   }
 
@@ -736,8 +748,16 @@ function lockPeriod() {
   })
 }
 
-function unlockPeriod() {
-  if (!window.confirm(`Mo khoa ky luong thang ${String(filterForm.month).padStart(2, '0')}/${filterForm.year}? Sau khi mo khoa, bang luong se quay lai che do tinh dong.`)) {
+async function unlockPeriod() {
+  const confirmed = await openConfirm({
+    title: 'Mở khóa kỳ lương',
+    message: `Mở khóa kỳ lương tháng ${String(filterForm.month).padStart(2, '0')}/${filterForm.year}? Sau khi mở khóa, bảng lương sẽ quay lại chế độ tính động.`,
+    okText: 'Mở khóa',
+    cancelText: 'Đóng',
+    variant: 'warning',
+    eyebrow: 'Bảng lương',
+  })
+  if (!confirmed) {
     return
   }
 
@@ -749,12 +769,20 @@ function unlockPeriod() {
   })
 }
 
-function recalculatePeriod() {
+async function recalculatePeriod() {
   const message = periodStatusLocked()
     ? `Tinh lai snapshot ky luong thang ${String(filterForm.month).padStart(2, '0')}/${filterForm.year}?`
     : `Ky luong ${String(filterForm.month).padStart(2, '0')}/${filterForm.year} chua khoa. Ban van muon tai lai man hinh hien tai?`
 
-  if (!window.confirm(message)) {
+  const confirmed = await openConfirm({
+    title: 'Xác nhận tính lại',
+    message,
+    okText: 'Xác nhận',
+    cancelText: 'Đóng',
+    variant: periodStatusLocked() ? 'warning' : 'primary',
+    eyebrow: 'Bảng lương',
+  })
+  if (!confirmed) {
     return
   }
 
@@ -771,15 +799,27 @@ function recalculatePeriod() {
   })
 }
 
-function saveAdjustment() {
+async function saveAdjustment() {
   if (!props.selectedDetail?.profile?.id) return
   if (periodStatusLocked()) {
-    window.alert('Ky luong da khoa. Hay mo khoa ky luong truoc khi them phu cap hoac khau tru.')
+    await openAlert({
+      title: 'Kỳ lương đã khóa',
+      message: 'Hãy mở khóa kỳ lương trước khi thêm phụ cấp hoặc khấu trừ.',
+      okText: 'Đã hiểu',
+      variant: 'warning',
+      eyebrow: 'Bảng lương',
+    })
     return
   }
 
   if (!adjustmentForm.label.trim() || Number(adjustmentForm.amount) <= 0) {
-    window.alert('Vui long nhap noi dung va so tien hop le.')
+    await openAlert({
+      title: 'Dữ liệu chưa hợp lệ',
+      message: 'Vui lòng nhập nội dung và số tiền hợp lệ.',
+      okText: 'Đã hiểu',
+      variant: 'warning',
+      eyebrow: 'Điều chỉnh',
+    })
     return
   }
 
@@ -801,13 +841,27 @@ function saveAdjustment() {
   })
 }
 
-function removeAdjustment(item) {
+async function removeAdjustment(item) {
   if (periodStatusLocked()) {
-    window.alert('Ky luong da khoa. Hay mo khoa ky luong truoc khi xoa phu cap hoac khau tru.')
+    await openAlert({
+      title: 'Kỳ lương đã khóa',
+      message: 'Hãy mở khóa kỳ lương trước khi xóa phụ cấp hoặc khấu trừ.',
+      okText: 'Đã hiểu',
+      variant: 'warning',
+      eyebrow: 'Bảng lương',
+    })
     return
   }
 
-  if (!window.confirm(`Xoa khoan ${item.type === 'allowance' ? 'phu cap' : 'khau tru'} "${item.label}"?`)) {
+  const confirmed = await openConfirm({
+    title: 'Xóa khoản điều chỉnh',
+    message: `Xóa khoản ${item.type === 'allowance' ? 'phụ cấp' : 'khấu trừ'} "${item.label}"?`,
+    okText: 'Xóa khoản',
+    cancelText: 'Đóng',
+    variant: 'danger',
+    eyebrow: 'Điều chỉnh',
+  })
+  if (!confirmed) {
     return
   }
 
