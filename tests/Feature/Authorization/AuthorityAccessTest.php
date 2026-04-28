@@ -9,6 +9,7 @@ use App\Models\Project;
 use App\Models\ProjectAttachment;
 use App\Models\ProjectDetailComment;
 use App\Models\ProjectImplementationDetail;
+use App\Models\ProjectMilestone;
 use App\Models\ProjectMember;
 use App\Models\ProjectRole;
 use App\Models\User;
@@ -262,6 +263,155 @@ class AuthorityAccessTest extends TestCase
         }
     }
 
+    public function test_project_manager_can_manage_milestones_and_link_implementation_details(): void
+    {
+        $manager = $this->makeUserWithCapabilities([
+            Capability::VIEW_ALL_PROJECTS,
+            Capability::MANAGE_PROJECTS,
+            Capability::MANAGE_PROJECT_MEMBERS,
+        ]);
+
+        $project = Project::query()->create([
+            'name' => 'Milestone Delivery Project',
+            'start_date' => '2026-04-01',
+            'status' => 'in_progress',
+            'description' => 'Milestone workflow test',
+            'created_by' => $manager->id,
+            'updated_by' => $manager->id,
+        ]);
+
+        $this->actingAs($manager)
+            ->post(route('projects.milestones.store', $project), [
+                'phase_name' => 'Giai Ä‘oáº¡n phÃ¢n tÃ­ch',
+                'name' => 'Chá»‘t tÃ i liá»‡u yÃªu cáº§u',
+                'description' => 'HoÃ n thÃ nh BRD vÃ  scope.',
+                'planned_start_date' => '2026-04-01',
+                'planned_end_date' => '2026-04-05',
+                'status' => 'planned',
+                'sort_order' => 1,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success', 'ÄÃ£ thÃªm má»‘c tiáº¿n Ä‘á»™ cho dá»± Ã¡n.');
+
+        $milestone = ProjectMilestone::query()->where('project_id', $project->id)->firstOrFail();
+
+        $this->actingAs($manager)
+            ->put(route('projects.milestones.update', [$project, $milestone]), [
+                'phase_name' => 'Giai Ä‘oáº¡n phÃ¢n tÃ­ch',
+                'name' => 'Chá»‘t tÃ i liá»‡u yÃªu cáº§u',
+                'description' => 'BRD Ä‘Ã£ Ä‘Æ°á»£c duyá»‡t.',
+                'planned_start_date' => '2026-04-01',
+                'planned_end_date' => '2026-04-05',
+                'completed_at' => '2026-04-04',
+                'status' => 'completed',
+                'sort_order' => 1,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success', 'ÄÃ£ cáº­p nháº­t má»‘c tiáº¿n Ä‘á»™.');
+
+        $this->actingAs($manager)
+            ->post(route('projects.implementation-details.store', $project), [
+                'content' => 'HoÃ n thiá»‡n tÃ i liá»‡u use case',
+                'project_milestone_id' => $milestone->id,
+                'execution_date' => '2026-04-02',
+                'duration_days' => 3,
+                'detail_status' => 'completed',
+                'progress_percent' => 100,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success', 'ÄÃ£ thÃªm Ä‘áº§u viá»‡c triá»ƒn khai.');
+
+        $detail = ProjectImplementationDetail::query()->where('project_id', $project->id)->firstOrFail();
+
+        $this->assertDatabaseHas('project_milestones', [
+            'id' => $milestone->id,
+            'status' => 'completed',
+            'completed_at' => '2026-04-04',
+        ]);
+
+        $this->assertDatabaseHas('project_implementation_details', [
+            'id' => $detail->id,
+            'project_milestone_id' => $milestone->id,
+            'detail_status' => 'completed',
+        ]);
+
+        $response = $this->actingAs($manager)->get(route('projects.index'));
+        $response->assertOk();
+
+        $payload = $response->viewData('page');
+        $projectPayload = collect(data_get($payload, 'props.projects'))->firstWhere('id', $project->id);
+
+        $this->assertSame(1, (int) data_get($projectPayload, 'milestone_summary.total'));
+        $this->assertSame(1, (int) data_get($projectPayload, 'milestone_summary.completed'));
+        $this->assertSame(100, (int) data_get($projectPayload, 'milestone_summary.completion_rate'));
+        $this->assertSame('2026-04-01', data_get($projectPayload, 'schedule_summary.overall_start_date'));
+        $this->assertSame(now()->toDateString(), data_get($projectPayload, 'schedule_summary.overall_end_date'));
+        $this->assertSame('Chá»‘t tÃ i liá»‡u yÃªu cáº§u', data_get($projectPayload, 'implementation_details.0.milestone_name'));
+    }
+
+    public function test_project_role_permission_can_manage_milestones_only_inside_that_project(): void
+    {
+        $leader = $this->makeUserWithCapabilities([Capability::VIEW_OWN_PROJECTS]);
+        $outsider = $this->makeUserWithCapabilities([Capability::VIEW_OWN_PROJECTS]);
+
+        $project = Project::query()->create([
+            'name' => 'Delegated Milestone Project',
+            'start_date' => now()->toDateString(),
+            'status' => 'in_progress',
+            'description' => 'Milestone permission test',
+            'created_by' => $leader->id,
+            'updated_by' => $leader->id,
+        ]);
+
+        $leadRole = ProjectRole::query()->create([
+            'project_id' => $project->id,
+            'name' => 'Dieu phoi milestone',
+            'permissions' => [
+                'create_project_milestone',
+                'update_project_milestone',
+                'delete_project_milestone',
+            ],
+        ]);
+
+        ProjectMember::query()->create([
+            'project_id' => $project->id,
+            'employee_profile_id' => $leader->employeeProfile->id,
+            'project_role_id' => $leadRole->id,
+            'joined_at' => now()->toDateString(),
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($leader)
+            ->post(route('projects.milestones.store', $project), [
+                'phase_name' => 'Khoi dong',
+                'name' => 'Chot kickoff',
+                'planned_start_date' => now()->toDateString(),
+                'planned_end_date' => now()->addDays(2)->toDateString(),
+                'status' => 'in_progress',
+                'sort_order' => 1,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success', 'ÄÃ£ thÃªm má»‘c tiáº¿n Ä‘á»™ cho dá»± Ã¡n.');
+
+        $this->withoutExceptionHandling();
+
+        try {
+            $this->actingAs($outsider)
+                ->post(route('projects.milestones.store', $project), [
+                    'phase_name' => 'Khoi dong',
+                    'name' => 'Khong duoc phep',
+                    'planned_start_date' => now()->toDateString(),
+                    'planned_end_date' => now()->addDay()->toDateString(),
+                    'status' => 'planned',
+                    'sort_order' => 2,
+                ]);
+
+            $this->fail('Expected a 403 HttpException for missing milestone permission.');
+        } catch (HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+        }
+    }
+
     public function test_project_manager_can_upload_download_and_delete_project_attachment(): void
     {
         Storage::fake('local');
@@ -282,15 +432,15 @@ class AuthorityAccessTest extends TestCase
         $this->actingAs($manager)
             ->post(route('projects.attachments.store', $project), [
                 'files' => [
-                    UploadedFile::fake()->create('Tài liệu dự án.pdf', 120, 'application/pdf'),
+                    UploadedFile::fake()->create('TÃ i liá»‡u dá»± Ã¡n.pdf', 120, 'application/pdf'),
                 ],
             ])
             ->assertRedirect()
-            ->assertSessionHas('success', 'Đã tải tệp đính kèm lên dự án.');
+            ->assertSessionHas('success', 'ÄÃ£ táº£i tá»‡p Ä‘Ã­nh kÃ¨m lÃªn dá»± Ã¡n.');
 
         $attachment = ProjectAttachment::query()->firstOrFail();
 
-        $this->assertSame('Tài liệu dự án.pdf', $attachment->original_name);
+        $this->assertSame('TÃ i liá»‡u dá»± Ã¡n.pdf', $attachment->original_name);
         Storage::disk('local')->assertExists($attachment->path);
 
         $this->actingAs($manager)
@@ -300,7 +450,7 @@ class AuthorityAccessTest extends TestCase
         $this->actingAs($manager)
             ->delete(route('projects.attachments.destroy', [$project, $attachment]))
             ->assertRedirect()
-            ->assertSessionHas('success', 'Đã xóa tệp đính kèm.');
+            ->assertSessionHas('success', 'ÄÃ£ xÃ³a tá»‡p Ä‘Ã­nh kÃ¨m.');
 
         $this->assertDatabaseMissing('project_attachments', [
             'id' => $attachment->id,
@@ -332,7 +482,7 @@ class AuthorityAccessTest extends TestCase
         $detail = ProjectImplementationDetail::query()->create([
             'project_id' => $project->id,
             'assigned_to' => $employee->employeeProfile->id,
-            'content' => 'Chuẩn bị tài liệu triển khai',
+            'content' => 'Chuáº©n bá»‹ tÃ i liá»‡u triá»ƒn khai',
             'execution_date' => now()->toDateString(),
             'duration_days' => 2,
             'expected_end_date' => now()->addDay()->toDateString(),
@@ -345,16 +495,16 @@ class AuthorityAccessTest extends TestCase
         $this->actingAs($employee)
             ->post(route('projects.implementation-details.attachments.store', [$project, $detail]), [
                 'files' => [
-                    UploadedFile::fake()->create('Minh chứng.png', 24, 'image/png'),
+                    UploadedFile::fake()->create('Minh chá»©ng.png', 24, 'image/png'),
                 ],
             ])
             ->assertRedirect()
-            ->assertSessionHas('success', 'Đã tải tệp đính kèm lên đầu việc.');
+            ->assertSessionHas('success', 'ÄÃ£ táº£i tá»‡p Ä‘Ã­nh kÃ¨m lÃªn Ä‘áº§u viá»‡c.');
 
         $this->assertDatabaseHas('project_attachments', [
             'project_id' => $project->id,
             'implementation_detail_id' => $detail->id,
-            'original_name' => 'Minh chứng.png',
+            'original_name' => 'Minh chá»©ng.png',
             'uploaded_by' => $employee->id,
         ]);
     }
@@ -468,7 +618,7 @@ class AuthorityAccessTest extends TestCase
                 'content' => 'Da nhan viec va dang xu ly.',
             ])
             ->assertRedirect()
-            ->assertSessionHas('success', 'Đã gửi bình luận cho đầu việc.');
+            ->assertSessionHas('success', 'ÄÃ£ gá»­i bÃ¬nh luáº­n cho Ä‘áº§u viá»‡c.');
 
         $comment = ProjectDetailComment::query()->firstOrFail();
 
@@ -482,7 +632,7 @@ class AuthorityAccessTest extends TestCase
         $this->actingAs($employee)
             ->delete(route('projects.implementation-details.comments.destroy', [$project, $detail, $comment]))
             ->assertRedirect()
-            ->assertSessionHas('success', 'Đã xóa bình luận.');
+            ->assertSessionHas('success', 'ÄÃ£ xÃ³a bÃ¬nh luáº­n.');
 
         $this->assertDatabaseMissing('project_detail_comments', [
             'id' => $comment->id,
@@ -582,6 +732,54 @@ class AuthorityAccessTest extends TestCase
             ->assertSessionHasErrors(['position']);
     }
 
+    public function test_my_projects_page_hides_company_project_directory_for_regular_members(): void
+    {
+        $employee = $this->makeUserWithCapabilities([Capability::VIEW_OWN_PROJECTS]);
+        $coworker = $this->makeUserWithCapabilities([Capability::VIEW_OWN_PROJECTS]);
+
+        $visibleProject = Project::query()->create([
+            'name' => 'Visible Member Project',
+            'start_date' => now()->toDateString(),
+            'status' => 'in_progress',
+            'description' => 'Project assigned to the current employee',
+            'created_by' => $employee->id,
+            'updated_by' => $employee->id,
+        ]);
+        $hiddenProject = Project::query()->create([
+            'name' => 'Hidden Coworker Project',
+            'start_date' => now()->toDateString(),
+            'status' => 'planning',
+            'description' => 'Project assigned to another employee',
+            'created_by' => $coworker->id,
+            'updated_by' => $coworker->id,
+        ]);
+
+        ProjectMember::query()->create([
+            'project_id' => $visibleProject->id,
+            'employee_profile_id' => $employee->employeeProfile->id,
+            'joined_at' => now()->toDateString(),
+            'is_active' => true,
+        ]);
+        ProjectMember::query()->create([
+            'project_id' => $hiddenProject->id,
+            'employee_profile_id' => $coworker->employeeProfile->id,
+            'joined_at' => now()->toDateString(),
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($employee)->get(route('projects.mine'));
+        $response->assertOk();
+
+        $page = $response->viewData('page');
+        $projects = collect(data_get($page, 'props.projects', []));
+
+        $this->assertCount(1, $projects);
+        $this->assertSame($visibleProject->id, (int) data_get($projects->first(), 'id'));
+        $this->assertSame([], data_get($page, 'props.employee_filter_options', []));
+        $this->assertSame([], data_get($page, 'props.employee_options', []));
+        $this->assertSame([], data_get($page, 'props.employee_project_overview', []));
+        $this->assertFalse((bool) data_get($page, 'props.can_view_employee_project_overview'));
+    }
     private function makeUserWithAuthorityProfile(string $profile): User
     {
         $user = User::factory()->create([

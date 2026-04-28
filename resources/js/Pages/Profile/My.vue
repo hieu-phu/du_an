@@ -147,7 +147,7 @@ const currentShiftHint = computed(() => {
   if (!shift) return 'Hiện tại chưa có ca làm áp dụng cho tài khoản này.'
 
   if (shift.source === 'assignment') {
-    return `Đang lấy theo phân ca${shift.effective_from ? ` từ ${shift.effective_from}` : ''}${shift.effective_to ? ` đến ${shift.effective_to}` : ''}.`
+    return `Đang lấy theo phân ca${shift.effective_from ? ` từ ${formatDate(shift.effective_from)}` : ''}${shift.effective_to ? ` đến ${formatDate(shift.effective_to)}` : ''}.`
   }
 
   return 'Đang hiển thị theo ca mặc định trong hồ sơ nhân viên.'
@@ -156,6 +156,26 @@ const currentShiftHint = computed(() => {
 function formatCurrency(value) {
   if (!value) return '-'
   return `${new Intl.NumberFormat('vi-VN').format(Number(value))} VND`
+}
+
+function formatDate(dateString) {
+  if (!dateString) return '-'
+  const date = new Date(dateString)
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const year = date.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
+function formatDateTime(dateString) {
+  if (!dateString) return 'Chưa rõ'
+  const date = new Date(dateString)
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const year = date.getFullYear()
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${day}/${month}/${year} ${hours}:${minutes}`
 }
 
 const getAvatarUrl = (avatar) => {
@@ -381,7 +401,7 @@ const triggerAvatarUpload = () => {
                </div>
                <div>
                   <div class="text-xs text-gray-500">Ngày vào làm</div>
-                  <div class="text-sm font-semibold text-gray-900">{{ profile.hire_date || '-' }}</div>
+                   <div class="text-sm font-semibold text-gray-900">{{ formatDate(profile.hire_date) }}</div>
                </div>
              </div>
              <div class="flex items-start gap-4">
@@ -390,7 +410,7 @@ const triggerAvatarUpload = () => {
                </div>
                <div>
                   <div class="text-xs text-gray-500">Đăng nhập cuối</div>
-                  <div class="text-sm font-semibold text-gray-900">{{ profile.last_login_at || 'Chưa rõ' }}</div>
+                   <div class="text-sm font-semibold text-gray-900">{{ formatDateTime(profile.last_login_at) }}</div>
                </div>
              </div>
            </div>
@@ -440,9 +460,7 @@ const triggerAvatarUpload = () => {
               <div class="space-y-1 rounded-xl p-4 transition hover:bg-gray-50 border border-transparent hover:border-gray-100">
                  <div class="text-xs font-bold uppercase tracking-wider text-gray-400">Ngày sinh</div>
                 <div class="text-base font-semibold text-gray-900">
-                    {{ profile.date_of_birth 
-                        ? new Date(profile.date_of_birth).toLocaleDateString('vi-VN') 
-                        : 'Chưa cập nhật' }}
+                    {{ formatDate(profile.date_of_birth) }}
                 </div>
               </div>
 

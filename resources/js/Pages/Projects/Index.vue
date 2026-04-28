@@ -484,53 +484,77 @@
               </div>
             </div>
 
-            <div v-if="canManageProjectRoles" class="mb-3 grid grid-cols-1 gap-3">
-                <div
-                  v-for="role in selectedProject.roles || []"
-                  :key="`project-role-permissions-${role.id}`"
-                  class="rounded-xl border border-gray-200 bg-gray-50 p-3"
-                >
-                  <div class="mb-2 flex items-center justify-between gap-2">
-                    <div>
-                      <div class="text-sm font-semibold text-gray-800">{{ role.name }}</div>
-                      <div class="text-xs text-gray-500">Quyền này chỉ áp dụng trong dự án hiện tại.</div>
-                    </div>
+            <div v-if="canManageProjectRoles" class="mb-3">
+              <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                <div class="mb-3">
+                  <div class="text-sm font-semibold text-gray-800">Phân quyền theo vai trò</div>
+                  <div class="text-xs text-gray-500">Nhấn vào vai trò để mở hoặc đóng chi tiết phân quyền.</div>
+                </div>
+                <div class="flex flex-col gap-3">
+                  <div
+                    v-for="role in selectedProject.roles || []"
+                    :key="`project-role-permissions-${role.id}`"
+                    class="overflow-hidden rounded-lg border border-gray-200 bg-white"
+                  >
                     <button
                       type="button"
-                      class="rounded-lg border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
-                      @click="updateRolePermissions(role)"
+                      class="flex w-full items-center justify-between bg-gray-50 px-4 py-3 text-left transition hover:bg-gray-100"
+                      @click="activeRolePermissionId = (activeRolePermissionId === role.id ? null : role.id)"
                     >
-                      Lưu quyền
+                      <div>
+                        <div class="text-sm font-semibold text-gray-800">{{ role.name }}</div>
+                        <div class="text-xs text-gray-500">Quyền này chỉ áp dụng trong dự án hiện tại.</div>
+                      </div>
+                      <svg
+                        class="h-5 w-5 text-gray-500 transition-transform"
+                        :class="activeRolePermissionId === role.id ? 'rotate-180' : ''"
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                      >
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
                     </button>
-                  </div>
-                  <div class="grid grid-cols-1 gap-3">
-                    <div
-                      v-for="group in projectRolePermissionGroups"
-                      :key="`role-permission-group-${role.id}-${group.key}`"
-                      class="rounded-lg border border-gray-200 bg-white p-2"
-                    >
-                      <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-600">{{ group.label }}</div>
-                      <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
-                        <label
-                          v-for="permission in group.permissions"
-                          :key="`role-permission-${role.id}-${permission.value}`"
-                          class="flex gap-2 rounded-lg border border-gray-100 bg-gray-50 p-2 text-xs text-gray-700"
+                    
+                    <div v-show="activeRolePermissionId === role.id" class="border-t border-gray-200 p-4">
+                      <div class="mb-3 flex justify-end">
+                        <button
+                          type="button"
+                          class="rounded-lg border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                          @click="updateRolePermissions(role)"
                         >
-                          <input
-                            v-model="rolePermissionDrafts[role.id]"
-                            type="checkbox"
-                            class="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                            :value="permission.value"
-                          />
-                          <span>
-                            <span class="block font-semibold text-gray-800">{{ permission.label }}</span>
-                            <span class="block text-gray-500">{{ permission.description }}</span>
-                          </span>
-                        </label>
+                          Lưu quyền
+                        </button>
+                      </div>
+                      <div class="grid grid-cols-1 gap-3">
+                        <div
+                          v-for="group in projectRolePermissionGroups"
+                          :key="`role-permission-group-${role.id}-${group.key}`"
+                          class="rounded-lg border border-gray-200 bg-gray-50 p-3"
+                        >
+                          <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-600">{{ group.label }}</div>
+                          <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
+                            <label
+                              v-for="permission in group.permissions"
+                              :key="`role-permission-${role.id}-${permission.value}`"
+                              class="flex cursor-pointer gap-2 rounded-lg border border-gray-200 bg-white p-2 text-xs text-gray-700 transition hover:border-indigo-300"
+                            >
+                              <input
+                                v-model="rolePermissionDrafts[role.id]"
+                                type="checkbox"
+                                class="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                :value="permission.value"
+                              />
+                              <span>
+                                <span class="block font-semibold text-gray-800">{{ permission.label }}</span>
+                                <span class="block text-gray-500">{{ permission.description }}</span>
+                              </span>
+                            </label>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
+              </div>
             </div>
 
             <div v-if="canAddProjectMember" class="mb-3 grid grid-cols-1 gap-2 rounded-xl border border-gray-200 p-3 md:grid-cols-[minmax(0,1fr)_200px_170px]">
@@ -1108,6 +1132,7 @@ const rolePermissionDrafts = ref({})
 const implementationDrafts = ref({})
 const commentDrafts = ref({})
 const editingImplementationId = ref(null)
+const activeRolePermissionId = ref(null)
 
 const newMember = reactive({
   employee_profile_id: '',

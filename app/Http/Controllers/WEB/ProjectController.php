@@ -335,7 +335,7 @@ class ProjectController extends Controller
 
         if ($project->is_locked) {
             return redirect()->back()->withErrors([
-                'project' => 'Dá»± Ã¡n Ä‘ang bá»‹ khÃ³a, khÃ´ng thá»ƒ thay Ä‘á»•i vai trÃ².',
+                'project' => 'Dự án đang bị khóa, không thể thay đổi vai trò.',
             ]);
         }
 
@@ -954,7 +954,6 @@ class ProjectController extends Controller
                 ->values(),
         ]);
     }
-
     private function baseProjectQuery(Request $request, string $scope): Builder
     {
         $query = Project::query();
@@ -979,7 +978,6 @@ class ProjectController extends Controller
                 ->where('is_active', true);
         });
     }
-
     private function validateProjectPayload(Request $request, ?int $projectId = null): array
     {
         return $request->validate([

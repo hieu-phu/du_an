@@ -14,6 +14,7 @@ class ProjectImplementationDetail extends Model
 
     protected $fillable = [
         'project_id',
+        'project_milestone_id',
         'assigned_to',
         'content',
         'execution_date',
@@ -44,6 +45,11 @@ class ProjectImplementationDetail extends Model
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(EmployeeProfile::class, 'assigned_to');
+    }
+
+    public function milestone(): BelongsTo
+    {
+        return $this->belongsTo(ProjectMilestone::class, 'project_milestone_id');
     }
 
     public function creator(): BelongsTo

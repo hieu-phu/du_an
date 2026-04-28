@@ -224,6 +224,7 @@
 <script setup>
 import { computed } from 'vue'
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3'
+import { toast } from 'vue3-toastify'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 
@@ -294,11 +295,21 @@ const quickLinks = computed(() => {
 })
 
 function checkIn() {
-  attendanceForm.post(route('attendance.check-in'), { preserveScroll: true })
+  attendanceForm.post(route('attendance.check-in'), {
+    preserveScroll: true,
+    onError: (errors) => {
+      toast.error(errors?.error || 'Không thể check in.')
+    },
+  })
 }
 
 function checkOut() {
-  attendanceForm.post(route('attendance.check-out'), { preserveScroll: true })
+  attendanceForm.post(route('attendance.check-out'), {
+    preserveScroll: true,
+    onError: (errors) => {
+      toast.error(errors?.error || 'Không thể check out.')
+    },
+  })
 }
 
 function formatDateTime(value) {

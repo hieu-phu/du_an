@@ -179,6 +179,12 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
         Route::delete('/projects/{project}/roles/{projectRole}', [ProjectController::class, 'removeRole'])
             ->middleware('position.capability:' . PositionCapability::MANAGE_PROJECT_ROLES)
             ->name('projects.roles.destroy');
+        Route::post('/projects/{project}/milestones', [ProjectController::class, 'storeMilestone'])
+            ->name('projects.milestones.store');
+        Route::put('/projects/{project}/milestones/{projectMilestone}', [ProjectController::class, 'updateMilestone'])
+            ->name('projects.milestones.update');
+        Route::delete('/projects/{project}/milestones/{projectMilestone}', [ProjectController::class, 'destroyMilestone'])
+            ->name('projects.milestones.destroy');
         Route::post('/projects/{project}/implementation-details', [ProjectController::class, 'storeImplementationDetail'])
             ->name('projects.implementation-details.store');
         Route::post('/projects/{project}/implementation-details/{implementationDetail}/attachments', [ProjectController::class, 'uploadImplementationDetailAttachment'])
