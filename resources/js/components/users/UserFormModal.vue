@@ -1,4 +1,4 @@
-﻿<template>
+<template>
     <CustomModal
         v-if="modelValue"
         :title="isEditMode ? 'Chỉnh sửa nhân sự' : 'Thêm nhân sự mới'"
@@ -340,6 +340,14 @@ watch(() => form.employment_status, (status, previousStatus) => {
 
     if (previousStatus === 'terminated' && form.status === 'blocked') {
         form.status = lastManualStatus.value || 'active'
+    }
+})
+
+watch(() => form.position_id, (val) => {
+    if (!val) return
+    const pos = props.positions.find(p => Number(p.id) === Number(val))
+    if (pos && pos.department_id) {
+        form.department_id = pos.department_id
     }
 })
 

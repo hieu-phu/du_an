@@ -260,6 +260,7 @@ class UserApprovalService extends BaseService
                     'currency' => (string) ($payload['currency'] ?? 'VND'),
                     'effective_date' => (string) ($payload['effective_date'] ?? now()->toDateString()),
                     'approved_by' => $this->user()?->id,
+                    'requested_by' => $approvalRequest->requested_by,
                     'note' => $reviewNote ?: ($payload['request_reason'] ?? null),
                 ]);
 

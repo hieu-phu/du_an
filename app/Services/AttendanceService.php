@@ -614,7 +614,10 @@ class AttendanceService extends BaseService
             }
 
             for ($cursor = $profileStart->copy(); $cursor->lte($profileEnd); $cursor->addDay()) {
-                if ($this->isPaidHolidayDate($cursor) || !$this->isExpectedWorkingDateForProfile($profile, $cursor)) {
+                $isHoliday = $this->isPaidHolidayDate($cursor);
+                $isExpectedWorking = $this->isExpectedWorkingDateForProfile($profile, $cursor);
+                
+                if (!$isHoliday && !$isExpectedWorking) {
                     continue;
                 }
 
@@ -1753,8 +1756,10 @@ class AttendanceService extends BaseService
 
     private function makeSyntheticAbsentRecord(EmployeeProfile $profile, Carbon $workDate): AttendanceRecord
     {
+        $isHoliday = $this->isPaidHolidayDate($workDate);
         $workShift = $this->resolveWorkShift($profile, $workDate);
         $shiftSnapshot = $this->buildShiftSnapshot($workShift);
+        
         $record = new AttendanceRecord([
             'employee_profile_id' => $profile->id,
             'work_shift_id' => $workShift?->id,
@@ -1765,11 +1770,11 @@ class AttendanceService extends BaseService
             'overtime_minutes' => 0,
             'missing_check_in' => false,
             'missing_check_out' => false,
-            'attendance_status' => 'absent',
-            'approval_status' => 'pending',
-            'day_status' => 'absent',
-            'is_confirmed' => false,
-            'note' => 'Virtual absent record for report',
+            'attendance_status' => $isHoliday ? 'on_time' : 'absent',
+            'approval_status' => $isHoliday ? 'approved' : 'pending',
+            'day_status' => $isHoliday ? 'holiday_paid' : 'absent',
+            'is_confirmed' => $isHoliday,
+            'note' => $isHoliday ? 'Holiday record for report' : 'Virtual absent record for report',
             'shift_snapshot' => $shiftSnapshot,
         ]);
 
@@ -4030,9 +4035,15 @@ class AttendanceService extends BaseService
                 }
             }
 
-            if ($selectedLeaveType?->requires_attachment && blank($payload['attachment_path'] ?? null)) {
+            // Special rule for sick leave: >= 3 days requires attachment
+            $isSickLeave = in_array($selectedLeaveType?->code, ['SICK', 'NGHI_OM'], true);
+            $needsAttachment = ($selectedLeaveType?->requires_attachment) || ($isSickLeave && $leaveDays >= 3);
+
+            if ($needsAttachment && blank($payload['attachment_path'] ?? null)) {
                 throw ValidationException::withMessages([
-                    'attachment' => 'Loại nghỉ này yêu cầu tải lên minh chứng.',
+                    'attachment' => $isSickLeave && $leaveDays >= 3 
+                        ? 'Nghỉ bệnh từ 3 ngày trở lên yêu cầu tải lên giấy xác nhận của bác sĩ/bệnh viện.' 
+                        : 'Loại nghỉ này yêu cầu tải lên minh chứng.',
                 ]);
             }
         }

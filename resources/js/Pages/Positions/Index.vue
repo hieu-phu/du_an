@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import { toast } from 'vue3-toastify'
@@ -6,6 +6,7 @@ import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import Modal from '@/components/ui/Modal.vue'
 import ActionDialog from '@/components/ui/ActionDialog.vue'
+import FormSelect from '@/components/forms/FormSelect.vue'
 import { useActionDialog } from '@/composables/useActionDialog'
 const props = defineProps({
     positions: { type: Array, default: () => [] },
@@ -14,7 +15,14 @@ const props = defineProps({
     canCreateCustomCapabilities: { type: Boolean, default: false },
     authorityLevels: { type: Array, default: () => [] },
     authorityLevelCatalog: { type: Array, default: () => [] },
+    defaultCapabilities: { type: Object, default: () => ({}) },
+    departments: { type: Array, default: () => [] },
 })
+
+const departmentOptions = computed(() => [
+    { value: null, label: 'Toàn công ty' },
+    ...props.departments.map(d => ({ value: d.id, label: d.name }))
+])
 const page = usePage()
 const { actionDialogRef, openAlert, openConfirm } = useActionDialog()
 const positionCapabilities = computed(() => page.props.auth?.position_capabilities || {})
@@ -138,6 +146,7 @@ const activeTab = ref('info')
 const form = useForm({
     name: '',
     description: '',
+    department_id: null,
     authority_level: '',
     capabilities: [],
     is_active: true,
@@ -244,6 +253,7 @@ const openEditModal = (position) => {
     form.clearErrors()
     form.name = position.name ?? ''
     form.description = position.description ?? ''
+    form.department_id = position.department_id ?? null
     form.authority_level = position.authority_level ?? ''
     form.capabilities = Array.isArray(position.capabilities) ? [...position.capabilities] : []
     form.is_active = !!position.is_active
@@ -363,7 +373,14 @@ watch(() => form.authority_level, (nextLevel, prevLevel) => {
     if (next <= 0) {
         return
     }
+
+    const defaults = props.defaultCapabilities?.[next] || []
+    
+    // Always sync defaults when the level changes
+    form.capabilities = [...defaults]
+    
     if (prev > 0 && next < prev) {
+        // If decreasing level, remove incompatible ones (redundant but safe)
         removeCapabilitiesAboveAuthority(next)
     }
 })
@@ -496,6 +513,7 @@ const canTogglePosition = (position) => position?.can_toggle !== false
                         <thead class="bg-slate-50/50 border-b border-slate-200">
                             <tr>
                                 <th class="px-5 py-3.5 text-xs font-semibold uppercase text-slate-500">Tên chức vụ</th>
+                                <th class="px-5 py-3.5 text-xs font-semibold uppercase text-slate-500">Phòng ban</th>
                                 <th class="px-5 py-3.5 text-center text-xs font-semibold uppercase text-slate-500">Mức quyền hạn</th>
                                 <th class="px-5 py-3.5 text-center text-xs font-semibold uppercase text-slate-500">Quyền phân bổ</th>
                                 <th class="px-5 py-3.5 text-center text-xs font-semibold uppercase text-slate-500">Nhân viên</th>
@@ -510,6 +528,14 @@ const canTogglePosition = (position) => position?.can_toggle !== false
                                         <span class="text-sm font-semibold text-slate-900">{{ position.name }}</span>
                                         <span class="mt-0.5 truncate max-w-[250px] text-xs text-slate-500">{{ position.description || 'Không có mô tả' }}</span>
                                     </div>
+                                </td>
+                                <td class="px-5 py-4">
+                                    <span v-if="position.department" class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                                        {{ position.department.name }}
+                                    </span>
+                                    <span v-else class="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600">
+                                        Toàn công ty
+                                    </span>
                                 </td>
                                 <td class="px-5 py-4 text-center">
                                     <span class="inline-flex rounded-full bg-indigo-50 border border-indigo-100 px-2.5 py-1.5 text-xs font-semibold text-indigo-700">
@@ -643,22 +669,35 @@ const canTogglePosition = (position) => position?.can_toggle !== false
                                     <div v-if="form.errors.name" class="mt-1.5 text-xs text-rose-600">{{ form.errors.name }}</div>
                                 </div>
 
-                                <div class="col-span-1 md:col-span-2">
-                                    <label class="mb-2 block text-sm font-medium text-slate-700">Mức quyền hạn</label>
-                                    <select
-                                        v-model="form.authority_level"
-                                        class="h-11 w-full appearance-none rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-900 outline-none transition-all focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                                    >
-                                        <option value="">— Trống —</option>
-                                        <option v-for="option in authorityOptions" :key="option.value" :value="option.value">
-                                            {{ option.label }}
-                                        </option>
-                                    </select>
-                                    <div v-if="form.errors.authority_level" class="mt-1.5 text-xs text-rose-600">{{ form.errors.authority_level }}</div>
-                                    <div class="mt-2 text-xs text-slate-500">
-                                        Hệ thống kiểm soát theo rank và capability đã chọn.
+                                    <div class="col-span-1 md:col-span-2">
+                                        <FormSelect
+                                            v-model="form.department_id"
+                                            label="Phòng ban"
+                                            :options="departmentOptions"
+                                            placeholder="Chọn phòng ban"
+                                            :error="form.errors.department_id"
+                                        />
+                                        <div class="mt-2 text-xs text-slate-500">
+                                            Chọn phòng ban để chức vụ này chỉ hiển thị trong phòng ban đó.
+                                        </div>
                                     </div>
-                                </div>
+
+                                    <div class="col-span-1 md:col-span-2">
+                                        <label class="mb-2 block text-sm font-medium text-slate-700">Mức quyền hạn</label>
+                                        <select
+                                            v-model="form.authority_level"
+                                            class="h-11 w-full appearance-none rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-900 outline-none transition-all focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                                        >
+                                            <option value="">— Trống —</option>
+                                            <option v-for="option in authorityOptions" :key="option.value" :value="option.value">
+                                                {{ option.label }}
+                                            </option>
+                                        </select>
+                                        <div v-if="form.errors.authority_level" class="mt-1.5 text-xs text-rose-600">{{ form.errors.authority_level }}</div>
+                                        <div class="mt-2 text-xs text-slate-500">
+                                            Hệ thống kiểm soát theo rank và capability đã chọn.
+                                        </div>
+                                    </div>
 
                                 <div class="col-span-1 md:col-span-2">
                                     <label class="mb-2 block text-sm font-medium text-slate-700">Mô tả</label>
@@ -751,6 +790,12 @@ const canTogglePosition = (position) => position?.can_toggle !== false
                                             <span class="text-sm font-semibold text-slate-800">{{ group.group }}</span>
                                         </div>
                                         <div class="flex items-center gap-2">
+                                            <button
+                                                v-if="form.authority_level && props.defaultCapabilities?.[form.authority_level]"
+                                                type="button"
+                                                class="rounded-md px-2 py-1 text-xs font-semibold text-amber-600 transition hover:bg-amber-50"
+                                                @click="() => { form.capabilities = [...(props.defaultCapabilities[form.authority_level] || [])] }"
+                                            >Mặc định</button>
                                             <button
                                                 type="button"
                                                 class="rounded-md px-2 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-50"
@@ -945,6 +990,12 @@ const canTogglePosition = (position) => position?.can_toggle !== false
                                         <div class="text-xs font-medium text-slate-400 mb-1">Mức Phân Cấp</div>
                                         <div class="inline-flex rounded-full bg-indigo-50 border border-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-700">
                                             {{ authorityLabelMap[selectedPosition.authority_level] ?? 'Vô Danh' }}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="text-xs font-medium text-slate-400 mb-1">Phòng ban</div>
+                                        <div class="text-sm font-semibold text-slate-900">
+                                            {{ selectedPosition.department?.name ? selectedPosition.department.name : 'Toàn công ty' }}
                                         </div>
                                     </div>
                                     <div>

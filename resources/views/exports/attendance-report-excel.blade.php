@@ -1,115 +1,306 @@
 @php
-    $formatMinutes = function ($value): string {
-        $minutes = (int) $value;
-        if ($minutes <= 0) {
-            return '0 phút';
-        }
-        $hours = intdiv($minutes, 60);
-        $remainMinutes = $minutes % 60;
-        if ($hours <= 0) {
-            return $remainMinutes . ' phút';
-        }
-        if ($remainMinutes === 0) {
-            return $hours . ' giờ';
-        }
-        return $hours . ' giờ ' . $remainMinutes . ' phút';
+    $month = $filters['month'];
+    $year = $filters['year'];
+    $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $month, $year);
+    
+    $dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    $firstDayPosition = Carbon\Carbon::createFromDate($year, $month, 1)->dayOfWeek; // 0=CN, 1=T2 ... 6=T7
+    
+    $getDayOfWeek = function($day) use ($month, $year, $dayNames) {
+        $date = Carbon\Carbon::createFromDate($year, $month, $day);
+        return $dayNames[$date->dayOfWeek];
     };
-
-    $dayStatusLabel = function ($value): string {
-        return match ($value) {
-            'present' => 'Đi làm',
-            'late' => 'Đi muộn',
-            'early_leave' => 'Về sớm',
-            'leave' => 'Nghỉ phép',
-            'unpaid_leave' => 'Nghỉ không lương',
-            'holiday_paid' => 'Lễ có lương',
-            'day_off' => 'Nghỉ theo phân ca',
-            'business_trip' => 'Công tác',
-            'missing_check_in' => 'Thiếu check in',
-            'missing_check_out' => 'Thiếu check out',
-            'absent' => 'Vắng mặt',
-            default => '-',
-        };
+    
+    $getAttendanceMark = function($record) {
+        if (!$record) return '';
+        
+        $status = $record['day_status'] ?? null;
+        
+        if ($status === 'leave') return 'P';
+        if ($status === 'unpaid_leave') return 'Ro';
+        if ($status === 'absent') return 'V';
+        if ($status === 'holiday_paid') return 'L';
+        if ($status === 'day_off') return '';
+        
+        return 'x';
     };
-
-    $approvalStatusLabel = function ($value): string {
-        if ($value === 'needs_verification') {
-            return 'Cần xác minh';
-        }
-
-        return match ($value) {
-            'pending' => 'Chờ duyệt',
-            'not_required' => 'Không cần duyệt',
-            'approved' => 'Đã duyệt',
-            'rejected' => 'Từ chối',
-            default => '-',
-        };
-    };
+    
 @endphp
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Báo cáo chấm công</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <title>Bảng Chấm Công {{ sprintf('%02d/%04d', $month, $year) }}</title>
+    <style>
+        * {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #000;
+            padding: 4px;
+            text-align: center;
+        }
+        .header-company {
+            text-align: left;
+            font-size: 16px;
+            font-weight: bold;
+            color: #00008B;
+            border: none;
+        }
+        .header-address {
+            text-align: left;
+            font-size: 13px;
+            border: none;
+        }
+        .title-main {
+            background-color: #800080;
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            padding: 10px;
+        }
+        .title-month {
+            background-color: #FFFF00;
+            font-size: 20px;
+            font-weight: bold;
+            padding: 8px;
+        }
+        .header-day {
+            background-color: #800080;
+            color: white;
+            font-weight: bold;
+        }
+        .header-day-name {
+            background-color: #FFFF00;
+            font-weight: bold;
+        }
+        .header-summary {
+            background-color: #FFFF00;
+            font-weight: bold;
+        }
+        .department-row {
+            background-color: #FFFF00;
+            font-weight: bold;
+        }
+        .name-col {
+            text-align: left;
+            width: 200px;
+        }
+        .stt-col {
+            width: 30px;
+        }
+        .total-footer {
+            background-color: #FFFF00;
+            font-weight: bold;
+        }
+        .signature-section td {
+            border: none;
+            padding-top: 20px;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
-    <table border="1" cellspacing="0" cellpadding="6">
-        <tr>
-            <th colspan="12">BÁO CÁO CHẤM CÔNG {{ sprintf('%02d/%04d', $filters['month'], $filters['year']) }}</th>
-        </tr>
-        <tr>
-            <td>Tổng bản ghi</td>
-            <td>{{ $summary['total_records'] }}</td>
-            <td>Đã duyệt</td>
-            <td>{{ $summary['confirmed_records'] }}</td>
-            <td>Chờ duyệt</td>
-            <td>{{ $summary['pending_records'] }}</td>
-            <td>Từ chối</td>
-            <td>{{ $summary['rejected_records'] ?? 0 }}</td>
-            <td>Tổng giờ làm</td>
-            <td colspan="3">{{ $summary['total_worked_hours'] }}</td>
-        </tr>
-    </table>
+<table>
+    <tr>
+        <td colspan="{{ $daysInMonth + 6 + $firstDayPosition }}" class="title-main">BẢNG CHẤM CÔNG</td>
+    </tr>
+    <tr>
+        <td colspan="{{ $daysInMonth + 6 + $firstDayPosition }}" class="title-month">Tháng {{ $month }} năm {{ $year }}</td>
+    </tr>
+    
+    {{-- Header ngày tháng --}}
+    <tr>
+        <th class="header-day stt-col">STT</th>
+        <th class="header-day name-col">Họ Và Tên</th>
+        {{-- Khoảng trống các ngày trước ngày 1 của tháng --}}
+        @for($i = 0; $i < $firstDayPosition; $i++)
+            <th class="header-day"></th>
+        @endfor
+        @for($day = 1; $day <= $daysInMonth; $day++)
+            <th class="header-day">{{ $day }}</th>
+        @endfor
+        <th class="header-summary">Ngày Công Đi Làm</th>
+        <th class="header-summary">Ngày Nghỉ Hưởng nguyên Lương</th>
+        <th class="header-summary">Ngày ghi không lương</th>
+        <th class="header-summary">Vắng tự ý nghỉ</th>
+    </tr>
+    
+    <tr>
+        <td></td>
+        <td></td>
+        {{-- Khoảng trống các ngày trước ngày 1 của tháng --}}
+        @for($i = 0; $i < $firstDayPosition; $i++)
+            <td class="header-day-name"></td>
+        @endfor
+        @for($day = 1; $day <= $daysInMonth; $day++)
+            <td class="header-day-name">{{ $getDayOfWeek($day) }}</td>
+        @endfor
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+    </tr>
 
-    <table border="1" cellspacing="0" cellpadding="6" style="margin-top: 16px;">
-        <thead>
+    @php
+        $stt = 1;
+        $grandTotalWork = 0;
+        $grandTotalPaidLeave = 0;
+        $grandTotalUnpaidLeave = 0;
+        $grandTotalAbsent = 0;
+    @endphp
+    
+    @foreach($records->groupBy('department_name') as $department => $departmentRecords)
+        @php
+            $deptTotalWork = 0;
+            $deptTotalPaidLeave = 0;
+            $deptTotalUnpaidLeave = 0;
+            $deptTotalAbsent = 0;
+            
+            // ✅ GOM NHÓM DỮ LIỆU THEO NHÂN VIÊN, KHÔNG CHO LẶP LẠI
+            $groupedEmployees = [];
+            
+            foreach ($departmentRecords as $record) {
+                $empId = $record['employee_profile_id'];
+                $day = (int) Carbon\Carbon::parse($record['work_date'])->day;
+                
+                if (!isset($groupedEmployees[$empId])) {
+                    $groupedEmployees[$empId] = [
+                        'employee_name' => $record['employee_name'],
+                        'employee_code' => $record['employee_code'] ?? '',
+                        'days' => []
+                    ];
+                }
+                
+                $groupedEmployees[$empId]['days'][$day] = $record;
+            }
+        @endphp
+        <tr>
+            <td class="department-row">{{ chr(64 + $loop->iteration) }}</td>
+            <td class="department-row name-col">Bộ Phận {{ $department }}</td>
+            {{-- Khoảng trống các ngày trước ngày 1 của tháng --}}
+            @for($i = 0; $i < $firstDayPosition; $i++)
+                <td class="department-row"></td>
+            @endfor
+            @for($day = 1; $day <= $daysInMonth; $day++)
+                <td class="department-row"></td>
+            @endfor
+            <td class="department-row"></td>
+            <td class="department-row"></td>
+            <td class="department-row"></td>
+            <td class="department-row"></td>
+        </tr>
+        
+        @foreach($groupedEmployees as $employee)
+            @php
+                $empDays = $employee['days'] ?? [];
+                $workDays = 0;
+                $paidLeaveDays = 0;
+                $unpaidLeaveDays = 0;
+                $absentDays = 0;
+            @endphp
             <tr>
-                <th>Nhân viên</th>
-                <th>Mã NV</th>
-                <th>Phòng ban</th>
-                <th>Ngày công</th>
-                <th>Check in</th>
-                <th>Check out</th>
-                <th>Giờ làm</th>
-                <th>Đi muộn</th>
-                <th>Về sớm</th>
-                <th>Tăng ca</th>
-                <th>Trạng thái ngày</th>
-                <th>Duyệt</th>
+                <td>{{ $stt++ }}</td>
+                <td class="name-col">{{ $employee['employee_name'] }}</td>
+                {{-- Khoảng trống các ngày trước ngày 1 của tháng --}}
+                @for($i = 0; $i < $firstDayPosition; $i++)
+                    <td></td>
+                @endfor
+                @for($day = 1; $day <= $daysInMonth; $day++)
+                    @php
+                        $record = $empDays[$day] ?? null;
+                        $mark = $getAttendanceMark($record);
+                        $workedOnSpecial = $record['worked_on_special_day'] ?? false;
+                        
+                        if ($mark === 'x') $workDays++;
+                        if ($mark === 'P' || $mark === 'L') $paidLeaveDays++;
+                        if ($mark === 'Ro') $unpaidLeaveDays++;
+                        if ($mark === 'V') $absentDays++;
+                    @endphp
+                    <td style="{{ $workedOnSpecial ? 'background-color: #90EE90; font-weight: bold;' : '' }}">
+                        {{ $mark }}{{ ($workedOnSpecial && $mark === 'L') ? '+x' : '' }}
+                    </td>
+                @endfor
+                <td>{{ $workDays }}</td>
+                <td>{{ $paidLeaveDays }}</td>
+                <td>{{ $unpaidLeaveDays }}</td>
+                <td>{{ $absentDays }}</td>
             </tr>
-        </thead>
-        <tbody>
-            @forelse ($records as $record)
-                <tr>
-                    <td>{{ $record['employee_name'] ?? '-' }}</td>
-                    <td>{{ $record['employee_code'] ?? '-' }}</td>
-                    <td>{{ $record['department_name'] ?? '-' }}</td>
-                    <td>{{ $record['work_date'] ?? '-' }}</td>
-                    <td>{{ $record['check_in_at'] ?? '-' }}</td>
-                    <td>{{ $record['check_out_at'] ?? '-' }}</td>
-                    <td>{{ $formatMinutes($record['worked_minutes'] ?? 0) }}</td>
-                    <td>{{ $formatMinutes($record['late_minutes'] ?? 0) }}</td>
-                    <td>{{ $formatMinutes($record['early_leave_minutes'] ?? 0) }}</td>
-                    <td>{{ $formatMinutes($record['overtime_minutes'] ?? 0) }}</td>
-                    <td>{{ $record['day_status_label'] ?? $dayStatusLabel($record['day_status'] ?? null) }}</td>
-                    <td>{{ $approvalStatusLabel($record['display_approval_status'] ?? $record['approval_status'] ?? null) }}</td>
-                </tr>
-            @empty
-                <tr>
-                    <td colspan="12">Không có dữ liệu chấm công.</td>
-                </tr>
-            @endforelse
-        </tbody>
-    </table>
+            @php
+                $deptTotalWork += $workDays;
+                $deptTotalPaidLeave += $paidLeaveDays;
+                $deptTotalUnpaidLeave += $unpaidLeaveDays;
+                $deptTotalAbsent += $absentDays;
+            @endphp
+        @endforeach
+        
+        <tr>
+            <td class="department-row"></td>
+            <td class="department-row name-col"></td>
+            {{-- Khoảng trống các ngày trước ngày 1 của tháng --}}
+            @for($i = 0; $i < $firstDayPosition; $i++)
+                <td class="department-row"></td>
+            @endfor
+            @for($day = 1; $day <= $daysInMonth; $day++)
+                <td class="department-row"></td>
+            @endfor
+            <td class="department-row">{{ $deptTotalWork }}</td>
+            <td class="department-row">{{ $deptTotalPaidLeave }}</td>
+            <td class="department-row">{{ $deptTotalUnpaidLeave }}</td>
+            <td class="department-row">{{ $deptTotalAbsent }}</td>
+        </tr>
+        
+        @php
+            $grandTotalWork += $deptTotalWork;
+            $grandTotalPaidLeave += $deptTotalPaidLeave;
+            $grandTotalUnpaidLeave += $deptTotalUnpaidLeave;
+            $grandTotalAbsent += $deptTotalAbsent;
+        @endphp
+    @endforeach
+    
+    <tr>
+        <td class="total-footer" colspan="2">TỔNG CỘNG</td>
+        {{-- Khoảng trống các ngày trước ngày 1 của tháng --}}
+        @for($i = 0; $i < $firstDayPosition; $i++)
+            <td class="total-footer"></td>
+        @endfor
+        @for($day = 1; $day <= $daysInMonth; $day++)
+            <td class="total-footer"></td>
+        @endfor
+        <td class="total-footer">{{ $grandTotalWork }}</td>
+        <td class="total-footer">{{ $grandTotalPaidLeave }}</td>
+        <td class="total-footer">{{ $grandTotalUnpaidLeave }}</td>
+        <td class="total-footer">{{ $grandTotalAbsent }}</td>
+    </tr>
+</table>
+
+<table style="margin-top: 30px; width: 100%;">
+    <tr>
+        <td colspan="3" style="border: none; text-align: right; padding-right: 50px;">Hà Nội, ngày {{ $daysInMonth }} tháng {{ $month }} năm {{ $year }}</td>
+    </tr>
+    <tr class="signature-section">
+        <td style="width: 33%; text-align: center;">Người lập biểu<br><br><br>(Ký, họ tên)</td>
+        <td style="width: 33%; text-align: center;">Kế toán trưởng<br><br><br>(Ký, họ tên)</td>
+        <td style="width: 33%; text-align: center;">Giám Đốc Công ty<br><br><br>(Ký, họ tên, đóng dấu)</td>
+    </tr>
+    <tr>
+        <td colspan="{{ $daysInMonth + 6 }}" style="border: none; padding-top: 20px; font-weight: bold; text-align: left;">
+            Ghi chú ký hiệu: 
+            - x: Đi làm | 
+            - P: Nghỉ phép (Hưởng lương) | 
+            - L: Nghỉ lễ (Hưởng lương) | 
+            - L+x: Đi làm ngày lễ | 
+            - Ro: Nghỉ không lương | 
+            - V: Vắng không phép (Tự ý nghỉ)
+        </td>
+    </tr>
+</table>
+
 </body>
 </html>

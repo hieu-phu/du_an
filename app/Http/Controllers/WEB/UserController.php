@@ -279,6 +279,7 @@ class UserController extends Controller
                     'currency' => 'VND',
                     'effective_date' => now()->toDateString(),
                     'approved_by' => $actor?->id,
+                    'requested_by' => $actor?->id,
                     'note' => $validated['reason'] ?? 'Cập nhật lương trực tiếp từ danh sách nhân sự',
                 ]);
 
@@ -475,7 +476,7 @@ class UserController extends Controller
             $query->where('authority_level', '<', $actorLevel);
         }
 
-        return $query->get(['id', 'name', 'authority_level', 'capabilities']);
+        return $query->get(['id', 'name', 'authority_level', 'capabilities', 'department_id']);
     }
 
     private function assertAssignablePosition(User $actor, int $positionId): void

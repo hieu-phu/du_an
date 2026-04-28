@@ -19,6 +19,7 @@ class Position extends Model
     protected $fillable = [
         'name',
         'description',
+        'department_id',
         'authority_level',
         'capabilities',
         'is_active'
@@ -83,6 +84,21 @@ class Position extends Model
             ->all();
 
         $this->capabilitiesCatalog()->sync($capabilityIds);
+    }
+
+    public function department()
+    {
+        return $this->belongsTo(Department::class);
+    }
+
+    public function scopeForDepartment($query, ?int $departmentId)
+    {
+        return $query->where(fn ($q) => $q->whereNull('department_id')->when($departmentId, fn ($q) => $q->orWhere('department_id', $departmentId)));
+    }
+
+    public function isGlobal(): bool
+    {
+        return $this->department_id === null;
     }
 
     private function canUseCapabilityPivot(): bool

@@ -54,19 +54,91 @@ class PositionRoleResolver
 
     public static function normalizePositionPayload(array $data): array
     {
-        $capabilities = self::normalizeCapabilities((array) ($data['capabilities'] ?? []));
+        $inputCapabilities = (array) ($data['capabilities'] ?? []);
         $authorityLevel = (int) ($data['authority_level'] ?? 0);
 
         if ($authorityLevel <= 0) {
             $authorityLevel = 1;
         }
 
+        // If no capabilities provided, use defaults for the level
+        if (empty($inputCapabilities)) {
+            $inputCapabilities = self::getDefaultCapabilitiesForLevel($authorityLevel);
+        }
+
+        $capabilities = self::normalizeCapabilities($inputCapabilities);
         $authorityLevel = max($authorityLevel, self::resolveMinimumAuthorityLevelFromCapabilities($capabilities));
 
         $data['capabilities'] = $capabilities;
         $data['authority_level'] = $authorityLevel;
 
         return $data;
+    }
+
+    public static function getDefaultCapabilitiesForLevel(int $level): array
+    {
+        $mapping = [
+            1 => [
+                'view_own_profile', 'update_own_profile', 'view_own_salary',
+                'check_in', 'check_out', 'view_own_attendance',
+                'request_attendance_adjustment', 'request_leave', 'view_own_leave_requests',
+                'request_overtime', 'view_own_overtime', 'view_own_projects',
+                'update_project_task_status', 'create_feedback', 'view_dashboard'
+            ],
+            2 => [
+                'view_team_attendance', 'view_team_leave_requests',
+                'view_team_overtime', 'view_team_projects'
+            ],
+            3 => [
+                'approve_team_attendance', 'approve_team_leave',
+                'approve_team_overtime', 'manage_project_members',
+                'assign_project_member', 'remove_project_member'
+            ],
+            4 => [
+                'view_department_attendance', 'approve_department_attendance',
+                'view_department_leave_requests', 'approve_department_leave',
+                'view_department_overtime', 'approve_department_overtime',
+                'view_department_projects', 'request_update_employee',
+                'manage_projects', 'view_departments', 'view_positions',
+                'view_work_shifts', 'view_holidays'
+            ],
+            5 => [
+                'view_all_profiles', 'view_salary_history',
+                'request_salary_change', 'approve_requests',
+                'view_approval_requests', 'view_reports',
+                'view_feedbacks', 'reply_feedback'
+            ],
+            6 => [
+                'approve_update_employee', 'approve_salary_change',
+                'manage_leave_policy', 'view_all_attendance',
+                'view_all_leave_requests', 'view_all_overtime', 'view_all_projects',
+                'approve_user_requests'
+            ],
+            7 => [
+                'manage_employees', 'manage_salary', 'export_salary',
+                'generate_payroll', 'export_attendance', 'lock_attendance_month',
+                'unlock_attendance_month', 'manage_departments', 'manage_positions',
+                'manage_work_shifts', 'manage_holidays',
+                'approve_department_requests', 'approve_salary_requests'
+            ],
+            8 => [
+                'view_financial_reports', 'sign_documents',
+                'manage_settings', 'export_reports'
+            ],
+        ];
+
+        $all = [];
+        if ($level >= 10) {
+            return self::allowedCapabilities();
+        }
+
+        for ($i = 1; $i <= $level; $i++) {
+            if (isset($mapping[$i])) {
+                $all = array_merge($all, $mapping[$i]);
+            }
+        }
+
+        return array_unique($all);
     }
 
     private static function allowedCapabilities(): array

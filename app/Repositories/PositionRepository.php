@@ -15,6 +15,7 @@ class PositionRepository extends BaseRepository
     {
         return $this->model
             ->withCount('employeeProfiles')
+            ->with('department:id,name')
             ->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%"))
             ->when($status === 'active', fn ($q) => $q->where('is_active', true))
             ->when($status === 'inactive', fn ($q) => $q->where('is_active', false))

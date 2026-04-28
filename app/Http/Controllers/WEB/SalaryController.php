@@ -952,7 +952,8 @@ class SalaryController extends Controller
         $start = Carbon::create($year, $month, 1, 0, 0, 0, self::TIMEZONE)->startOfMonth();
         $end = $start->copy()->endOfMonth();
 
-        return Holiday::query()
+        // 1. Fetch custom holidays from database (e.g. Lunar New Year, Hung King's Day)
+        $map = Holiday::query()
             ->whereBetween('holiday_date', [$start->toDateString(), $end->toDateString()])
             ->get(['holiday_date', 'holiday_name', 'holiday_type', 'is_paid_leave'])
             ->mapWithKeys(function (Holiday $holiday) {
@@ -965,6 +966,32 @@ class SalaryController extends Controller
                 ]];
             })
             ->all();
+
+        // 2. Inject Global Fixed Holidays (Solar Calendar)
+        $fixedHolidays = [
+            '01-01' => 'Tết Dương lịch',
+            '04-30' => 'Ngày Giải phóng Miền Nam',
+            '05-01' => 'Ngày Quốc tế Lao động',
+            '09-02' => 'Quốc khánh',
+            '09-03' => 'Quốc khánh (Ngày 2)',
+        ];
+
+        foreach ($fixedHolidays as $monthDay => $name) {
+            $fixedDate = Carbon::createFromFormat('Y-m-d', "$year-$monthDay", self::TIMEZONE);
+            if ($fixedDate->month === $month) {
+                $dateStr = $fixedDate->toDateString();
+                // Custom holidays from DB take precedence if they overlap
+                if (!isset($map[$dateStr])) {
+                    $map[$dateStr] = [
+                        'holiday_name' => $name,
+                        'holiday_type' => 'public',
+                        'is_paid_leave' => true,
+                    ];
+                }
+            }
+        }
+
+        return $map;
     }
 
     private function buildPaidHolidayRows(
@@ -981,9 +1008,48 @@ class SalaryController extends Controller
             ->filter()
             ->flip();
 
-        return collect($holidayMap)
-            ->filter(fn (array $holiday, string $date) => (bool) ($holiday['is_paid_leave'] ?? false) && !$recordDates->has($date))
-            ->reject(fn (array $holiday, string $date) => !$this->isExpectedWorkingDate($profile, Carbon::parse($date, self::TIMEZONE), $shiftAssignments))
+        $resolvedHolidays = [];
+        $usedCompDates = []; 
+
+        foreach ($holidayMap as $dateStr => $holiday) {
+            if (!($holiday['is_paid_leave'] ?? false)) {
+                continue;
+            }
+
+            $date = Carbon::parse($dateStr, self::TIMEZONE);
+            
+            // Case 1: Holiday falls on a working day
+            if ($this->isExpectedWorkingDate($profile, $date, $shiftAssignments)) {
+                $resolvedHolidays[$dateStr] = $holiday;
+            } 
+            // Case 2: Holiday falls on a non-working day (e.g. Sunday) -> Find compensatory day (Nghỉ bù)
+            else {
+                $compDate = $date->copy()->addDay();
+                // Search for the next available working day within the next 7 days
+                for ($i = 0; $i < 7; $i++) {
+                    $compDateStr = $compDate->toDateString();
+                    
+                    // Must be a working day, not already a holiday, and not already used for compensation
+                    $isWorkingDay = $this->isExpectedWorkingDate($profile, $compDate, $shiftAssignments);
+                    $isAlreadyHoliday = isset($holidayMap[$compDateStr]);
+                    $isAlreadyUsed = isset($resolvedHolidays[$compDateStr]) || in_array($compDateStr, $usedCompDates);
+                    
+                    if ($isWorkingDay && !$isAlreadyHoliday && !$isAlreadyUsed) {
+                        $resolvedHolidays[$compDateStr] = [
+                            'holiday_name' => ($holiday['holiday_name'] ?? 'Ngày lễ') . ' (Nghỉ bù)',
+                            'holiday_type' => $holiday['holiday_type'] ?? 'public',
+                            'is_paid_leave' => true,
+                        ];
+                        $usedCompDates[] = $compDateStr;
+                        break;
+                    }
+                    $compDate->addDay();
+                }
+            }
+        }
+
+        return collect($resolvedHolidays)
+            ->filter(fn (array $holiday, string $date) => !$recordDates->has($date))
             ->map(fn (array $holiday, string $date) => [
                 'id' => 'holiday-' . $date,
                 'work_date' => $date,
@@ -1001,7 +1067,7 @@ class SalaryController extends Controller
                 'attendance_status' => 'on_time',
                 'day_status' => 'holiday_paid',
                 'approval_status' => 'approved',
-                'approval_note' => 'Ngày lễ có lương',
+                'approval_note' => 'Ngày lễ có lương (Tự động tính nghỉ bù nếu trùng ngày nghỉ)',
             ])
             ->values();
     }

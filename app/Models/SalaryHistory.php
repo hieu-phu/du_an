@@ -17,6 +17,7 @@ class SalaryHistory extends Model
         'currency',
         'effective_date',
         'approved_by',
+        'requested_by',
         'note',
     ];
 
@@ -25,4 +26,19 @@ class SalaryHistory extends Model
         'new_salary' => 'decimal:2',
         'effective_date' => 'date',
     ];
+
+    public function employeeProfile()
+    {
+        return $this->belongsTo(EmployeeProfile::class);
+    }
+
+    public function approver()
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function requester()
+    {
+        return $this->belongsTo(User::class, 'requested_by');
+    }
 }

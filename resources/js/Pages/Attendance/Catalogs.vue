@@ -260,6 +260,16 @@
           </div>
         </form>
 
+        <div class="mt-8 flex items-center justify-between border-b border-gray-200 pb-4">
+          <h4 class="text-md font-semibold text-gray-900">Danh sách ngày lễ</h4>
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-gray-500">Xem năm:</span>
+            <select v-model="selectedHolidayYear" class="rounded-lg border border-gray-300 bg-white px-3 py-1 text-sm focus:border-blue-500 focus:outline-none">
+              <option v-for="year in holidayYears" :key="year" :value="year">{{ year }}</option>
+            </select>
+          </div>
+        </div>
+
         <TableShell class="mt-5">
           <thead>
             <tr class="text-left">
@@ -272,15 +282,39 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in holidays" :key="item.id" class="border-t">
+            <tr v-for="item in filteredHolidays" :key="item.id" class="border-t hover:bg-gray-50 transition-colors">
               <td class="p-2">{{ formatDate(item.holiday_date) }}</td>
-              <td class="p-2">{{ item.holiday_name }}</td>
+              <td class="p-2 font-medium">
+                <div class="flex items-center gap-2">
+                  {{ item.holiday_name }}
+                  <span v-if="item.is_system" class="inline-flex items-center rounded bg-purple-50 px-1.5 py-0.5 text-[10px] font-medium text-purple-600 border border-purple-100">
+                    Hệ thống
+                  </span>
+                </div>
+              </td>
               <td class="p-2">{{ holidayTypeLabel(item.holiday_type) }}</td>
-              <td class="p-2">{{ item.is_paid_leave ? 'Có lương' : 'Không lương' }}</td>
-              <td class="p-2">{{ item.is_recurring ? 'Hàng năm' : '-' }}</td>
+              <td class="p-2">
+                <span :class="item.is_paid_leave ? 'text-green-600' : 'text-orange-600'">
+                  {{ item.is_paid_leave ? 'Có lương' : 'Không lương' }}
+                </span>
+              </td>
+              <td class="p-2">
+                <span v-if="item.is_system || item.is_recurring" class="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                  Hàng năm
+                </span>
+                <span v-else class="text-gray-400">-</span>
+              </td>
               <td class="p-2 space-x-2">
-                <button class="rounded border px-3 py-1 text-sm" type="button" @click="editHoliday(item)">Chỉnh sửa</button>
-                <button class="rounded border px-3 py-1 text-sm text-red-600" type="button" @click="deleteHoliday(item.id)">Xóa</button>
+                <template v-if="!item.is_system">
+                  <button class="rounded border border-gray-300 bg-white px-3 py-1 text-sm transition-colors hover:bg-gray-50" type="button" @click="editHoliday(item)">Sửa</button>
+                  <button class="rounded border border-red-200 bg-white px-3 py-1 text-sm text-red-600 transition-colors hover:bg-red-50" type="button" @click="deleteHoliday(item.id)">Xóa</button>
+                </template>
+                <span v-else class="text-xs text-gray-400 italic px-3">Cố định</span>
+              </td>
+            </tr>
+            <tr v-if="filteredHolidays.length === 0">
+              <td colspan="6" class="p-8 text-center text-gray-500">
+                Không có ngày lễ nào trong năm {{ selectedHolidayYear }}
               </td>
             </tr>
           </tbody>
@@ -413,6 +447,55 @@ const props = defineProps({
   assignments: { type: Array, default: () => [] },
   employeeOptions: { type: Array, default: () => [] },
   departmentOptions: { type: Array, default: () => [] },
+})
+
+const currentYear = new Date().getFullYear()
+const selectedHolidayYear = ref(currentYear)
+const holidayYears = computed(() => {
+  const years = new Set([currentYear, currentYear + 1])
+  props.holidays.forEach(h => years.add(new Date(h.holiday_date).getFullYear()))
+  // Ensure years from 2025 to 2030 are selectable for planning
+  for (let y = 2025; y <= 2030; y++) years.add(y)
+  return Array.from(years).sort((a, b) => b - a)
+})
+
+const fixedHolidaysConfig = [
+  { monthDay: '01-01', name: 'Tết Dương lịch' },
+  { monthDay: '04-30', name: 'Ngày Giải phóng Miền Nam' },
+  { monthDay: '05-01', name: 'Ngày Quốc tế Lao động' },
+  { monthDay: '09-02', name: 'Quốc khánh' },
+  { monthDay: '09-03', name: 'Quốc khánh (Ngày 2)' },
+]
+
+const filteredHolidays = computed(() => {
+  const year = selectedHolidayYear.value
+  
+  // 1. Get database holidays for this year
+  const dbHolidays = props.holidays
+    .filter(h => new Date(h.holiday_date).getFullYear() === year)
+    .map(h => ({ ...h, is_system: false }))
+
+  // 2. Generate fixed holidays for this year
+  const generatedFixed = fixedHolidaysConfig.map(fh => {
+    const holidayDate = `${year}-${fh.monthDay}`
+    // Check if DB already has this date (to avoid duplicates/overrides)
+    const exists = dbHolidays.some(dh => dh.holiday_date === holidayDate)
+    if (exists) return null
+    
+    return {
+      id: `sys-${fh.monthDay}`,
+      holiday_date: holidayDate,
+      holiday_name: fh.name,
+      holiday_type: 'public',
+      is_paid_leave: true,
+      is_recurring: true,
+      is_system: true,
+      note: 'Ngày lễ cố định hệ thống'
+    }
+  }).filter(Boolean)
+
+  // 3. Combine and sort
+  return [...dbHolidays, ...generatedFixed].sort((a, b) => new Date(a.holiday_date) - new Date(b.holiday_date))
 })
 
 const Field = (props, { slots }) => h('div', { class: 'space-y-2' }, [

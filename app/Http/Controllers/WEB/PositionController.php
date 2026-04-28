@@ -4,6 +4,7 @@ namespace App\Http\Controllers\WEB;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuthorityLevel;
+use App\Models\Department;
 use App\Models\Position;
 use App\Models\PositionCapability as PositionCapabilityModel;
 use App\Models\User;
@@ -33,7 +34,7 @@ class PositionController extends Controller
         $actorLevel = $actor ? $this->resolveActorAuthorityLevel($actor) : 0;
         $actorPositionId = (int) ($actor?->employeeProfile?->position_id ?? 0);
 
-        $positions = $positions->map(function (Position $position) use ($actorLevel, $actorPositionId) {
+        $positions = $positions->load('department')->map(function (Position $position) use ($actorLevel, $actorPositionId) {
             $canManage = ((int) ($position->authority_level ?? 0) <= $actorLevel)
                 && ((int) $position->id !== $actorPositionId);
 
@@ -50,7 +51,18 @@ class PositionController extends Controller
             'canCreateCustomCapabilities' => false,
             'authorityLevels' => $this->authorityLevelOptions(),
             'authorityLevelCatalog' => $this->authorityLevelCatalog(),
+            'defaultCapabilities' => $this->getDefaultCapabilitiesMap(),
+            'departments' => Department::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
         ]);
+    }
+
+    private function getDefaultCapabilitiesMap(): array
+    {
+        $map = [];
+        foreach ($this->allowedAuthorityLevelValues() as $level) {
+            $map[$level] = \App\Support\PositionRoleResolver::getDefaultCapabilitiesForLevel($level);
+        }
+        return $map;
     }
 
     public function store(Request $request)
@@ -61,6 +73,7 @@ class PositionController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:positions,name'],
             'description' => ['nullable', 'string'],
+            'department_id' => ['nullable', 'exists:departments,id'],
             'authority_level' => ['required', 'integer', Rule::in($allowedAuthorityLevels)],
             'capabilities' => ['nullable', 'array'],
             'capabilities.*' => ['string', Rule::in($allowedCapabilities)],
@@ -107,6 +120,7 @@ class PositionController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', "unique:positions,name,{$id}"],
             'description' => ['nullable', 'string'],
+            'department_id' => ['nullable', 'exists:departments,id'],
             'authority_level' => ['required', 'integer', Rule::in($allowedAuthorityLevels)],
             'capabilities' => ['nullable', 'array'],
             'capabilities.*' => ['string', Rule::in($allowedCapabilities)],

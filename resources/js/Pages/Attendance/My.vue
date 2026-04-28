@@ -161,16 +161,33 @@
         />
 
         <div v-if="requestForm.request_type === 'leave'">
-          <label class="mb-2 block text-sm font-medium text-gray-700">Loại nghỉ</label>
-          <select v-model="requestForm.leave_type_id" class="w-full rounded-lg border border-gray-300 px-3 py-2">
-            <option value="">Chọn loại nghỉ</option>
-            <option v-for="type in leave_types" :key="type.id" :value="type.id">
-              {{ type.name }} - {{ type.is_paid ? 'có lương' : 'không lương' }}
-            </option>
+          <label class="mb-2 block text-sm font-medium text-gray-700">Lý do nghỉ (Loại nghỉ)</label>
+          <select v-model="requestForm.leave_type_id" class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-emerald-500 focus:ring-emerald-500">
+            <option value="">-- Chọn lý do nghỉ cụ thể --</option>
+            <optgroup v-if="paidLeaveTypes.length" label="Nghỉ hưởng lương (Theo quy định)">
+              <option v-for="type in paidLeaveTypes" :key="type.id" :value="type.id">
+                {{ type.name }}
+              </option>
+            </optgroup>
+            <optgroup v-if="unpaidLeaveTypes.length" label="Nghỉ không hưởng lương">
+              <option v-for="type in unpaidLeaveTypes" :key="type.id" :value="type.id">
+                {{ type.name }}
+              </option>
+            </optgroup>
           </select>
-          <p v-if="selectedLeaveType" class="mt-1 text-xs text-gray-500">
-            {{ selectedLeaveType.deducts_balance ? `Còn lại: ${formatWorkUnits(selectedLeaveAvailableDays)} ngày` : 'Loại nghỉ này không trừ quỹ phép.' }}
-          </p>
+          
+          <div v-if="selectedLeaveType" class="mt-2 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-800">
+            <div class="flex items-start gap-2">
+              <span class="mt-0.5 inline-block h-2 w-2 rounded-full bg-emerald-500"></span>
+              <div>
+                <p class="font-semibold">{{ selectedLeaveType.name }} ({{ selectedLeaveType.is_paid ? 'Có lương' : 'Không lương' }})</p>
+                <p class="mt-1 opacity-90">{{ selectedLeaveType.description || 'Nghỉ phép theo quy định của công ty.' }}</p>
+                <p v-if="selectedLeaveType.deducts_balance" class="mt-1 font-medium">
+                  Hạn mức còn lại của bạn: <span class="text-emerald-700">{{ formatWorkUnits(selectedLeaveAvailableDays) }} ngày</span>
+                </p>
+              </div>
+            </div>
+          </div>
           <p v-if="requestForm.errors.leave_type_id || requestForm.errors.leave_type" class="mt-1 text-sm text-red-500">{{ requestForm.errors.leave_type_id || requestForm.errors.leave_type }}</p>
         </div>
 
@@ -191,9 +208,12 @@
         </div>
 
         <div v-if="showLeaveAttachmentField">
-          <label class="mb-2 block text-sm font-medium text-gray-700">Minh chứng</label>
-          <input ref="attachmentInput" class="w-full rounded-lg border border-gray-300 px-3 py-2" type="file" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx" @change="setAttachment">
-          <p v-if="selectedLeaveType?.requires_attachment" class="mt-1 text-xs text-amber-700">Loại nghỉ này bắt buộc có minh chứng.</p>
+          <label class="mb-2 block text-sm font-medium text-gray-700">Minh chứng (Bắt buộc)</label>
+          <input ref="attachmentInput" class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-emerald-500 focus:ring-emerald-500" type="file" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx" @change="setAttachment">
+          <div class="mt-2 flex items-center gap-2 text-xs text-amber-700">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            <span>{{ attachmentWarningMessage }}</span>
+          </div>
           <p v-if="requestForm.errors.attachment" class="mt-1 text-sm text-red-500">{{ requestForm.errors.attachment }}</p>
         </div>
 
@@ -251,23 +271,7 @@
           </template>
         </InputDate>
 
-        <div v-if="requestForm.request_type === 'make_up' && selectedMakeUpQuota" class="md:col-span-2 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <div class="font-semibold">Số giờ thiếu của ngày cần bù</div>
-          <div class="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
-            <div>
-              <span class="text-amber-700">Tổng thiếu:</span>
-              <strong class="ml-1">{{ formatMinutes(selectedMakeUpQuota.missing_minutes) }}</strong>
-            </div>
-            <div>
-              <span class="text-amber-700">Đã được đăng ký làm bù:</span>
-              <strong class="ml-1">{{ formatMinutes(selectedMakeUpQuota.allocated_minutes) }}</strong>
-            </div>
-            <div>
-              <span class="text-amber-700">Còn lại:</span>
-              <strong class="ml-1">{{ formatMinutes(selectedMakeUpQuota.remaining_minutes) }}</strong>
-            </div>
-          </div>
-        </div>
+
 
         <div v-if="requestForm.request_type === 'make_up'" class="md:col-span-2 rounded-lg border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
           <div class="font-semibold">Quy tắc làm bù</div>
@@ -289,26 +293,12 @@
         />
 
         <div v-if="requestForm.request_type === 'overtime'" class="md:col-span-2 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
-          <div class="font-semibold">Khung tăng ca theo danh mục chấm công</div>
-          <div class="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
-            <div>
-              <span class="text-blue-600">Ca áp dụng:</span>
-              <strong class="ml-1">{{ overtimeCatalog.shift_name || '-' }}</strong>
-            </div>
-            <div>
-              <span class="text-blue-600">Thời gian:</span>
-              <strong class="ml-1">{{ overtimeWindowLabel }}</strong>
-            </div>
-            <div>
-              <span class="text-blue-600">Số giờ tăng ca:</span>
-              <strong class="ml-1">{{ formatMinutes(overtimeCatalog.requested_minutes) }}</strong>
-            </div>
-          </div>
+          <div class="font-semibold">Quy tắc đăng ký tăng ca</div>
           <p class="mt-2">
-            Tăng ca là thời gian làm việc ngoài khung hành chính được cấu hình OT. Tăng ca không dùng để bù cho ngày nghỉ thiếu công.
+            Nhân viên vui lòng tự nhập giờ bắt đầu và giờ kết thúc tăng ca thực tế. Tăng ca là thời gian làm việc ngoài khung hành chính được cấu hình OT.
           </p>
-          <p v-if="!overtimeCatalog.start_time || !overtimeCatalog.end_time" class="mt-2 text-red-600">
-            Ca làm hiện tại chưa cấu hình khung tăng ca. Vui lòng liên hệ HR cập nhật danh mục chấm công.
+          <p class="mt-1">
+            Tăng ca không dùng để bù cho ngày nghỉ thiếu công.
           </p>
           <p v-if="requestForm.errors.start_at || requestForm.errors.end_at" class="mt-2 text-red-600">
             {{ requestForm.errors.start_at || requestForm.errors.end_at }}
@@ -672,9 +662,45 @@ const formError = computed(() => requestForm.errors.error || page.props.errors?.
 const overtimeCatalog = computed(() => props.overtime_catalog || {})
 const isAttendancePeriodClosed = computed(() => Boolean(props.month_lock?.is_locked || props.payroll_period?.is_locked))
 const selectedLeaveType = computed(() => (props.leave_types || []).find((type) => Number(type.id) === Number(requestForm.leave_type_id)) || null)
+const paidLeaveTypes = computed(() => (props.leave_types || []).filter((type) => type.is_paid))
+const unpaidLeaveTypes = computed(() => (props.leave_types || []).filter((type) => !type.is_paid))
+
 const selectedLeaveBalance = computed(() => (props.leave_balances || []).find((balance) => Number(balance.leave_type_id) === Number(requestForm.leave_type_id)) || null)
 const selectedLeaveAvailableDays = computed(() => selectedLeaveBalance.value?.available_days ?? selectedLeaveType.value?.annual_quota ?? 0)
-const showLeaveAttachmentField = computed(() => requestForm.request_type === 'leave' && Boolean(selectedLeaveType.value?.requires_attachment))
+
+const estimatedLeaveDays = computed(() => {
+  if (requestForm.request_type !== 'leave' || !requestForm.from_date || !requestForm.to_date) return 0
+  if (requestForm.leave_duration_type === 'half_day') return 0.5
+  if (requestForm.leave_duration_type === 'hourly') return (Number(requestForm.leave_hours) || 0) / 8
+
+  const start = new Date(requestForm.from_date)
+  const end = new Date(requestForm.to_date)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0
+
+  const diffTime = Math.abs(end - start)
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
+  return diffDays
+})
+
+const showLeaveAttachmentField = computed(() => {
+  if (requestForm.request_type !== 'leave' || !selectedLeaveType.value) return false
+  
+  if (selectedLeaveType.value.requires_attachment) return true
+  
+  const isSickLeave = ['SICK', 'NGHI_OM'].includes(selectedLeaveType.value.code)
+  if (isSickLeave && estimatedLeaveDays.value >= 3) return true
+  
+  return false
+})
+
+const attachmentWarningMessage = computed(() => {
+  if (!selectedLeaveType.value) return ''
+  const isSickLeave = ['SICK', 'NGHI_OM'].includes(selectedLeaveType.value.code)
+  if (isSickLeave && estimatedLeaveDays.value >= 3) {
+    return 'Nghỉ bệnh từ 3 ngày trở lên yêu cầu giấy xác nhận của bác sĩ.'
+  }
+  return 'Loại nghỉ này yêu cầu tải lên minh chứng.'
+})
 const makeUpEligibleDates = computed(() => {
   const dates = (props.make_up_quota_catalog || [])
     .map((item) => item.date)
@@ -723,7 +749,7 @@ const overtimeWindowLabel = computed(() => {
 })
 const showSingleDate = computed(() => ['forgot_check', 'late_early', 'make_up'].includes(requestForm.request_type))
 const showDateRange = computed(() => ['leave', 'business_trip'].includes(requestForm.request_type))
-const showTimeRange = computed(() => ['forgot_check', 'late_early', 'business_trip', 'make_up'].includes(requestForm.request_type))
+const showTimeRange = computed(() => ['forgot_check', 'late_early', 'business_trip', 'make_up', 'overtime'].includes(requestForm.request_type))
 const singleDateLabel = computed(() => {
   if (requestForm.request_type === 'forgot_check') return 'Ngày quên chấm công'
   if (requestForm.request_type === 'late_early') return 'Ngày vi phạm'
@@ -736,6 +762,7 @@ const fromTimeLabel = computed(() => {
   if (requestForm.request_type === 'make_up') return 'Bắt đầu làm bù'
   if (requestForm.request_type === 'forgot_check') return 'Giờ check-in nếu quên'
   if (requestForm.request_type === 'business_trip') return 'Bắt đầu công tác'
+  if (requestForm.request_type === 'overtime') return 'Bắt đầu tăng ca'
   if (requestForm.request_type === 'late_early') return requestForm.requested_status === 'early_leave' ? 'Bắt đầu về sớm' : 'Bắt đầu đi muộn'
   return 'Từ giờ'
 })
@@ -743,6 +770,7 @@ const toTimeLabel = computed(() => {
   if (requestForm.request_type === 'make_up') return 'Kết thúc làm bù'
   if (requestForm.request_type === 'forgot_check') return 'Giờ check-out nếu quên'
   if (requestForm.request_type === 'business_trip') return 'Kết thúc công tác'
+  if (requestForm.request_type === 'overtime') return 'Kết thúc tăng ca'
   if (requestForm.request_type === 'late_early') return requestForm.requested_status === 'early_leave' ? 'Kết thúc về sớm' : 'Kết thúc đi muộn'
   return 'Đến giờ'
 })
@@ -950,6 +978,11 @@ function parsePeriodValue(value) {
 }
 
 function submitAttendanceRequest() {
+  if (requestForm.request_type === 'overtime' && requestForm.request_date && requestForm.from_time && requestForm.to_time) {
+    requestForm.start_at = `${requestForm.request_date} ${requestForm.from_time}`
+    requestForm.end_at = `${requestForm.request_date} ${requestForm.to_time}`
+  }
+
   if (requestForm.request_type === 'leave' && selectedLeaveType.value) {
     requestForm.leave_type = selectedLeaveType.value.is_paid ? 'paid' : 'unpaid'
   }

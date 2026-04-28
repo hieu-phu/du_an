@@ -98,4 +98,9 @@ class EmployeeProfile extends Model
     {
         return $this->hasMany(EmployeeLeaveBalance::class);
     }
+
+    public function salaryHistories(): HasMany
+    {
+        return $this->hasMany(SalaryHistory::class)->latest();
+    }
 }

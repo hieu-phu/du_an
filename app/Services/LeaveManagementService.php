@@ -295,19 +295,31 @@ class LeaveManagementService extends BaseService
 
     private function calculateAnnualAccrual(EmployeeProfile $profile, LeaveType $leaveType, int $year): float
     {
-        $annualQuota = (float) $leaveType->annual_quota;
+        $baseQuota = (float) $leaveType->annual_quota;
+        
+        // Seniority leave: +1 day for every 5 years (only for ANNUAL leave type)
+        $seniorityDays = 0;
+        if ($leaveType->code === 'ANNUAL' && $profile->hire_date) {
+            // Calculate tenure in years relative to the target year's start
+            $targetYearStart = now()->setYear($year)->startOfYear();
+            $tenureYears = $profile->hire_date->diffInYears($targetYearStart);
+            $seniorityDays = (float) floor($tenureYears / 5);
+        }
+
+        $totalAnnualQuota = $baseQuota + $seniorityDays;
 
         if (!$leaveType->prorate_by_hire_date || !$profile->hire_date || (int) $profile->hire_date->year < $year) {
-            return round($annualQuota, 2);
+            return round($totalAnnualQuota, 2);
         }
 
         if ((int) $profile->hire_date->year > $year) {
             return 0.0;
         }
 
+        // Pro-rate by months worked in the first year (e.g. hire date month 4 means 9 months worked)
         $months = 13 - (int) $profile->hire_date->month;
 
-        return round($annualQuota * max(0, $months) / 12, 2);
+        return round($totalAnnualQuota * max(0, $months) / 12, 2);
     }
 
     public function transformBalance(EmployeeLeaveBalance $balance): array

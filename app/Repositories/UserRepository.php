@@ -106,6 +106,8 @@ class UserRepository extends BaseRepository
             'employeeProfile.position:id,name,authority_level,capabilities',
             'employeeProfile.province:id,name',
             'employeeProfile.ward:id,name',
+            'employeeProfile.salaryHistories.approver:id,name',
+            'employeeProfile.salaryHistories.requester:id,name',
         ];
 
         if (Schema::hasTable('user_position_capability_overrides')) {
@@ -185,6 +187,18 @@ class UserRepository extends BaseRepository
                 'id' => $profile->ward->id,
                 'name' => $profile->ward->name,
             ] : null,
+            'salary_histories' => $profile?->relationLoaded('salaryHistories')
+                ? $profile->salaryHistories->map(fn ($history) => [
+                    'id' => $history->id,
+                    'old_salary' => $history->old_salary,
+                    'new_salary' => $history->new_salary,
+                    'effective_date' => $history->effective_date?->format('Y-m-d'),
+                    'approver_name' => $history->approver?->name,
+                    'requester_name' => $history->requester?->name,
+                    'note' => $history->note,
+                    'created_at' => $history->created_at?->format('Y-m-d H:i:s'),
+                ])
+                : [],
             'companies' => [],
         ];
     }

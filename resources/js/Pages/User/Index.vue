@@ -71,7 +71,15 @@
                     </div>
 
                     <div>
-                        <div class="font-medium text-gray-900 dark:text-white">{{ item.name }}</div>
+                        <div class="flex items-center gap-2">
+                            <div class="font-medium text-gray-900 dark:text-white">{{ item.name }}</div>
+                            <span
+                                v-if="isNewEmployee(item)"
+                                class="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-600 animate-pulse"
+                            >
+                                NEW
+                            </span>
+                        </div>
                         <div class="text-xs text-gray-500 dark:text-gray-400">{{ item.employee_code || '-' }}</div>
                         <div class="text-xs text-indigo-600 dark:text-indigo-400">{{ getPositionSummary(item) }}</div>
                     </div>
@@ -275,14 +283,24 @@
                                 <div v-if="!selectedUser.position?.capabilities?.length" class="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
                                     Chức vụ này chưa cấu hình capability.
                                 </div>
-                                <div v-else class="flex flex-wrap gap-2">
-                                    <span
-                                        v-for="capability in selectedUser.position.capabilities"
-                                        :key="capability"
-                                        class="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700"
+                                <div v-else class="space-y-3">
+                                    <div class="flex flex-wrap gap-2">
+                                        <span
+                                            v-for="capability in displayedCapabilities"
+                                            :key="capability"
+                                            class="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700"
+                                        >
+                                            {{ getCapabilityLabel(capability) }}
+                                        </span>
+                                    </div>
+                                    <button
+                                        v-if="hasMoreCapabilities"
+                                        type="button"
+                                        @click="showAllCapabilities = !showAllCapabilities"
+                                        class="text-xs font-semibold text-blue-600 hover:text-blue-700"
                                     >
-                                        {{ getCapabilityLabel(capability) }}
-                                    </span>
+                                        {{ showAllCapabilities ? 'Thu gọn' : `Xem thêm (${selectedUser.position.capabilities.length - 15} quyền khác)...` }}
+                                    </button>
                                 </div>
                             </div>
                         </div>                        <div class="rounded-xl border border-gray-200 p-4 md:col-span-2">
@@ -317,14 +335,24 @@
                                                 Lý do: {{ override.reason }}
                                             </div>
                                         </div>
-                                        <button
-                                            v-if="canManageOverrides"
-                                            type="button"
-                                            class="rounded-md border border-rose-200 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50"
-                                            @click="removeOverride(override)"
-                                        >
-                                            Xóa
-                                        </button>
+                                        <div class="flex items-center gap-2">
+                                            <button
+                                                v-if="canManageOverrides"
+                                                type="button"
+                                                class="rounded-md border border-blue-200 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50"
+                                                @click="editOverride(override)"
+                                            >
+                                                Sửa
+                                            </button>
+                                            <button
+                                                v-if="canManageOverrides"
+                                                type="button"
+                                                class="rounded-md border border-rose-200 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50"
+                                                @click="removeOverride(override)"
+                                            >
+                                                Xóa
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -377,6 +405,38 @@
                                 <div><span class="font-medium text-gray-800">Địa chỉ:</span> {{ formatFullAddress(selectedUser) }}</div>
                             </div>
                         </div>
+
+                        <div v-if="selectedUser.salary_histories?.length" class="rounded-xl border border-gray-200 p-4 md:col-span-2">
+                            <div class="mb-3 text-sm font-semibold text-gray-800">Lịch sử thay đổi lương</div>
+                            <div class="overflow-hidden rounded-lg border border-gray-100">
+                                <table class="min-w-full divide-y divide-gray-100 text-left text-xs">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-3 py-2 font-semibold text-gray-600">Ngày hiệu lực</th>
+                                            <th class="px-3 py-2 font-semibold text-gray-600">Thay đổi</th>
+                                            <th class="px-3 py-2 font-semibold text-gray-600">Người đề xuất</th>
+                                            <th class="px-3 py-2 font-semibold text-gray-600">Người duyệt</th>
+                                            <th class="px-3 py-2 font-semibold text-gray-600">Ghi chú</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100">
+                                        <tr v-for="history in selectedUser.salary_histories" :key="history.id" class="hover:bg-gray-50/50">
+                                            <td class="whitespace-nowrap px-3 py-2 text-gray-700">{{ formatDate(history.effective_date) }}</td>
+                                            <td class="whitespace-nowrap px-3 py-2">
+                                                <div class="flex items-center gap-1.5">
+                                                    <span class="text-gray-400 line-through">{{ formatCurrency(history.old_salary) }}</span>
+                                                    <span class="text-gray-400">→</span>
+                                                    <span class="font-semibold text-emerald-600">{{ formatCurrency(history.new_salary) }}</span>
+                                                </div>
+                                            </td>
+                                            <td class="whitespace-nowrap px-3 py-2 text-gray-600">{{ history.requester_name || '-' }}</td>
+                                            <td class="whitespace-nowrap px-3 py-2 text-gray-600">{{ history.approver_name || 'Hệ thống' }}</td>
+                                            <td class="px-3 py-2 text-gray-500">{{ history.note || '-' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </template>
@@ -387,6 +447,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { router, useForm, usePage } from '@inertiajs/vue3'
+import { differenceInDays, parseISO } from 'date-fns'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import SearchPage from '@/components/features/SearchPage.vue'
@@ -402,6 +463,7 @@ import AddIcon from '@/icons/AddIcon.vue'
 import EditButtonIcon from '@/icons/EditButtonIcon.vue'
 import EyeOn from '@/icons/EyeOn.vue'
 import CheckCirleIcon from '@/icons/CheckCirleIcon.vue'
+import Swal from 'sweetalert2'
 
 const props = defineProps({
     users: Object,
@@ -442,6 +504,16 @@ const overrideForm = ref({
 const salaryForm = useForm({
     base_salary: '',
     reason: '',
+})
+
+const showAllCapabilities = ref(false)
+const displayedCapabilities = computed(() => {
+    const caps = selectedUser.value?.position?.capabilities || []
+    if (showAllCapabilities.value) return caps
+    return caps.slice(0, 15)
+})
+const hasMoreCapabilities = computed(() => {
+    return (selectedUser.value?.position?.capabilities?.length || 0) > 15
 })
 
 const createButtonText = computed(() => {
@@ -561,6 +633,16 @@ const getPositionSummary = (user) => {
     return authority > 0 ? `Rank ${authority}` : '-'
 }
 
+const isNewEmployee = (user) => {
+    if (!user.hire_date) return false
+    try {
+        const hireDate = parseISO(user.hire_date)
+        return Math.abs(differenceInDays(new Date(), hireDate)) <= 7
+    } catch (e) {
+        return false
+    }
+}
+
 const getCapabilityLabel = (capability) => ({
     manage_employees: 'Quản lý nhân sự',
     view_salary: 'Xem lương',
@@ -629,12 +711,24 @@ const canManageOverrides = computed(() =>
     && !!permissions.value['users.edit']
 )
 
-const capabilityOptionItems = computed(() =>
-    (props.capabilityOptions || []).map((item) => ({
-        value: item.code,
-        label: `${item.name || getCapabilityLabel(item.code)} (${item.code})`,
-    }))
-)
+const capabilityOptionItems = computed(() => {
+    const positionCaps = selectedUser.value?.position?.capabilities || []
+    const existingOverrides = (selectedUser.value?.position_capability_overrides || [])
+        .map((o) => o.capability_code)
+
+    return (props.capabilityOptions || [])
+        .filter((item) => {
+            const inPosition = positionCaps.includes(item.code)
+            const isAlreadyOverrode = existingOverrides.includes(item.code)
+            const isCurrentlySelected = item.code === overrideForm.value.capability_code
+
+            return !inPosition && (!isAlreadyOverrode || isCurrentlySelected)
+        })
+        .map((item) => ({
+            value: item.code,
+            label: `${item.name || getCapabilityLabel(item.code)} (${item.code})`,
+        }))
+})
 
 const effectOptionItems = [
     { value: 'allow', label: 'Cho phép' },
@@ -684,6 +778,15 @@ const resetOverrideForm = () => {
     }
 }
 
+const editOverride = (override) => {
+    overrideForm.value = {
+        capability_code: override.capability_code,
+        effect: override.effect,
+        reason: override.reason || '',
+        expires_at: override.expires_at ? override.expires_at.replace(' ', 'T').substring(0, 16) : '',
+    }
+}
+
 const submitOverride = () => {
     if (!selectedUser.value?.id || !overrideForm.value.capability_code) {
         toast.error('Vui lòng chọn quyền cần ghi đè.')
@@ -713,17 +816,33 @@ const submitOverride = () => {
 const removeOverride = (override) => {
     if (!selectedUser.value?.id || !override?.id) return
 
-    router.delete(
-        route('web.users.capability-overrides.destroy', { user: selectedUser.value.id, override: override.id }),
-        {
-            preserveScroll: true,
-            onSuccess: () => {
-                toast.success('Đã xóa ghi đè quyền.')
-                refreshDetailUser(selectedUser.value.id)
-            },
-            onError: () => toast.error('Không thể xóa ghi đè quyền.'),
+    Swal.fire({
+        title: 'Xác nhận xóa?',
+        text: `Bạn có chắc muốn xóa ghi đè cho quyền ${getCapabilityLabel(override.capability_code)}?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Đồng ý xóa',
+        cancelButtonText: 'Hủy',
+        customClass: {
+            container: 'swal2-z-index'
         }
-    )
+    }).then((result) => {
+        if (result.isConfirmed) {
+            router.delete(
+                route('web.users.capability-overrides.destroy', { user: selectedUser.value.id, override: override.id }),
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        toast.success('Đã xóa ghi đè quyền.')
+                        refreshDetailUser(selectedUser.value.id)
+                    },
+                    onError: () => toast.error('Không thể xóa ghi đè quyền.'),
+                }
+            )
+        }
+    })
 }
 
 const changeAccountStatus = (user, status) => {
@@ -865,6 +984,12 @@ watch(() => props.detailUser, (detailUser) => {
     openDetailModal(detailUser)
 }, { immediate: true })
 </script>
+
+<style>
+.swal2-z-index {
+    z-index: 999999 !important;
+}
+</style>
 
 
 
