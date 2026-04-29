@@ -160,6 +160,8 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
             ->name('projects.toggle-lock');
         Route::post('/projects/{project}/attachments', [ProjectController::class, 'uploadAttachment'])
             ->name('projects.attachments.store');
+        Route::get('/projects/{project}/attachments/{attachment}/view', [ProjectController::class, 'viewAttachment'])
+            ->name('projects.attachments.view');
         Route::get('/projects/{project}/attachments/{attachment}/download', [ProjectController::class, 'downloadAttachment'])
             ->name('projects.attachments.download');
         Route::delete('/projects/{project}/attachments/{attachment}', [ProjectController::class, 'destroyAttachment'])
@@ -189,6 +191,18 @@ Route::middleware(['auth', 'activity.log'])->group(function () {
             ->name('projects.implementation-details.store');
         Route::post('/projects/{project}/implementation-details/{implementationDetail}/attachments', [ProjectController::class, 'uploadImplementationDetailAttachment'])
             ->name('projects.implementation-details.attachments.store');
+        Route::post('/projects/{project}/implementation-details/{implementationDetail}/subtasks', [ProjectController::class, 'storeImplementationSubtask'])
+            ->name('projects.implementation-details.subtasks.store');
+        Route::put('/projects/{project}/implementation-details/{implementationDetail}/subtasks/{subtask}', [ProjectController::class, 'updateImplementationSubtask'])
+            ->name('projects.implementation-details.subtasks.update');
+        Route::put('/projects/{project}/implementation-details/{implementationDetail}/subtasks/{subtask}/status', [ProjectController::class, 'updateImplementationSubtaskStatus'])
+            ->name('projects.implementation-details.subtasks.status');
+        Route::post('/projects/{project}/implementation-details/{implementationDetail}/subtasks/{subtask}/work-logs', [ProjectController::class, 'storeSubtaskWorkLog'])
+            ->name('projects.implementation-details.subtasks.work-logs.store');
+        Route::delete('/projects/{project}/implementation-details/{implementationDetail}/subtasks/{subtask}/work-logs/{workLog}', [ProjectController::class, 'destroySubtaskWorkLog'])
+            ->name('projects.implementation-details.subtasks.work-logs.destroy');
+        Route::delete('/projects/{project}/implementation-details/{implementationDetail}/subtasks/{subtask}', [ProjectController::class, 'destroyImplementationSubtask'])
+            ->name('projects.implementation-details.subtasks.destroy');
         Route::post('/projects/{project}/implementation-details/{implementationDetail}/comments', [ProjectController::class, 'storeImplementationDetailComment'])
             ->name('projects.implementation-details.comments.store');
         Route::delete('/projects/{project}/implementation-details/{implementationDetail}/comments/{comment}', [ProjectController::class, 'destroyImplementationDetailComment'])

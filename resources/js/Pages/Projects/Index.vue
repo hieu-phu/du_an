@@ -96,7 +96,7 @@
             <tr>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Tên dự án</th>
               <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Trạng thái</th>
-              <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Tiến độ</th>
+              <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Tỉ trọng</th>
               <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Ngày bắt đầu</th>
               <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Ngày kết thúc</th>
               <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Thành viên</th>
@@ -292,7 +292,7 @@
               v-model="form.status"
               class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500"
             >
-              <option v-for="option in statusOptions" :key="option.value" :value="option.value">
+              <option v-for="option in formStatusOptions" :key="option.value" :value="option.value">
                 {{ option.label }}
               </option>
             </select>
@@ -433,10 +433,10 @@
             <div class="mb-3 text-sm font-semibold text-gray-900">Thông tin chung</div>
             <div class="space-y-2 text-sm text-gray-700">
               <div><span class="font-medium text-gray-900">Tên dự án:</span> {{ selectedProject.name }}</div>
-              <div><span class="font-medium text-gray-900">Trạng thái:</span> {{ selectedProject.status_label || '-' }}</div>
+              <div><span class="font-medium text-gray-900">Trạng thái dự án:</span> {{ selectedProject.status_label || '-' }}</div>
               <div><span class="font-medium text-gray-900">Ngày bắt đầu:</span> {{ formatDate(selectedProject.start_date) }}</div>
               <div><span class="font-medium text-gray-900">Ngày kết thúc:</span> {{ formatDate(selectedProject.end_date) }}</div>
-              <div><span class="font-medium text-gray-900">Tình trạng khóa:</span> {{ selectedProject.is_locked ? 'Đã khóa' : 'Đang mở' }}</div>
+              <div><span class="font-medium text-gray-900">Trạng thái khóa:</span> {{ selectedProject.is_locked ? 'Đã khóa' : 'Đang mở' }}</div>
             </div>
           </div>
 
@@ -708,28 +708,68 @@
           </div>
 
           <div v-if="activeDetailTab === 'implementation'" class="rounded-xl border border-gray-200 p-4 lg:col-span-3">
-            <div class="mb-3 text-sm font-semibold text-gray-900">Chi tiết triển khai dự án</div>
+            <div class="mb-3 text-sm font-semibold text-gray-900">Kế hoạch triển khai dự án</div>
 
             <div class="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
               <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                <div class="text-[11px] uppercase tracking-wide text-gray-500">Tiến độ</div>
+                <div class="text-[11px] uppercase tracking-wide text-gray-500">Tỉ trọng toàn dự án</div>
                 <div class="text-sm font-semibold text-gray-900">{{ selectedProject.progress_percent || 0 }}%</div>
               </div>
               <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                <div class="text-[11px] uppercase tracking-wide text-gray-500">Tổng đầu việc</div>
+                <div class="text-[11px] uppercase tracking-wide text-gray-500">Tổng số đầu việc</div>
                 <div class="text-sm font-semibold text-gray-900">{{ selectedProject.task_summary?.total || 0 }}</div>
               </div>
               <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                <div class="text-[11px] uppercase tracking-wide text-gray-500">Đã hoàn thành</div>
+                <div class="text-[11px] uppercase tracking-wide text-gray-500">Đầu việc đã hoàn thành</div>
                 <div class="text-sm font-semibold text-emerald-700">{{ selectedProject.task_summary?.completed || 0 }}</div>
               </div>
               <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                <div class="text-[11px] uppercase tracking-wide text-gray-500">Chậm tiến độ</div>
+                <div class="text-[11px] uppercase tracking-wide text-gray-500">Đầu việc chậm tiến độ</div>
                 <div class="text-sm font-semibold" :class="selectedProject.is_delayed ? 'text-rose-700' : 'text-gray-900'">
                   {{ selectedProject.task_summary?.delayed || 0 }}
                 </div>
               </div>
             </div>
+
+            <details class="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <summary class="cursor-pointer text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Hiệu suất giờ làm:
+                <span class="normal-case tracking-normal text-slate-900">
+                  {{ formatHours(selectedProject.work_report?.actual_hours) }}/{{ formatHours(selectedProject.work_report?.estimated_hours) }} giờ,
+                  chênh lệch {{ formatHours(selectedProject.work_report?.variance_hours) }} giờ
+                </span>
+              </summary>
+              <div class="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+                <div>
+                  <div class="text-[11px] text-slate-500">Giờ dự kiến</div>
+                  <div class="text-sm font-semibold text-slate-900">{{ formatHours(selectedProject.work_report?.estimated_hours) }} giờ</div>
+                </div>
+                <div>
+                  <div class="text-[11px] text-slate-500">Giờ thực tế</div>
+                  <div class="text-sm font-semibold text-slate-900">{{ formatHours(selectedProject.work_report?.actual_hours) }} giờ</div>
+                </div>
+                <div>
+                  <div class="text-[11px] text-slate-500">Chênh lệch</div>
+                  <div class="text-sm font-semibold" :class="Number(selectedProject.work_report?.variance_hours || 0) > 0 ? 'text-rose-700' : 'text-slate-900'">
+                    {{ formatHours(selectedProject.work_report?.variance_hours) }} giờ
+                  </div>
+                </div>
+                <div>
+                  <div class="text-[11px] text-slate-500">Tỉ lệ dùng giờ</div>
+                  <div class="text-sm font-semibold text-slate-900">{{ selectedProject.work_report?.efficiency_percent || 0 }}%</div>
+                </div>
+              </div>
+              <div v-if="(selectedProject.work_report?.employee_hours || []).length" class="mt-3 divide-y divide-slate-200 border-t border-slate-200 pt-2">
+                <div
+                  v-for="employee in selectedProject.work_report.employee_hours"
+                  :key="`work-report-${employee.employee_profile_id}`"
+                  class="flex items-center justify-between py-1.5 text-xs"
+                >
+                  <span class="font-medium text-slate-700">{{ employee.employee_code || '-' }} - {{ employee.employee_name }}</span>
+                  <span class="font-semibold text-slate-900">{{ formatHours(employee.actual_hours) }} giờ / {{ employee.log_count }} log</span>
+                </div>
+              </div>
+            </details>
 
             <div v-if="selectedProject.delay_warning" class="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
               {{ selectedProject.delay_warning }}
@@ -737,41 +777,51 @@
 
             <div v-if="canCreateImplementationDetail || editingImplementationId" class="mb-3 rounded-xl border border-gray-200 p-3">
               <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-600">
-                {{ editingImplementationId ? 'Cập nhật đầu việc' : 'Thêm đầu việc mới' }}
+                {{ editingImplementationId ? 'Cập nhật đầu việc chính' : 'Thêm đầu việc chính' }}
               </div>
               <div class="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
                 <div>
-                  <label class="mb-1 block text-xs font-medium text-gray-600">Nội dung công việc</label>
+                  <label class="mb-1 block text-xs font-medium text-gray-600">Tên đầu việc chính</label>
                   <input
                     v-model="implementationForm.content"
                     type="text"
                     class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
-                    placeholder="Nhập nội dung công việc"
+                    placeholder="Nhập tên đầu việc cần triển khai"
                   />
                 </div>
                 <div>
-                  <label class="mb-1 block text-xs font-medium text-gray-600">Nhân sự thực hiện</label>
+                  <label class="mb-1 block text-xs font-medium text-gray-600">Người phụ trách chính</label>
                   <select
                     v-model="implementationForm.assigned_to"
                     class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
                   >
-                    <option value="">Không giao cụ thể</option>
+                    <option value="">Chưa phân công</option>
                     <option v-for="option in selectedProjectMemberOptions" :key="`impl-employee-${option.id}`" :value="option.id">
                       {{ option.label }}
                     </option>
                   </select>
                 </div>
                 <div>
-                  <label class="mb-1 block text-xs font-medium text-gray-600">Ngày thực hiện</label>
-                  <input
-                    v-model="implementationForm.execution_date"
-                    type="date"
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
-                    :disabled="!canEditImplementationSchedule"
-                  />
+                  <label class="mb-1 block text-xs font-medium text-gray-600">Ngày bắt đầu</label>
+                  <div class="relative">
+                    <input
+                      v-model="implementationForm.execution_date"
+                      type="date"
+                      class="project-date-input w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm outline-none focus:border-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
+                      :disabled="!canEditImplementationSchedule"
+                    />
+                    <button
+                      type="button"
+                      class="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-indigo-600"
+                      :disabled="!canEditImplementationSchedule"
+                      @click="openDatePicker"
+                    >
+                      <Calendar2Line class="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
                 <div>
-                  <label class="mb-1 block text-xs font-medium text-gray-600">Số ngày thực hiện</label>
+                  <label class="mb-1 block text-xs font-medium text-gray-600">Thời lượng dự kiến (ngày)</label>
                   <input
                     v-model="implementationForm.duration_days"
                     type="number"
@@ -782,7 +832,7 @@
                   />
                 </div>
                 <div>
-                  <label class="mb-1 block text-xs font-medium text-gray-600">Trạng thái đầu việc</label>
+                  <label class="mb-1 block text-xs font-medium text-gray-600">Trạng thái đầu việc chính</label>
                   <select
                     v-model="implementationForm.detail_status"
                     class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
@@ -794,15 +844,10 @@
                   </select>
                 </div>
                 <div>
-                  <label class="mb-1 block text-xs font-medium text-gray-600">Tiến độ (%)</label>
-                  <input
-                    v-model="implementationForm.progress_percent"
-                    type="number"
-                    min="0"
-                    max="100"
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
-                    @input="syncImplementationFormProgress"
-                  />
+                  <label class="mb-1 block text-xs font-medium text-gray-600">Tỉ trọng đầu việc (%)</label>
+                  <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+                    Tự tính từ công việc con
+                  </div>
                 </div>
                 <div class="flex gap-2 xl:col-span-2">
                   <button
@@ -823,7 +868,7 @@
                 </div>
               </div>
               <p v-if="!canEditImplementationSchedule" class="mt-2 text-xs text-amber-600">
-                Chỉ admin mới được thay đổi ngày thực hiện và số ngày thực hiện.
+                Chỉ admin mới được thay đổi ngày bắt đầu và thời lượng dự kiến.
               </p>
             </div>
 
@@ -831,28 +876,29 @@
               <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                   <tr>
-                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Nội dung</th>
-                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Nhân sự</th>
-                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Thực hiện</th>
-                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Dự kiến xong</th>
-                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Tiến độ</th>
+                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Đầu việc chính</th>
+                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Người phụ trách</th>
+                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Ngày bắt đầu</th>
+                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Hạn hoàn thành</th>
+                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Tỉ trọng</th>
                     <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Trạng thái</th>
                     <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Tệp đính kèm</th>
                     <th class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200">
-                  <tr v-for="detail in selectedImplementationDetails" :key="`impl-detail-${detail.id}`" class="align-top">
+                  <template v-for="detail in selectedImplementationDetails" :key="`impl-detail-${detail.id}`">
+                  <tr class="align-top">
                     <td class="px-3 py-2 text-sm text-gray-700">
                       <div class="font-medium text-gray-900">{{ detail.content }}</div>
                       <div class="hidden">
-                        Số ngày: {{ detail.duration_days }} |
-                        Thực tế xong: {{ formatDate(detail.actual_end_date) }}
+                        Thời lượng dự kiến: {{ detail.duration_days }} ngày |
+                        Ngày hoàn thành thực tế: {{ formatDate(detail.actual_end_date) }}
                       </div>
                       <div class="mt-1 space-y-0.5 text-xs text-gray-500">
-                        <div>Thời lượng: {{ detail.duration_days }} ngày</div>
+                        <div>Thời lượng dự kiến: {{ detail.duration_days }} ngày</div>
                         <div>
-                          Thực tế xong:
+                          Ngày hoàn thành thực tế:
                           <span :class="detail.actual_end_date ? 'text-emerald-700' : 'text-gray-500'">
                             {{ detail.actual_end_date ? formatDate(detail.actual_end_date) : 'Chưa hoàn thành' }}
                           </span>
@@ -874,28 +920,24 @@
                     <td class="px-3 py-2 text-sm text-gray-700">{{ formatDate(detail.execution_date) }}</td>
                     <td class="px-3 py-2 text-sm text-gray-700">{{ formatDate(detail.expected_end_date) }}</td>
                     <td class="px-3 py-2 text-sm text-gray-700">
-                      <template v-if="detail.can_update_status">
-                        <input
-                          v-model="implementationDrafts[detail.id].progress_percent"
-                          type="number"
-                          min="0"
-                          max="100"
-                          class="w-20 rounded-lg border border-gray-300 px-2 py-1 text-sm outline-none focus:border-blue-500"
-                          @input="syncImplementationDraftProgress(detail)"
-                        />
-                      </template>
-                      <template v-else>
-                        {{ detail.progress_percent }}%
-                      </template>
+                      <div class="space-y-1">
+                        <div class="font-semibold text-gray-900">{{ detail.progress_percent }}%</div>
+                        <div class="text-[11px] font-medium text-gray-500">
+                          {{ scheduleDaysLabel(detail.execution_date, detail.duration_days) }}
+                        </div>
+                        <div class="text-[11px] font-medium text-slate-500">
+                          Tính từ công việc con
+                        </div>
+                      </div>
                     </td>
                     <td class="px-3 py-2 text-sm text-gray-700">
-                      <template v-if="detail.can_update_status">
+                      <template v-if="detail.can_update_status && !hasDetailSubtasks(detail)">
                         <select
                           v-model="implementationDrafts[detail.id].detail_status"
                           class="rounded-lg border border-gray-300 px-2 py-1 text-sm outline-none focus:border-blue-500"
                           @change="syncImplementationDraftProgress(detail)"
                         >
-                          <option v-for="option in implementationStatusOptions" :key="`impl-row-status-${detail.id}-${option.value}`" :value="option.value">
+                          <option v-for="option in implementationStatusOptionsFor(detail.detail_status)" :key="`impl-row-status-${detail.id}-${option.value}`" :value="option.value">
                             {{ option.label }}
                           </option>
                         </select>
@@ -916,6 +958,15 @@
                               {{ attachment.original_name }}
                             </a>
                             <span class="text-xs text-gray-500">{{ attachment.size_label }}</span>
+                            <a
+                              v-if="attachment.can_preview"
+                              :href="attachment.preview_url"
+                              target="_blank"
+                              rel="noopener"
+                              class="text-xs font-semibold text-emerald-700 hover:text-emerald-800"
+                            >
+                              Xem
+                            </a>
                             <button
                               v-if="attachment.can_delete"
                               type="button"
@@ -939,7 +990,14 @@
                     <td class="px-3 py-2 text-center text-sm text-gray-700">
                       <div class="flex flex-wrap items-center justify-center gap-2">
                         <button
-                          v-if="detail.can_update_status"
+                          type="button"
+                          class="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          @click="toggleSubtasks(detail)"
+                        >
+                          Công việc con {{ detail.subtask_summary?.completed || 0 }}/{{ detail.subtask_summary?.total || 0 }}
+                        </button>
+                        <button
+                          v-if="detail.can_update_status && !hasDetailSubtasks(detail)"
                           type="button"
                           class="rounded-lg border border-blue-200 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
                           @click="updateImplementationStatus(detail)"
@@ -974,6 +1032,275 @@
                       </div>
                     </td>
                   </tr>
+                  <tr v-if="expandedSubtaskIds[detail.id]">
+                    <td colspan="8" class="bg-slate-50 px-3 py-2">
+                      <div class="rounded-lg border border-slate-200 bg-white p-3">
+                        <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <div class="text-xs font-semibold uppercase tracking-wide text-slate-600">Danh sách công việc con của: {{ detail.content }}</div>
+                            <div class="mt-1 text-xs text-slate-500">
+                              {{ detail.subtask_summary?.completed || 0 }}/{{ detail.subtask_summary?.total || 0 }} công việc con đã hoàn thành
+                              <span v-if="detail.subtask_summary?.progress_percent !== null">
+                                - tiến độ đầu việc tự tính {{ detail.subtask_summary.progress_percent }}%
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div v-if="detail.can_create_subtask || editingSubtaskIds[detail.id]" class="mb-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_250px_170px_170px_auto]">
+                          <div>
+                            <label class="mb-1 block text-xs font-medium text-slate-600">Tên việc con</label>
+                            <input
+                              v-model="subtaskForms[detail.id].title"
+                              type="text"
+                              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                              placeholder="Nhập tên việc"
+                            />
+                          </div>
+                          <div>
+                            <label class="mb-1 block text-xs font-medium text-slate-600">Người thực hiện</label>
+                            <select
+                              v-model="subtaskForms[detail.id].assigned_to"
+                              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                            >
+                              <option value="">Chưa phân công</option>
+                              <option v-for="option in selectedProjectMemberOptions" :key="`subtask-member-${detail.id}-${option.id}`" :value="option.id">
+                                {{ option.label }}
+                              </option>
+                            </select>
+                          </div>
+                          <div>
+                            <label class="mb-1 block text-xs font-medium text-slate-600">Ngày bắt đầu</label>
+                            <div class="relative">
+                              <input
+                                v-model="subtaskForms[detail.id].start_date"
+                                type="date"
+                                class="project-date-input w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm outline-none focus:border-indigo-500"
+                              />
+                              <button
+                                type="button"
+                                class="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-indigo-600"
+                                @click="openDatePicker"
+                              >
+                              <Calendar2Line class="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                          <div>
+                            <label class="mb-1 block text-xs font-medium text-slate-600">Ngày kết thúc</label>
+                            <div class="relative">
+                              <input
+                                v-model="subtaskForms[detail.id].due_date"
+                                type="date"
+                                class="project-date-input w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm outline-none focus:border-indigo-500"
+                              />
+                              <button
+                                type="button"
+                                class="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-indigo-600"
+                                @click="openDatePicker"
+                              >
+                                <Calendar2Line class="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                          <div class="flex items-end gap-2">
+                            <button
+                              type="button"
+                              class="rounded-lg border border-indigo-200 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
+                              @click="saveSubtask(detail)"
+                            >
+                              {{ editingSubtaskIds[detail.id] ? 'Lưu' : 'Thêm' }}
+                            </button>
+                            <button
+                              v-if="editingSubtaskIds[detail.id]"
+                              type="button"
+                              class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                              @click="cancelSubtaskEdit(detail.id)"
+                            >
+                              Hủy
+                            </button>
+                          </div>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                          <table class="min-w-full divide-y divide-slate-200">
+                            <thead class="bg-slate-100">
+                              <tr>
+                                <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">Công việc con</th>
+                                <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">Người thực hiện</th>
+                                <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">Ngày bắt đầu</th>
+                                <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">Hạn hoàn thành</th>
+
+                                <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">Giờ làm</th>
+                                <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">Trạng thái</th>
+                                <th class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-600">Thao tác</th>
+                              </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200">
+                              <template v-for="subtask in detail.subtasks || []" :key="`subtask-${detail.id}-${subtask.id}`">
+                              <tr>
+                                <td class="px-3 py-2 text-sm text-slate-700">
+                                  <div class="font-semibold text-slate-900">{{ subtask.title }}</div>
+                                  <div v-if="subtask.description" class="mt-1 text-xs text-slate-500">{{ subtask.description }}</div>
+                                  <div class="mt-1 text-xs text-slate-500">Thời lượng dự kiến: {{ subtask.duration_days }} ngày</div>
+                                  <div v-if="subtask.is_delayed" class="mt-1 text-xs font-semibold text-rose-600">
+                                    Quá hạn {{ subtask.delay_days || 1 }} ngày
+                                  </div>
+                                </td>
+                                <td class="px-3 py-2 text-sm text-slate-700">
+                                  <template v-if="subtask.assigned_name">
+                                    <div class="font-semibold text-slate-900">{{ subtask.assigned_name }}</div>
+                                    <div class="text-xs text-slate-500">{{ subtask.assigned_code || '-' }}</div>
+                                  </template>
+                                  <span v-else class="text-xs text-slate-500">Chưa phân công</span>
+                                </td>
+                                <td class="px-3 py-2 text-sm text-slate-700">{{ formatDate(subtask.start_date) }}</td>
+                                <td class="px-3 py-2 text-sm text-slate-700">{{ formatDate(subtask.due_date) }}</td>
+                                <td class="px-3 py-2 text-sm text-slate-700">
+                                  <div class="font-semibold text-slate-900">{{ formatHours(subtask.actual_hours) }}/{{ formatHours(subtask.estimated_hours) }} giờ</div>
+                                  <div class="text-[11px]" :class="Number(subtask.variance_hours || 0) > 0 ? 'text-rose-600' : 'text-slate-500'">
+                                    Lệch {{ formatHours(subtask.variance_hours) }} giờ
+                                  </div>
+                                </td>
+
+                                <td class="px-3 py-2 text-sm text-slate-700">
+                                  <select
+                                    v-if="subtask.can_update_status"
+                                    v-model="subtaskDrafts[subtask.id].status"
+                                    class="rounded-lg border border-gray-300 px-2 py-1 text-sm outline-none focus:border-blue-500"
+                                  >
+                                    <option v-for="option in implementationStatusOptionsFor(subtask.status)" :key="`subtask-status-${subtask.id}-${option.value}`" :value="option.value">
+                                      {{ option.label }}
+                                    </option>
+                                  </select>
+                                  <template v-else>{{ subtask.status_label }}</template>
+                                </td>
+                                <td class="px-3 py-2 text-center text-sm text-slate-700">
+                                  <div class="flex flex-wrap justify-center gap-2">
+                                    <button
+                                      v-if="subtask.can_log_work"
+                                      type="button"
+                                      class="rounded-lg border border-emerald-200 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                                      @click="toggleWorkLogForm(subtask)"
+                                    >
+                                      {{ workLogExpandedIds[subtask.id] ? 'Ẩn ghi giờ' : 'Ghi giờ' }}
+                                    </button>
+                                    <button
+                                      v-if="subtask.can_update_status"
+                                      type="button"
+                                      class="rounded-lg border border-blue-200 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                                      @click="updateSubtaskStatus(detail, subtask)"
+                                    >
+                                      Cập nhật
+                                    </button>
+                                    <button
+                                      v-if="detail.can_update_subtask"
+                                      type="button"
+                                      class="rounded-lg border border-gray-300 px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                                      @click="editSubtask(detail, subtask)"
+                                    >
+                                      Sửa
+                                    </button>
+                                    <button
+                                      v-if="detail.can_delete_subtask"
+                                      type="button"
+                                      class="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                                      @click="removeSubtask(detail, subtask)"
+                                    >
+                                      Xóa
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                              <tr v-if="subtask.can_log_work && workLogExpandedIds[subtask.id]">
+                                <td colspan="7" class="bg-slate-50 px-3 py-2">
+                                  <div class="rounded-lg border border-slate-200 bg-white p-2">
+                                    <div class="grid grid-cols-1 gap-2 md:grid-cols-[150px_120px_minmax(0,1fr)_auto]">
+                                      <div>
+                                        <label class="mb-1 block text-xs font-medium text-slate-600">Ngày làm việc</label>
+                                        <div class="relative">
+                                          <input
+                                            v-model="workLogForms[subtask.id].work_date"
+                                            type="date"
+                                            class="project-date-input w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm outline-none focus:border-blue-500"
+                                          />
+                                          <button
+                                            type="button"
+                                            class="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-blue-600"
+                                            @click="openDatePicker"
+                                          >
+                                            <Calendar2Line class="h-4 w-4" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <label class="mb-1 block text-xs font-medium text-slate-600">Số giờ thực tế</label>
+                                        <input
+                                          v-model="workLogForms[subtask.id].hours"
+                                          type="number"
+                                          min="0.25"
+                                          max="24"
+                                          step="0.25"
+                                          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                          placeholder="VD: 2.5"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label class="mb-1 block text-xs font-medium text-slate-600">Nội dung đã làm</label>
+                                        <input
+                                          v-model="workLogForms[subtask.id].note"
+                                          type="text"
+                                          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                          placeholder="Ghi chú phần việc đã thực hiện"
+                                        />
+                                      </div>
+                                      <div class="flex items-end">
+                                        <button
+                                          type="button"
+                                          class="rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+                                          @click="saveWorkLog(detail, subtask)"
+                                        >
+                                          Ghi giờ
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <div v-if="(subtask.work_logs || []).length" class="mt-2 divide-y divide-slate-100 border-t border-slate-100 pt-1">
+                                      <div
+                                        v-for="workLog in subtask.work_logs"
+                                        :key="`work-log-${workLog.id}`"
+                                        class="grid grid-cols-[90px_70px_minmax(0,1fr)_auto] items-center gap-2 py-1 text-xs"
+                                      >
+                                        <div class="text-slate-500">{{ formatDate(workLog.work_date) }}</div>
+                                        <div class="font-semibold text-slate-800">{{ formatHours(workLog.hours) }} giờ</div>
+                                        <div class="truncate text-slate-500">{{ workLog.note || '-' }}</div>
+                                        <div class="text-right">
+                                              <button
+                                                v-if="workLog.can_delete"
+                                                type="button"
+                                                class="rounded border border-rose-200 px-2 py-0.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                                                @click="removeWorkLog(detail, subtask, workLog)"
+                                              >
+                                                Xóa
+                                              </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                              </template>
+                              <tr v-if="!(detail.subtasks || []).length">
+                                <td colspan="7" class="px-3 py-4 text-center text-sm text-slate-500">
+                                  Chưa có công việc con. Thêm công việc con để hệ thống tự tính tiến độ đầu việc theo số ngày và hạn hoàn thành.
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                  </template>
                   <tr v-if="!selectedImplementationDetails.length">
                     <td colspan="8" class="px-3 py-4 text-center text-sm text-gray-500">
                       Chưa có đầu việc triển khai.
@@ -983,7 +1310,8 @@
               </table>
             </div>
 
-            <div v-for="detail in selectedImplementationDetails" :key="`impl-comment-${detail.id}`" class="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <template v-for="detail in selectedImplementationDetails" :key="`impl-comment-${detail.id}`">
+            <div v-if="expandedSubtaskIds[detail.id]" class="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
               <div class="mb-2 flex items-center justify-between gap-3">
                 <div class="text-xs font-semibold uppercase tracking-wide text-gray-600">
                   Thảo luận - #{{ detail.id }}
@@ -1044,8 +1372,10 @@
                 </div>
               </div>
             </div>
+            </template>
 
-            <div v-for="detail in selectedImplementationDetails" :key="`impl-log-${detail.id}`" class="mt-3 rounded-xl border border-gray-200 p-3">
+            <template v-for="detail in selectedImplementationDetails" :key="`impl-log-${detail.id}`">
+            <div v-if="expandedSubtaskIds[detail.id]" class="mt-3 rounded-xl border border-gray-200 p-3">
               <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-600">
                 Lịch sử cập nhật - #{{ detail.id }}
               </div>
@@ -1057,6 +1387,7 @@
                 <div v-if="!(detail.logs || []).length">Chưa có lịch sử cập nhật.</div>
               </div>
             </div>
+            </template>
           </div>
 
           <div v-if="activeDetailTab === 'attachments'" class="rounded-xl border border-gray-200 p-4 lg:col-span-3">
@@ -1093,6 +1424,15 @@
                     <td class="px-3 py-2 text-sm text-gray-700">{{ formatDateTime(attachment.created_at) }}</td>
                     <td class="px-3 py-2 text-center text-sm text-gray-700">
                       <div class="flex flex-wrap items-center justify-center gap-2">
+                        <a
+                          v-if="attachment.can_preview"
+                          :href="attachment.preview_url"
+                          target="_blank"
+                          rel="noopener"
+                          class="rounded-lg border border-emerald-200 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                        >
+                          Xem
+                        </a>
                         <a
                           :href="attachment.download_url"
                           class="rounded-lg border border-blue-200 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
@@ -1199,6 +1539,12 @@ const activeDetailTab = ref('members')
 const memberRoleDrafts = ref({})
 const rolePermissionDrafts = ref({})
 const implementationDrafts = ref({})
+const subtaskDrafts = ref({})
+const subtaskForms = ref({})
+const workLogForms = ref({})
+const workLogExpandedIds = ref({})
+const editingSubtaskIds = ref({})
+const expandedSubtaskIds = ref({})
 const commentDrafts = ref({})
 const editingImplementationId = ref(null)
 const activeRolePermissionId = ref(null)
@@ -1212,6 +1558,20 @@ const newMember = reactive({
 const newRole = reactive({
   name: '',
 })
+
+const defaultProjectStatus = 'in_progress'
+const projectStatusTransitions = {
+  planning: ['in_progress', 'on_hold'],
+  in_progress: ['on_hold', 'completed'],
+  on_hold: ['in_progress'],
+  completed: [],
+}
+const implementationStatusTransitions = {
+  planned: ['in_progress'],
+  in_progress: ['completed', 'cancelled'],
+  cancelled: ['in_progress'],
+  completed: [],
+}
 
 const implementationForm = reactive({
   content: '',
@@ -1233,12 +1593,25 @@ const form = useForm({
   name: '',
   start_date: '',
   end_date: '',
-  status: 'planning',
+  status: defaultProjectStatus,
   description: '',
   members: [],
 })
 
 const statusOptions = computed(() => props.status_options || [])
+const formStatusOptions = computed(() => {
+  if (!isEditing.value) {
+    return statusOptions.value
+  }
+
+  const currentStatus = selectedProject.value?.status || form.status || defaultProjectStatus
+  const allowedStatuses = new Set([
+    currentStatus,
+    ...(projectStatusTransitions[currentStatus] || []),
+  ])
+
+  return statusOptions.value.filter((option) => allowedStatuses.has(option.value))
+})
 const employeeOptions = computed(() => props.employee_options || [])
 const employeeSelectOptions = computed(() => employeeOptions.value.map((option) => ({
   value: option.id,
@@ -1280,6 +1653,19 @@ const selectedProjectMemberOptions = computed(() => {
   }))
 })
 
+function hasDetailSubtasks(detail) {
+  return Number(detail?.subtask_summary?.total || 0) > 0
+}
+
+function implementationStatusOptionsFor(currentStatus) {
+  const allowedStatuses = new Set([
+    currentStatus,
+    ...(implementationStatusTransitions[currentStatus] || []),
+  ])
+
+  return implementationStatusOptions.value.filter((option) => allowedStatuses.has(option.value))
+}
+
 const memberErrors = computed(() => {
   return Object.entries(form.errors)
     .filter(([key]) => key.startsWith('members'))
@@ -1293,9 +1679,54 @@ function buildImplementationDrafts(project) {
   }]))
 }
 
+function emptySubtaskForm() {
+  return {
+    title: '',
+    description: '',
+    assigned_to: '',
+    start_date: '',
+    due_date: '',
+  }
+}
+
+function buildSubtaskForms(project) {
+  return Object.fromEntries((project?.implementation_details || []).map((detail) => [detail.id, emptySubtaskForm()]))
+}
+
+function buildSubtaskDrafts(project) {
+  return Object.fromEntries((project?.implementation_details || []).flatMap((detail) =>
+    (detail.subtasks || []).map((subtask) => [subtask.id, {
+      status: subtask.status || 'planned',
+      weight_percent: subtask.weight_percent ?? 0,
+    }])
+  ))
+}
+
+function defaultWorkLogForm() {
+  return {
+    work_date: new Date().toISOString().slice(0, 10),
+    hours: '',
+    note: '',
+  }
+}
+
+function buildWorkLogForms(project) {
+  return Object.fromEntries((project?.implementation_details || []).flatMap((detail) =>
+    (detail.subtasks || []).map((subtask) => [subtask.id, defaultWorkLogForm()])
+  ))
+}
+
+function buildWorkLogExpandedIds(project, currentExpanded = {}) {
+  return Object.fromEntries((project?.implementation_details || []).flatMap((detail) =>
+    (detail.subtasks || []).map((subtask) => [subtask.id, Boolean(currentExpanded?.[subtask.id])])
+  ))
+}
+
 function buildRolePermissionDrafts(project) {
   return Object.fromEntries((project?.roles || []).map((role) => [role.id, [...(role.permissions || [])]]))
 }
+
+
 
 function buildCommentDrafts(project, currentDrafts = {}) {
   return Object.fromEntries((project?.implementation_details || []).map((detail) => [detail.id, currentDrafts?.[detail.id] || '']))
@@ -1319,6 +1750,17 @@ function normalizeProgressForStatus(progress, status) {
   return numericProgress
 }
 
+function addDaysToDate(dateValue, days) {
+  if (!dateValue) return ''
+  const [year, month, day] = String(dateValue).split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  date.setDate(date.getDate() + Math.max(1, Number(days || 1)) - 1)
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
 function syncImplementationFormProgress() {
   implementationForm.progress_percent = normalizeProgressForStatus(
     implementationForm.progress_percent,
@@ -1333,11 +1775,24 @@ function syncImplementationDraftProgress(detail) {
   draft.progress_percent = normalizeProgressForStatus(draft.progress_percent, draft.detail_status)
 }
 
+
+
 function syncSelectedProjectState(project, currentCommentDrafts = commentDrafts.value) {
+  const currentExpandedSubtasks = expandedSubtaskIds.value
+  const currentExpandedWorkLogs = workLogExpandedIds.value
   selectedProject.value = project
   memberRoleDrafts.value = Object.fromEntries((project?.members || []).map((member) => [member.id, member.role_name || '']))
   rolePermissionDrafts.value = buildRolePermissionDrafts(project)
   implementationDrafts.value = buildImplementationDrafts(project)
+  subtaskDrafts.value = buildSubtaskDrafts(project)
+  subtaskForms.value = buildSubtaskForms(project)
+  workLogForms.value = buildWorkLogForms(project)
+  workLogExpandedIds.value = buildWorkLogExpandedIds(project, currentExpandedWorkLogs)
+  editingSubtaskIds.value = {}
+  expandedSubtaskIds.value = Object.fromEntries((project?.implementation_details || []).map((detail) => [
+    detail.id,
+    Boolean(currentExpandedSubtasks?.[detail.id]),
+  ]))
   commentDrafts.value = buildCommentDrafts(project, currentCommentDrafts)
 }
 
@@ -1388,7 +1843,7 @@ function openCreateModal() {
   selectedProject.value = null
   form.reset()
   form.clearErrors()
-  form.status = statusOptions.value?.[0]?.value || 'planning'
+  form.status = defaultProjectStatus
   form.members = []
   isFormModalOpen.value = true
 }
@@ -1400,7 +1855,7 @@ function openEditModal(project) {
   form.name = project.name || ''
   form.start_date = project.start_date || ''
   form.end_date = project.end_date || ''
-  form.status = project.status || (statusOptions.value?.[0]?.value || 'planning')
+  form.status = project.status || defaultProjectStatus
   form.description = project.description || ''
   form.members = (project.members || []).map((member) => ({
     employee_profile_id: member.employee_profile_id || '',
@@ -1471,21 +1926,32 @@ function submitOptions(successMessage) {
   }
 }
 
-function openDatePicker(inputRef) {
-  if (!inputRef) return
+function openDatePicker(target) {
+  const input = target?.currentTarget
+    ? target.currentTarget.parentElement?.querySelector('input[type="date"]')
+    : target
 
-  inputRef.focus()
-  if (typeof inputRef.showPicker === 'function') {
-    inputRef.showPicker()
+  if (!input) return
+
+  input.focus()
+  if (typeof input.showPicker === 'function') {
+    input.showPicker()
     return
   }
 
-  inputRef.click()
+  input.click()
 }
 
 function setMemberJoinedDateInput(inputRef, index) {
   if (inputRef) {
     memberJoinedDateInputs.value[index] = inputRef
+  }
+}
+
+function toggleSubtasks(detail) {
+  expandedSubtaskIds.value = {
+    ...expandedSubtaskIds.value,
+    [detail.id]: !expandedSubtaskIds.value[detail.id],
   }
 }
 
@@ -1656,7 +2122,13 @@ function saveImplementationDetail() {
     return
   }
   if (!implementationForm.duration_days || Number(implementationForm.duration_days) < 1) {
-    toast.error('Số ngày thực hiện phải lớn hơn 0.')
+    toast.error('Thời lượng dự kiến phải lớn hơn 0 ngày.')
+    return
+  }
+
+  const expectedEndDate = addDaysToDate(implementationForm.execution_date, implementationForm.duration_days)
+  if (selectedProject.value.end_date && expectedEndDate > selectedProject.value.end_date) {
+    toast.error(`Đầu việc chính không được vượt quá thời hạn dự án (${formatDate(selectedProject.value.end_date)}).`)
     return
   }
 
@@ -1721,6 +2193,192 @@ function updateImplementationStatus(detail) {
     },
     onError: (errors) => {
       toast.error(errors?.detail || errors?.detail_status || errors?.progress_percent || 'Không thể cập nhật trạng thái đầu việc.')
+    },
+  })
+}
+
+function editSubtask(detail, subtask) {
+  editingSubtaskIds.value = {
+    ...editingSubtaskIds.value,
+    [detail.id]: subtask.id,
+  }
+  subtaskForms.value[detail.id] = {
+    title: subtask.title || '',
+    description: subtask.description || '',
+    assigned_to: subtask.assigned_to ? String(subtask.assigned_to) : '',
+    start_date: subtask.start_date || '',
+    due_date: subtask.due_date || '',
+  }
+}
+
+function cancelSubtaskEdit(detailId) {
+  editingSubtaskIds.value = {
+    ...editingSubtaskIds.value,
+    [detailId]: null,
+  }
+  subtaskForms.value[detailId] = emptySubtaskForm()
+}
+
+function saveSubtask(detail) {
+  if (!selectedProject.value) return
+  const form = subtaskForms.value[detail.id] || emptySubtaskForm()
+  if (!form.title.trim()) {
+    toast.error('Vui lòng nhập tên công việc con.')
+    return
+  }
+  if (!form.start_date) {
+    toast.error('Vui lòng chọn ngày bắt đầu công việc con.')
+    return
+  }
+  if (!form.due_date) {
+    toast.error('Vui lòng chọn ngày kết thúc công việc con.')
+    return
+  }
+  if (form.due_date < form.start_date) {
+    toast.error('Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.')
+    return
+  }
+
+  if (detail.execution_date && form.start_date < detail.execution_date) {
+    toast.error(`Ngày bắt đầu công việc con không được trước ngày bắt đầu đầu việc chính (${formatDate(detail.execution_date)}).`)
+    return
+  }
+  if (detail.expected_end_date && form.due_date > detail.expected_end_date) {
+    toast.error(`Công việc con không được vượt quá thời hạn đầu việc chính (${formatDate(detail.expected_end_date)}).`)
+    return
+  }
+
+  const payload = {
+    title: form.title.trim(),
+    description: form.description || null,
+    assigned_to: form.assigned_to || null,
+    start_date: form.start_date,
+    due_date: form.due_date,
+  }
+
+  const editingId = editingSubtaskIds.value[detail.id]
+  const options = {
+    preserveState: true,
+    preserveScroll: true,
+    onSuccess: (page) => {
+      toast.success(editingId ? 'Đã cập nhật công việc con.' : 'Đã thêm công việc con.')
+      cancelSubtaskEdit(detail.id)
+      syncSelectedProjectFromPage(page, { keepCommentDrafts: true })
+    },
+    onError: (errors) => {
+      toast.error(errors?.title || errors?.start_date || errors?.due_date || errors?.subtask || 'Không thể lưu công việc con.')
+    },
+  }
+
+  if (editingId) {
+    router.put(route('projects.implementation-details.subtasks.update', [selectedProject.value.id, detail.id, editingId]), payload, options)
+    return
+  }
+
+  router.post(route('projects.implementation-details.subtasks.store', [selectedProject.value.id, detail.id]), payload, options)
+}
+
+function updateSubtaskStatus(detail, subtask) {
+  if (!selectedProject.value) return
+  const draft = subtaskDrafts.value[subtask.id] || {}
+  router.put(route('projects.implementation-details.subtasks.status', [selectedProject.value.id, detail.id, subtask.id]), {
+    status: draft.status || subtask.status,
+  }, {
+    preserveState: true,
+    preserveScroll: true,
+    onSuccess: (page) => {
+      toast.success('Đã cập nhật trạng thái công việc con.')
+      syncSelectedProjectFromPage(page, { keepCommentDrafts: true })
+    },
+    onError: (errors) => {
+      toast.error(errors?.subtask || errors?.status || 'Không thể cập nhật trạng thái công việc con.')
+    },
+  })
+}
+
+function toggleWorkLogForm(subtask) {
+  workLogExpandedIds.value = {
+    ...workLogExpandedIds.value,
+    [subtask.id]: !workLogExpandedIds.value[subtask.id],
+  }
+}
+
+function saveWorkLog(detail, subtask) {
+  if (!selectedProject.value) return
+  const form = workLogForms.value[subtask.id] || defaultWorkLogForm()
+  if (!form.work_date) {
+    toast.error('Vui lòng chọn ngày làm việc.')
+    return
+  }
+  if (!form.hours || Number(form.hours) <= 0) {
+    toast.error('Vui lòng nhập số giờ thực tế đã làm.')
+    return
+  }
+
+  router.post(route('projects.implementation-details.subtasks.work-logs.store', [selectedProject.value.id, detail.id, subtask.id]), {
+    work_date: form.work_date,
+    hours: Number(form.hours),
+    note: form.note || null,
+  }, {
+    preserveState: true,
+    preserveScroll: true,
+    onSuccess: (page) => {
+      toast.success('Đã ghi nhận giờ làm cho công việc.')
+      workLogForms.value[subtask.id] = defaultWorkLogForm()
+      syncSelectedProjectFromPage(page, { keepCommentDrafts: true })
+    },
+    onError: (errors) => {
+      toast.error(errors?.work_log || errors?.work_date || errors?.hours || 'Không thể ghi nhận giờ làm.')
+    },
+  })
+}
+
+async function removeWorkLog(detail, subtask, workLog) {
+  if (!selectedProject.value) return
+  const confirmed = await openConfirm({
+    title: 'Xóa log giờ làm',
+    message: 'Bạn có chắc muốn xóa dòng ghi giờ làm này?',
+    okText: 'Xóa log',
+    cancelText: 'Đóng',
+    variant: 'danger',
+    eyebrow: 'Giờ làm',
+  })
+  if (!confirmed) return
+
+  router.delete(route('projects.implementation-details.subtasks.work-logs.destroy', [selectedProject.value.id, detail.id, subtask.id, workLog.id]), {
+    preserveState: true,
+    preserveScroll: true,
+    onSuccess: (page) => {
+      toast.success('Đã xóa log giờ làm.')
+      syncSelectedProjectFromPage(page, { keepCommentDrafts: true })
+    },
+    onError: (errors) => {
+      toast.error(errors?.work_log || 'Không thể xóa log giờ làm.')
+    },
+  })
+}
+
+async function removeSubtask(detail, subtask) {
+  if (!selectedProject.value) return
+  const confirmed = await openConfirm({
+    title: 'Xóa công việc con',
+    message: `Bạn có chắc muốn xóa công việc con "${subtask.title}"?`,
+    okText: 'Xóa công việc con',
+    cancelText: 'Đóng',
+    variant: 'danger',
+    eyebrow: 'Triển khai',
+  })
+  if (!confirmed) return
+
+  router.delete(route('projects.implementation-details.subtasks.destroy', [selectedProject.value.id, detail.id, subtask.id]), {
+    preserveState: true,
+    preserveScroll: true,
+    onSuccess: (page) => {
+      toast.success('Đã xóa công việc con.')
+      syncSelectedProjectFromPage(page, { keepCommentDrafts: true })
+    },
+    onError: (errors) => {
+      toast.error(errors?.subtask || 'Không thể xóa công việc con.')
     },
   })
 }
@@ -1946,8 +2604,36 @@ function formatDate(value) {
   return new Date(value).toLocaleDateString('vi-VN')
 }
 
+function scheduleDaysLabel(startDate, durationDays) {
+  const totalDays = Math.max(1, Number(durationDays || 1))
+  if (!startDate) {
+    return `0/${totalDays} ngày`
+  }
+
+  const [year, month, day] = String(startDate).split('-').map(Number)
+  const start = new Date(year, month - 1, day)
+  const today = new Date()
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const diffDays = Math.floor((todayStart - start) / 86400000) + 1
+  const elapsedDays = Math.max(0, Math.min(totalDays, diffDays))
+
+  return `${elapsedDays}/${totalDays} ngày`
+}
+
+function formatHours(value) {
+  const hours = Number(value || 0)
+  return Number.isInteger(hours) ? String(hours) : hours.toFixed(2)
+}
+
 function formatDateTime(value) {
   if (!value) return '-'
   return new Date(value).toLocaleString('vi-VN')
 }
 </script>
+
+<style scoped>
+.project-date-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0;
+}
+</style>

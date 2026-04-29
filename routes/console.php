@@ -6,6 +6,7 @@ use App\Models\Position;
 use App\Models\PositionCapability as PositionCapabilityModel;
 use App\Services\AttendanceService;
 use App\Services\FeedbackEscalationService;
+use App\Services\ProjectReminderService;
 use App\Support\PositionRoleResolver;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Schedule;
@@ -111,6 +112,20 @@ Artisan::command('feedbacks:escalate-stale {--hours=}', function () {
     $this->info("Escalated {$count} stale feedback message(s) older than {$hours} hour(s).");
 })->purpose('Escalate unreplied feedback messages to the next superior level after a timeout');
 
+Artisan::command('projects:send-deadline-reminders {--days=3}', function () {
+    $days = max(1, (int) $this->option('days'));
+    $count = app(ProjectReminderService::class)->sendDeadlineReminders($days);
+
+    $this->info("Sent {$count} project deadline reminder(s).");
+})->purpose('Send project task deadline reminders');
+
+Artisan::command('projects:send-periodic-report {period=weekly}', function (string $period) {
+    $period = in_array($period, ['weekly', 'monthly'], true) ? $period : 'weekly';
+    $count = app(ProjectReminderService::class)->sendPeriodicReports($period);
+
+    $this->info("Sent {$count} {$period} project report(s).");
+})->purpose('Send weekly or monthly project summary reports');
+
 Schedule::command('attendance:mark-absent ' . Carbon::now('Asia/Ho_Chi_Minh')->subDay()->toDateString())
     ->dailyAt('00:05')
     ->timezone('Asia/Ho_Chi_Minh')
@@ -122,3 +137,18 @@ Schedule::command('attendance:close-unexplained-absences --days=1')
     ->withoutOverlapping();
 
 Schedule::command('feedbacks:escalate-stale')->hourly();
+
+Schedule::command('projects:send-deadline-reminders --days=3')
+    ->dailyAt('08:00')
+    ->timezone('Asia/Ho_Chi_Minh')
+    ->withoutOverlapping();
+
+Schedule::command('projects:send-periodic-report weekly')
+    ->weeklyOn(1, '08:30')
+    ->timezone('Asia/Ho_Chi_Minh')
+    ->withoutOverlapping();
+
+Schedule::command('projects:send-periodic-report monthly')
+    ->monthlyOn(1, '08:45')
+    ->timezone('Asia/Ho_Chi_Minh')
+    ->withoutOverlapping();

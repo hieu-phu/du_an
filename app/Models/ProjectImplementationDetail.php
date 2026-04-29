@@ -76,4 +76,14 @@ class ProjectImplementationDetail extends Model
     {
         return $this->hasMany(ProjectDetailComment::class, 'implementation_detail_id');
     }
+
+    public function subtasks(): HasMany
+    {
+        return $this->hasMany(ProjectImplementationSubtask::class, 'project_implementation_detail_id');
+    }
+
+    public function workLogs(): HasMany
+    {
+        return $this->hasMany(ProjectWorkLog::class, 'project_implementation_detail_id');
+    }
 }

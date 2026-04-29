@@ -76,4 +76,9 @@ class Project extends Model
     {
         return $this->hasMany(ProjectAttachment::class);
     }
+
+    public function workLogs(): HasMany
+    {
+        return $this->hasMany(ProjectWorkLog::class);
+    }
 }

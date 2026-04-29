@@ -20,6 +20,7 @@ class ProjectMilestone extends Model
         'planned_start_date',
         'planned_end_date',
         'completed_at',
+        'deadline_reminded_at',
         'status',
         'sort_order',
         'created_by',
@@ -30,6 +31,7 @@ class ProjectMilestone extends Model
         'planned_start_date' => 'date',
         'planned_end_date' => 'date',
         'completed_at' => 'date',
+        'deadline_reminded_at' => 'datetime',
         'sort_order' => 'integer',
     ];
 
