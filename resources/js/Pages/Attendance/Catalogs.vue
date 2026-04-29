@@ -66,20 +66,6 @@
             </div>
           </div>
 
-          <div class="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
-            <div class="mb-4">
-              <h4 class="text-sm font-semibold text-blue-900">Quy tắc tăng ca</h4>
-              <p class="mt-1 text-sm text-blue-800">Phần này là cấu hình riêng cho tăng ca của ca làm. Có thể bỏ trống nếu ca không sử dụng OT có quy tắc riêng.</p>
-            </div>
-
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <InputDate v-model="shiftForm.overtime_start_time" label="Giờ bắt đầu tăng ca" placeholder="Không cấu hình" :config="timePickerConfig" :error="shiftForm.errors.overtime_start_time" />
-              <InputDate v-model="shiftForm.overtime_end_time" label="Giờ kết thúc tăng ca" placeholder="Không cấu hình" :config="timePickerConfig" :error="shiftForm.errors.overtime_end_time" />
-              <Field label="Tiền tăng ca / giờ" :error="shiftForm.errors.overtime_hourly_rate">
-                <input v-model.number="shiftForm.overtime_hourly_rate" class="form-input" type="number" min="0" step="1000" placeholder="Ví dụ: 50000">
-              </Field>
-            </div>
-          </div>
 
           <Field label="Ghi chú" :error="shiftForm.errors.description">
             <textarea v-model.trim="shiftForm.description" class="form-input min-h-[74px]" placeholder="Quy định riêng của ca làm nếu có"></textarea>
@@ -93,7 +79,6 @@
               <div>Thời lượng ca sau khi trừ nghỉ: <strong>{{ formatMinutes(netShiftMinutes) }}</strong></div>
               <div>Thời gian tính công theo phút chuẩn: <strong>{{ formatMinutes(standardMinutes) }}</strong></div>
               <div>Nghỉ giao ca: <strong>{{ formatMinutes(Number(shiftForm.handover_break_minutes || 0)) }}</strong></div>
-              <div>Khung tăng ca: <strong>{{ overtimePreviewLabel }}</strong></div>
               <div>Trạng thái kiểm tra dữ liệu: <strong>{{ shiftPreviewError || 'Hợp lệ để lưu' }}</strong></div>
             </div>
           </div>
@@ -277,7 +262,7 @@
               <th class="p-2">Tên</th>
               <th class="p-2">Loại</th>
               <th class="p-2">Tính lương</th>
-              <th class="p-2">Lặp lại</th>
+              <th class="p-2 text-center">Lặp lại</th>
               <th class="p-2">Tác vụ</th>
             </tr>
           </thead>
@@ -298,11 +283,18 @@
                   {{ item.is_paid_leave ? 'Có lương' : 'Không lương' }}
                 </span>
               </td>
-              <td class="p-2">
-                <span v-if="item.is_system || item.is_recurring" class="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+              <td class="p-2 text-center">
+                <div v-if="item.is_system || item.is_recurring" class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 border border-blue-100 shadow-sm">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  </svg>
                   Hàng năm
+                </div>
+                <span v-else class="text-gray-300">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 12H6" />
+                  </svg>
                 </span>
-                <span v-else class="text-gray-400">-</span>
               </td>
               <td class="p-2 space-x-2">
                 <template v-if="!item.is_system">
@@ -610,34 +602,13 @@ const breakMinutes = computed(() => {
 })
 const netShiftMinutes = computed(() => Math.max(0, shiftDurationMinutes.value - breakMinutes.value))
 const standardMinutes = computed(() => Number(shiftForm.standard_minutes || 0))
-const overtimeGapMinutes = computed(() => {
-  if (!shiftForm.overtime_start_time || !shiftForm.end_time) return 0
-  const shiftStartMinutes = timeToMinutes(shiftForm.start_time)
-  let shiftEndMinutes = timeToMinutes(shiftForm.end_time)
-  let overtimeStartMinutes = timeToMinutes(shiftForm.overtime_start_time)
-
-  if (shiftForm.is_overnight) {
-    if (shiftEndMinutes <= shiftStartMinutes) shiftEndMinutes += 1440
-    if (overtimeStartMinutes < shiftStartMinutes) overtimeStartMinutes += 1440
-  }
-
-  return overtimeStartMinutes - shiftEndMinutes
-})
-const overtimePreviewLabel = computed(() => {
-  if (!shiftForm.overtime_start_time || !shiftForm.overtime_end_time) return 'Chưa cấu hình'
-  return `${shiftForm.overtime_start_time} - ${shiftForm.overtime_end_time}`
-})
 const shiftPreviewError = computed(() => {
   if (shiftDurationMinutes.value <= 0) return 'Giờ kết thúc phải sau giờ bắt đầu'
   if ((shiftForm.break_start_time && !shiftForm.break_end_time) || (!shiftForm.break_start_time && shiftForm.break_end_time)) return 'Cần nhập đủ giờ nghỉ'
-  if ((shiftForm.overtime_start_time && !shiftForm.overtime_end_time) || (!shiftForm.overtime_start_time && shiftForm.overtime_end_time)) return 'Cần nhập đủ giờ tăng ca'
   if (breakMinutes.value < 0 || breakMinutes.value >= shiftDurationMinutes.value || !rangeInsideShift(shiftForm.start_time, shiftForm.end_time, shiftForm.break_start_time, shiftForm.break_end_time, shiftForm.is_overnight)) return 'Giờ nghỉ không hợp lệ'
   if (Number(shiftForm.handover_break_minutes || 0) < 0) return 'Nghỉ giao ca không hợp lệ'
-  if (!shiftForm.allows_overtime && (shiftForm.overtime_start_time || shiftForm.overtime_end_time || shiftForm.overtime_hourly_rate)) return 'Đang tắt tính tăng ca nhưng vẫn còn cấu hình OT'
   if (standardMinutes.value !== netShiftMinutes.value) return `Phút chuẩn phải bằng ${netShiftMinutes.value} phút`
   if (Number(shiftForm.half_day_minutes) > Number(shiftForm.standard_minutes)) return 'Ngưỡng nửa công vượt phút chuẩn'
-  if (shiftForm.overtime_start_time && shiftForm.overtime_end_time && overtimeGapMinutes.value > 0) return `Không được để khoảng hở ${shiftForm.end_time}-${shiftForm.overtime_start_time}`
-  if (shiftForm.overtime_start_time && shiftForm.overtime_end_time && overtimeGapMinutes.value < 0) return 'Giờ bắt đầu tăng ca phải nối tiếp ngay sau giờ kết thúc ca'
   return ''
 })
 

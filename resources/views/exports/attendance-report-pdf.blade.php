@@ -54,10 +54,10 @@
 
 <table>
     <tr>
-        <td colspan="{{ $daysInMonth + 6 }}" class="title-main">BẢNG CHẤM CÔNG</td>
+        <td colspan="{{ $daysInMonth + 8 }}" class="title-main">BẢNG CHẤM CÔNG</td>
     </tr>
     <tr>
-        <td colspan="{{ $daysInMonth + 6 }}" class="title-month">Tháng {{ $month }} năm {{ $year }}</td>
+        <td colspan="{{ $daysInMonth + 8 }}" class="title-month">Tháng {{ $month }} năm {{ $year }}</td>
     </tr>
     
     <tr>
@@ -70,6 +70,8 @@
         <th class="header-summary">Ngày Nghỉ Hưởng nguyên Lương</th>
         <th class="header-summary">Ngày ghi không lương</th>
         <th class="header-summary">Vắng tự ý nghỉ</th>
+        <th class="header-summary">Số lần VP</th>
+        <th class="header-summary">Chi tiết vi phạm</th>
     </tr>
     
     <tr>
@@ -82,6 +84,8 @@
         <td></td>
         <td></td>
         <td></td>
+        <td></td>
+        <td></td>
     </tr>
 
     @php
@@ -90,6 +94,7 @@
         $grandTotalPaidLeave = 0;
         $grandTotalUnpaidLeave = 0;
         $grandTotalAbsent = 0;
+        $grandTotalViolation = 0;
     @endphp
     
     @foreach($records->groupBy('department_name') as $department => $departmentRecords)
@@ -98,6 +103,7 @@
             $deptTotalPaidLeave = 0;
             $deptTotalUnpaidLeave = 0;
             $deptTotalAbsent = 0;
+            $deptTotalViolation = 0;
             
             // ✅ GOM NHÓM DỮ LIỆU THEO NHÂN VIÊN, KHÔNG CHO LẶP LẠI
             $groupedEmployees = [];
@@ -127,6 +133,8 @@
             <td class="department-row"></td>
             <td class="department-row"></td>
             <td class="department-row"></td>
+            <td class="department-row"></td>
+            <td class="department-row"></td>
         </tr>
         
         @foreach($groupedEmployees as $employee)
@@ -136,6 +144,8 @@
                 $paidLeaveDays = 0;
                 $unpaidLeaveDays = 0;
                 $absentDays = 0;
+                $violationCount = 0;
+                $violationDetails = [];
             @endphp
             <tr>
                 <td>{{ $stt++ }}</td>
@@ -150,6 +160,21 @@
                         if ($mark === 'P' || $mark === 'L') $paidLeaveDays++;
                         if ($mark === 'Ro') $unpaidLeaveDays++;
                         if ($mark === 'V') $absentDays++;
+                        
+                        $vStatus = $record['violation_status'] ?? null;
+                        if ($vStatus && $vStatus !== 'none' && $vStatus !== '') {
+                            $violationCount++;
+                            $label = match($vStatus) {
+                                'late' => 'Đi muộn',
+                                'early_leave' => 'Về sớm',
+                                'late_early' => 'Muộn+Sớm',
+                                'missing_check_in' => 'Thiếu IN',
+                                'missing_check_out' => 'Thiếu OUT',
+                                'missing_attendance' => 'Vắng',
+                                default => $vStatus
+                            };
+                            $violationDetails[] = $day . '/' . $month . ': ' . $label;
+                        }
                     @endphp
                     <td style="{{ $workedOnSpecial ? 'background-color: #90EE90; font-weight: bold;' : '' }}">
                         {{ $mark }}{{ ($workedOnSpecial && $mark === 'L') ? '+x' : '' }}
@@ -159,12 +184,15 @@
                 <td>{{ $paidLeaveDays }}</td>
                 <td>{{ $unpaidLeaveDays }}</td>
                 <td>{{ $absentDays }}</td>
+                <td>{{ $violationCount }}</td>
+                <td style="text-align: left; font-size: 8px;">{{ implode(', ', $violationDetails) }}</td>
             </tr>
             @php
                 $deptTotalWork += $workDays;
                 $deptTotalPaidLeave += $paidLeaveDays;
                 $deptTotalUnpaidLeave += $unpaidLeaveDays;
                 $deptTotalAbsent += $absentDays;
+                $deptTotalViolation += $violationCount;
             @endphp
         @endforeach
         
@@ -178,6 +206,8 @@
             <td class="department-row">{{ $deptTotalPaidLeave }}</td>
             <td class="department-row">{{ $deptTotalUnpaidLeave }}</td>
             <td class="department-row">{{ $deptTotalAbsent }}</td>
+            <td class="department-row">{{ $deptTotalViolation }}</td>
+            <td class="department-row"></td>
         </tr>
         
         @php
@@ -185,6 +215,7 @@
             $grandTotalPaidLeave += $deptTotalPaidLeave;
             $grandTotalUnpaidLeave += $deptTotalUnpaidLeave;
             $grandTotalAbsent += $deptTotalAbsent;
+            $grandTotalViolation += $deptTotalViolation;
         @endphp
     @endforeach
     
@@ -197,6 +228,8 @@
         <td class="total-footer">{{ $grandTotalPaidLeave }}</td>
         <td class="total-footer">{{ $grandTotalUnpaidLeave }}</td>
         <td class="total-footer">{{ $grandTotalAbsent }}</td>
+        <td class="total-footer">{{ $grandTotalViolation }}</td>
+        <td class="total-footer"></td>
     </tr>
 </table>
 

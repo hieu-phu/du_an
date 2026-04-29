@@ -1135,6 +1135,9 @@ function formatMinutes(value) {
 function suggestedRequestTypeForRecord(item) {
   if (isAttendancePeriodClosed.value || !item || hasExistingResolvedRequest(item)) return null
 
+  // Khong goi y neu da duyet hoac da chot
+  if (item.approval_status === 'approved' || item.is_confirmed) return null
+
   if (hasMissingCheck(item)) {
     return 'forgot_check'
   }

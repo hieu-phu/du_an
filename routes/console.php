@@ -111,13 +111,13 @@ Artisan::command('feedbacks:escalate-stale {--hours=}', function () {
     $this->info("Escalated {$count} stale feedback message(s) older than {$hours} hour(s).");
 })->purpose('Escalate unreplied feedback messages to the next superior level after a timeout');
 
-Schedule::command('attendance:mark-absent ' . Carbon::now('Asia/Ho_Chi_Minh')->subDays((int) config('attendance.auto_mark_after_days', 2))->toDateString())
-    ->dailyAt('09:00')
+Schedule::command('attendance:mark-absent ' . Carbon::now('Asia/Ho_Chi_Minh')->subDay()->toDateString())
+    ->dailyAt('00:05')
     ->timezone('Asia/Ho_Chi_Minh')
     ->withoutOverlapping();
 
-Schedule::command('attendance:close-unexplained-absences --days=' . (int) config('attendance.auto_close_after_days', 2))
-    ->dailyAt('09:10')
+Schedule::command('attendance:close-unexplained-absences --days=1')
+    ->dailyAt('00:10')
     ->timezone('Asia/Ho_Chi_Minh')
     ->withoutOverlapping();
 

@@ -745,7 +745,6 @@ const actions = [
       class: 'rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-800',
     },
     hidden: (item) => item.approval_status !== 'pending'
-      || item.display_approval_status === 'needs_verification'
       || (Number(item.employee_authority_level || 0) >= currentAuthorityLevel.value),
     onClick: (item) => decide(item, 'approve'),
   },
@@ -860,14 +859,15 @@ async function decide(item, action) {
     message: action === 'approve' ? 'Nhập ghi chú duyệt.' : 'Nhập lý do từ chối.',
     inputLabel: action === 'approve' ? 'Ghi chú duyệt' : 'Lý do từ chối',
     inputType: 'textarea',
-    defaultValue: item.approval_note || item.note || '',
+    defaultValue: action === 'approve' ? '' : (item.approval_note || item.note || ''),
     okText: action === 'approve' ? 'Duyệt' : 'Từ chối',
     cancelText: 'Đóng',
     variant: action === 'approve' ? 'primary' : 'danger',
     eyebrow: 'Chấm công',
   })
   if (note === null) return
-  if (String(note).trim().length < 5) {
+    if (action !== 'approve' && String(note).trim().length < 5) {
+
     await openAlert({
       title: 'Ghi chú chưa hợp lệ',
       message: 'Ghi chú tối thiểu 5 ký tự.',
@@ -926,7 +926,6 @@ function isRecordSelectable(item) {
 function isRecordBulkApprovable(item) {
   return isRecordSelectable(item)
     && !needsResolvedCheckOut(item)
-    && item.display_approval_status !== 'needs_verification'
 }
 
 function bulkSelectionTitle(item) {
@@ -935,7 +934,6 @@ function bulkSelectionTitle(item) {
 
 function bulkSelectionBlockReason(item) {
   if (!isRecordSelectable(item)) return 'Không thể chọn do không đủ quyền duyệt'
-  if (item.display_approval_status === 'needs_verification') return 'Nhân viên cần giải trình trước khi duyệt'
   if (needsResolvedCheckOut(item)) return 'Không thể chọn vì thiếu check-out'
 
   return ''
@@ -1201,9 +1199,6 @@ function dayStatusBadges(item) {
 }
 
 function formatApprovalStatus(value) {
-  if (value === 'needs_verification') {
-    return 'Cần xác minh'
-  }
 
   const labels = {
     pending: 'Chờ duyệt',
@@ -1231,7 +1226,6 @@ function dayStatusClass(value) {
 function approvalStatusClass(value) {
   const classes = {
     pending: 'bg-amber-50 text-amber-700',
-    needs_verification: 'bg-orange-50 text-orange-700',
     approved: 'bg-emerald-50 text-emerald-700',
     rejected: 'bg-rose-50 text-rose-700',
   }

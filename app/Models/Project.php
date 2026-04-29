@@ -15,6 +15,7 @@ class Project extends Model
     protected $fillable = [
         'name',
         'start_date',
+        'end_date',
         'status',
         'description',
         'is_locked',
@@ -26,6 +27,7 @@ class Project extends Model
 
     protected $casts = [
         'start_date' => 'date',
+        'end_date' => 'date',
         'is_locked' => 'boolean',
         'locked_at' => 'datetime',
     ];

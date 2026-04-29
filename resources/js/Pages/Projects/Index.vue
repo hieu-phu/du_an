@@ -31,7 +31,7 @@
             </select>
           </div>
 
-          <div>
+          <div v-if="canViewPersonnelOverview">
             <label class="mb-1.5 block text-sm font-medium text-gray-700">Nhân sự tham gia</label>
             <select
               v-model="localFilters.employee_profile_id"
@@ -98,6 +98,7 @@
               <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Trạng thái</th>
               <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Tiến độ</th>
               <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Ngày bắt đầu</th>
+              <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Ngày kết thúc</th>
               <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Thành viên</th>
               <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Khóa</th>
               <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-600">Thao tác</th>
@@ -131,6 +132,7 @@
                 </div>
               </td>
               <td class="px-4 py-4 text-center text-sm text-gray-700">{{ formatDate(project.start_date) }}</td>
+              <td class="px-4 py-4 text-center text-sm text-gray-700">{{ formatDate(project.end_date) }}</td>
               <td class="px-4 py-4 text-center text-sm text-gray-700">
                 <span class="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
                   {{ project.active_members_count || 0 }}
@@ -175,7 +177,7 @@
               </td>
             </tr>
             <tr v-if="!projects.length">
-              <td colspan="7" class="px-4 py-12 text-center text-sm text-gray-500">
+              <td colspan="8" class="px-4 py-12 text-center text-sm text-gray-500">
                 Chưa có dự án phù hợp.
               </td>
             </tr>
@@ -187,7 +189,7 @@
       </div>
     </div>
 
-    <div class="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div v-if="canViewPersonnelOverview" class="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <h3 class="mb-3 text-base font-semibold text-gray-900">Danh sách dự án theo từng nhân sự</h3>
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
@@ -229,7 +231,7 @@
         </h2>
 
         <form class="space-y-4" @submit.prevent="submitForm">
-          <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
               <label class="mb-1.5 block text-sm font-medium text-gray-700">Tên dự án</label>
               <input
@@ -243,12 +245,44 @@
 
             <div>
               <label class="mb-1.5 block text-sm font-medium text-gray-700">Ngày bắt đầu</label>
-              <input
-                v-model="form.start_date"
-                type="date"
-                class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500"
-              />
+              <div class="relative">
+                <input
+                  ref="startDateInput"
+                  v-model="form.start_date"
+                  type="date"
+                  class="w-full rounded-xl border border-gray-300 px-4 py-3 pr-12 text-sm outline-none transition focus:border-blue-500"
+                />
+                <button
+                  type="button"
+                  class="absolute inset-y-1.5 right-1.5 inline-flex w-9 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100 hover:text-blue-600"
+                  title="Chọn ngày bắt đầu"
+                  @click="openDatePicker(startDateInput)"
+                >
+                  <Calendar2Line class="h-4 w-4" />
+                </button>
+              </div>
               <div v-if="form.errors.start_date" class="mt-1 text-sm text-rose-600">{{ form.errors.start_date }}</div>
+            </div>
+
+            <div>
+              <label class="mb-1.5 block text-sm font-medium text-gray-700">Ngày kết thúc</label>
+              <div class="relative">
+                <input
+                  ref="endDateInput"
+                  v-model="form.end_date"
+                  type="date"
+                  class="w-full rounded-xl border border-gray-300 px-4 py-3 pr-12 text-sm outline-none transition focus:border-blue-500"
+                />
+                <button
+                  type="button"
+                  class="absolute inset-y-1.5 right-1.5 inline-flex w-9 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100 hover:text-blue-600"
+                  title="Chọn ngày kết thúc"
+                  @click="openDatePicker(endDateInput)"
+                >
+                  <Calendar2Line class="h-4 w-4" />
+                </button>
+              </div>
+              <div v-if="form.errors.end_date" class="mt-1 text-sm text-rose-600">{{ form.errors.end_date }}</div>
             </div>
           </div>
 
@@ -295,16 +329,15 @@
                 :key="`member-${index}`"
                 class="grid grid-cols-1 gap-2 rounded-xl border border-gray-200 p-3 md:grid-cols-[minmax(0,1fr)_180px_170px_auto]"
               >
-                <select
+                <FormSelect
                   v-model="member.employee_profile_id"
-                  class="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  :options="employeeSelectOptions"
+                  placeholder="Chọn nhân sự"
                   :disabled="!canManageMembers"
-                >
-                  <option value="">Chọn nhân sự</option>
-                  <option v-for="option in employeeOptions" :key="option.id" :value="option.id">
-                    {{ option.label }}
-                  </option>
-                </select>
+                  :searchable="true"
+                  :can-clear="true"
+                  :max-height="220"
+                />
 
                 <select
                   v-model="member.role_name"
@@ -317,12 +350,27 @@
                   </option>
                 </select>
 
-                <input
-                  v-model="member.joined_at"
-                  type="date"
-                  class="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                  :disabled="!canManageMembers"
-                />
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-gray-600">Ngày tham gia</label>
+                  <div class="relative">
+                    <input
+                      :ref="(el) => setMemberJoinedDateInput(el, index)"
+                      v-model="member.joined_at"
+                      type="date"
+                      class="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm outline-none focus:border-blue-500"
+                      :disabled="!canManageMembers"
+                    />
+                    <button
+                      type="button"
+                      class="absolute inset-y-1 right-1 inline-flex w-8 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-100 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      title="Chọn ngày tham gia"
+                      :disabled="!canManageMembers"
+                      @click="openDatePicker(memberJoinedDateInputs[index])"
+                    >
+                      <Calendar2Line class="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
 
                 <button
                   v-if="canAddProjectMember"
@@ -387,6 +435,7 @@
               <div><span class="font-medium text-gray-900">Tên dự án:</span> {{ selectedProject.name }}</div>
               <div><span class="font-medium text-gray-900">Trạng thái:</span> {{ selectedProject.status_label || '-' }}</div>
               <div><span class="font-medium text-gray-900">Ngày bắt đầu:</span> {{ formatDate(selectedProject.start_date) }}</div>
+              <div><span class="font-medium text-gray-900">Ngày kết thúc:</span> {{ formatDate(selectedProject.end_date) }}</div>
               <div><span class="font-medium text-gray-900">Tình trạng khóa:</span> {{ selectedProject.is_locked ? 'Đã khóa' : 'Đang mở' }}</div>
             </div>
           </div>
@@ -558,15 +607,14 @@
             </div>
 
             <div v-if="canAddProjectMember" class="mb-3 grid grid-cols-1 gap-2 rounded-xl border border-gray-200 p-3 md:grid-cols-[minmax(0,1fr)_200px_170px]">
-              <select
+              <FormSelect
                 v-model="newMember.employee_profile_id"
-                class="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-              >
-                <option value="">Chọn nhân sự</option>
-                <option v-for="option in employeeOptions" :key="option.id" :value="String(option.id)">
-                  {{ option.label }}
-                </option>
-              </select>
+                :options="employeeSelectOptions"
+                placeholder="Chọn nhân sự"
+                :searchable="true"
+                :can-clear="true"
+                :max-height="220"
+              />
               <select
                 v-model="newMember.role_name"
                 class="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
@@ -576,11 +624,25 @@
                   {{ option.label }}
                 </option>
               </select>
-              <input
-                v-model="newMember.joined_at"
-                type="date"
-                class="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-              />
+              <div>
+                <label class="mb-1 block text-xs font-medium text-gray-600">Ngày tham gia</label>
+                <div class="relative">
+                  <input
+                    ref="newMemberJoinedDateInput"
+                    v-model="newMember.joined_at"
+                    type="date"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm outline-none focus:border-blue-500"
+                  />
+                  <button
+                    type="button"
+                    class="absolute inset-y-1 right-1 inline-flex w-8 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-100 hover:text-blue-600"
+                    title="Chọn ngày tham gia"
+                    @click="openDatePicker(newMemberJoinedDateInput)"
+                  >
+                    <Calendar2Line class="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div class="overflow-x-auto">
@@ -1098,7 +1160,9 @@ import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import Modal from '@/components/ui/Modal.vue'
 import Pagination from '@/components/tables/Pagination.vue'
 import ActionDialog from '@/components/ui/ActionDialog.vue'
+import FormSelect from '@/components/forms/FormSelect.vue'
 import { useActionDialog } from '@/composables/useActionDialog'
+import Calendar2Line from '@/icons/Calendar2Line.vue'
 
 const props = defineProps({
   projects: { type: Array, default: () => [] },
@@ -1113,6 +1177,7 @@ const props = defineProps({
   implementation_status_options: { type: Array, default: () => [] },
   employee_project_overview: { type: Array, default: () => [] },
   can_manage_projects: { type: Boolean, default: false },
+  can_view_all_projects: { type: Boolean, default: false },
   can_manage_members: { type: Boolean, default: false },
   can_manage_project_roles: { type: Boolean, default: false },
   can_manage_implementation_details: { type: Boolean, default: false },
@@ -1126,6 +1191,10 @@ const isDetailModalOpen = ref(false)
 const isEditing = ref(false)
 const editingId = ref(null)
 const selectedProject = ref(null)
+const startDateInput = ref(null)
+const endDateInput = ref(null)
+const memberJoinedDateInputs = ref([])
+const newMemberJoinedDateInput = ref(null)
 const activeDetailTab = ref('members')
 const memberRoleDrafts = ref({})
 const rolePermissionDrafts = ref({})
@@ -1163,6 +1232,7 @@ const localFilters = reactive({
 const form = useForm({
   name: '',
   start_date: '',
+  end_date: '',
   status: 'planning',
   description: '',
   members: [],
@@ -1170,11 +1240,17 @@ const form = useForm({
 
 const statusOptions = computed(() => props.status_options || [])
 const employeeOptions = computed(() => props.employee_options || [])
+const employeeSelectOptions = computed(() => employeeOptions.value.map((option) => ({
+  value: option.id,
+  label: option.label,
+})))
 const projectRoleOptions = computed(() => props.project_role_options || [])
 const projectRolePermissionGroups = computed(() => props.project_role_permission_options || [])
 const implementationStatusOptions = computed(() => props.implementation_status_options || [])
 const employeeProjectOverview = computed(() => props.employee_project_overview || [])
 const canManageProjects = computed(() => props.can_manage_projects)
+const canViewAllProjects = computed(() => props.can_view_all_projects)
+const canViewPersonnelOverview = computed(() => canManageProjects.value || canViewAllProjects.value)
 const canManageMembers = computed(() => props.can_manage_members || props.can_manage_projects || Boolean(selectedProject.value?.can_manage_members))
 const canAddProjectMember = computed(() => props.can_manage_members || props.can_manage_projects || Boolean(selectedProject.value?.can_add_member))
 const canUpdateProjectMemberRole = computed(() => props.can_manage_members || props.can_manage_projects || Boolean(selectedProject.value?.can_update_member_role))
@@ -1323,6 +1399,7 @@ function openEditModal(project) {
   form.clearErrors()
   form.name = project.name || ''
   form.start_date = project.start_date || ''
+  form.end_date = project.end_date || ''
   form.status = project.status || (statusOptions.value?.[0]?.value || 'planning')
   form.description = project.description || ''
   form.members = (project.members || []).map((member) => ({
@@ -1359,12 +1436,14 @@ function addMemberRow() {
 
 function removeMemberRow(index) {
   form.members.splice(index, 1)
+  memberJoinedDateInputs.value.splice(index, 1)
 }
 
 function submitForm() {
   const payload = {
     name: form.name,
     start_date: form.start_date,
+    end_date: form.end_date || null,
     status: form.status,
     description: form.description,
     members: form.members,
@@ -1389,6 +1468,24 @@ function submitOptions(successMessage) {
     onError: () => {
       toast.error('Không thể lưu dự án. Vui lòng kiểm tra dữ liệu.')
     },
+  }
+}
+
+function openDatePicker(inputRef) {
+  if (!inputRef) return
+
+  inputRef.focus()
+  if (typeof inputRef.showPicker === 'function') {
+    inputRef.showPicker()
+    return
+  }
+
+  inputRef.click()
+}
+
+function setMemberJoinedDateInput(inputRef, index) {
+  if (inputRef) {
+    memberJoinedDateInputs.value[index] = inputRef
   }
 }
 

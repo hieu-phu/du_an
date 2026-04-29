@@ -75,9 +75,15 @@ class ProjectController extends Controller
 
     public function index(Request $request): Response
     {
-        abort_unless($this->canViewAllProjects($request->user()), 403);
+        $user = $request->user();
 
-        return $this->renderProjectsPage($request, 'all');
+        if ($this->canViewAllProjects($user)) {
+            return $this->renderProjectsPage($request, 'all');
+        }
+
+        abort_unless($this->canViewOwnProjects($user), 403);
+
+        return $this->renderProjectsPage($request, 'mine');
     }
 
     public function myProjects(Request $request): Response
@@ -97,6 +103,7 @@ class ProjectController extends Controller
             $project = Project::query()->create([
                 'name' => $validated['name'],
                 'start_date' => $validated['start_date'],
+                'end_date' => $validated['end_date'] ?? null,
                 'status' => $validated['status'],
                 'description' => $validated['description'] ?? null,
                 'created_by' => $request->user()?->id,
@@ -128,6 +135,7 @@ class ProjectController extends Controller
             $project->update([
                 'name' => $validated['name'],
                 'start_date' => $validated['start_date'],
+                'end_date' => $validated['end_date'] ?? null,
                 'status' => $validated['status'],
                 'description' => $validated['description'] ?? null,
                 'updated_by' => $request->user()?->id,
@@ -770,7 +778,6 @@ class ProjectController extends Controller
         if (!Storage::disk($attachment->disk)->exists($attachment->path)) {
             abort(404);
         }
-
         return Storage::disk($attachment->disk)->download($attachment->path, $attachment->original_name);
     }
 
@@ -874,54 +881,61 @@ class ProjectController extends Controller
             ->map(fn (Project $project) => $this->transformProject($project, $pageUser))
             ->values();
 
-        $employeeOptions = EmployeeProfile::query()
-            ->where('employment_status', 'active')
-            ->whereHas('user', fn (Builder $builder) => $builder->where('status', 'active'))
-            ->with(['user:id,name', 'position:id,name'])
-            ->orderBy('employee_code')
-            ->get()
-            ->map(fn (EmployeeProfile $profile) => [
-                'id' => $profile->id,
-                'employee_code' => $profile->employee_code,
-                'name' => $profile->user?->name,
-                'position_name' => $profile->position?->name,
-                'label' => trim(($profile->employee_code ? ($profile->employee_code . ' - ') : '') . ($profile->user?->name ?? 'Nhân sự')),
-            ])
-            ->values();
-
-        $employeeProjectOverview = ProjectMember::query()
-            ->where('is_active', true)
-            ->with([
-                'employeeProfile.user:id,name',
-                'project:id,name,status',
-                'role:id,name',
-            ])
-            ->get()
-            ->groupBy('employee_profile_id')
-            ->map(function ($rows, $employeeProfileId) {
-                $first = $rows->first();
-
-                return [
-                    'employee_profile_id' => (int) $employeeProfileId,
-                    'employee_name' => $first?->employeeProfile?->user?->name,
-                    'employee_code' => $first?->employeeProfile?->employee_code,
-                    'project_count' => $rows->count(),
-                    'projects' => $rows->map(fn (ProjectMember $member) => [
-                        'project_id' => $member->project_id,
-                        'project_name' => $member->project?->name,
-                        'project_status' => $member->project?->status,
-                        'project_status_label' => $this->statusLabel($member->project?->status),
-                        'role_name' => $member->role?->name,
-                    ])->values(),
-                ];
-            })
-            ->values();
-
         $canManageProjects = $this->canManageProjects($pageUser);
         $canManageMembers = $this->canManageProjectMembers($pageUser);
         $canManageProjectRoles = $this->canManageProjectRoles($pageUser);
         $canManageImplementationDetails = $this->canManageImplementationDetails($pageUser);
-        $canUploadProjectAttachments = $this->canManageProjects($pageUser) || $this->canManageProjectMembers($pageUser);
+        $canUploadProjectAttachments = $canManageProjects || $canManageMembers;
+        $canViewAllProjects = $this->canViewAllProjects($pageUser);
+
+        $employeeOptions = [];
+        $employeeProjectOverview = [];
+
+        if ($canManageProjects || $canViewAllProjects) {
+            $employeeOptions = EmployeeProfile::query()
+                ->where('employment_status', 'active')
+                ->whereHas('user', fn (Builder $builder) => $builder->where('status', 'active'))
+                ->with(['user:id,name', 'position:id,name'])
+                ->orderBy('employee_code')
+                ->get()
+                ->map(fn (EmployeeProfile $profile) => [
+                    'id' => $profile->id,
+                    'employee_code' => $profile->employee_code,
+                    'name' => $profile->user?->name,
+                    'position_name' => $profile->position?->name,
+                    'label' => trim(($profile->employee_code ? ($profile->employee_code . ' - ') : '') . ($profile->user?->name ?? 'Nhân sự')),
+                ])
+                ->values();
+
+            $employeeProjectOverview = ProjectMember::query()
+                ->where('is_active', true)
+                ->with([
+                    'employeeProfile.user:id,name',
+                    'project:id,name,status',
+                    'role:id,name',
+                ])
+                ->get()
+                ->groupBy('employee_profile_id')
+                ->map(function ($rows, $employeeProfileId) {
+                    $first = $rows->first();
+
+                    return [
+                        'employee_profile_id' => (int) $employeeProfileId,
+                        'employee_name' => $first?->employeeProfile?->user?->name,
+                        'employee_code' => $first?->employeeProfile?->employee_code,
+                        'project_count' => $rows->count(),
+                        'projects' => $rows->map(fn (ProjectMember $member) => [
+                            'project_id' => $member->project_id,
+                            'project_name' => $member->project?->name,
+                            'project_status' => $member->project?->status,
+                            'project_status_label' => $this->statusLabel($member->project?->status),
+                            'role_name' => $member->role?->name,
+                        ])->values(),
+                    ];
+                })
+                ->values();
+        }
+
 
         return Inertia::render('Projects/Index', [
             'projects' => $projects,
@@ -944,6 +958,7 @@ class ProjectController extends Controller
             'project_role_permission_options' => $this->projectRolePermissionOptions(),
             'employee_project_overview' => $employeeProjectOverview,
             'can_manage_projects' => $canManageProjects,
+            'can_view_all_projects' => $canViewAllProjects,
             'can_manage_members' => $canManageMembers,
             'can_manage_project_roles' => $canManageProjectRoles,
             'can_manage_implementation_details' => $canManageImplementationDetails,
@@ -988,6 +1003,7 @@ class ProjectController extends Controller
                 Rule::unique('projects')->where(fn ($query) => $query->where('start_date', $request->input('start_date')))->ignore($projectId),
             ],
             'start_date' => ['required', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'status' => ['required', Rule::in(self::STATUSES)],
             'description' => ['nullable', 'string'],
             'members' => ['nullable', 'array'],
@@ -1359,6 +1375,7 @@ class ProjectController extends Controller
                 ? sprintf('Dự án có %d đầu việc chậm tiến độ.', $progressSummary['delayed_tasks'])
                 : null,
             'start_date' => optional($project->start_date)->format('Y-m-d'),
+            'end_date' => optional($project->end_date)->format('Y-m-d'),
             'description' => $project->description,
             'is_locked' => (bool) $project->is_locked,
             'can_manage_members' => $this->canManageProjectMembers($pageUser, $project),
@@ -2075,8 +2092,7 @@ class ProjectController extends Controller
             return true;
         }
 
-        return $user->hasPositionCapability(PositionCapability::VIEW_OWN_PROJECTS)
-            && $user->hasActiveProjectMembership();
+        return (bool) $user->hasPositionCapability(PositionCapability::VIEW_OWN_PROJECTS);
     }
 
     private function canUpdateImplementationStatus($user, ProjectImplementationDetail $detail): bool
@@ -2249,5 +2265,4 @@ class ProjectController extends Controller
             || $this->userHasProjectRolePermission($user, $project, 'manage_implementation_details');
     }
 }
-
 

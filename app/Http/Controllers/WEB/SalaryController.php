@@ -35,6 +35,9 @@ class SalaryController extends Controller
     private const OVERTIME_WEEKDAY_MULTIPLIER = 1.5;
     private const OVERTIME_WEEKEND_MULTIPLIER = 2.0;
     private const OVERTIME_HOLIDAY_MULTIPLIER = 3.0;
+    private const OVERTIME_WEEKDAY_NIGHT_MULTIPLIER = 2.1;
+    private const OVERTIME_WEEKEND_NIGHT_MULTIPLIER = 2.7;
+    private const OVERTIME_HOLIDAY_NIGHT_MULTIPLIER = 3.9;
 
     public function mine(Request $request): Response
     {
@@ -293,6 +296,9 @@ class SalaryController extends Controller
             ->where('employee_profile_id', $profile->id)
             ->whereMonth('work_date', $month)
             ->whereYear('work_date', $year)
+            ->when($profile->hire_date, fn (Builder $q) => $q->whereDate('work_date', '>=', $profile->hire_date))
+            ->when($profile->termination_date, fn (Builder $q) => $q->whereDate('work_date', '<=', $profile->termination_date))
+            ->whereDate('work_date', '<=', Carbon::now(self::TIMEZONE)->toDateString())
             ->orderBy('work_date')
             ->get();
 
@@ -832,6 +838,18 @@ class SalaryController extends Controller
     ): int
     {
         $start = Carbon::create($year, $month, 1, 0, 0, 0, self::TIMEZONE)->startOfMonth();
+        
+        // Cần tính từ ngày vào làm nếu ngày vào làm nằm trong tháng này
+        if ($profile->hire_date) {
+            $hireDate = $profile->hire_date->copy()->setTimezone(self::TIMEZONE)->startOfDay();
+            if ($hireDate->isSameMonth($start) && $hireDate->year === $start->year) {
+                $start = $hireDate;
+            } elseif ($hireDate->greaterThan($start)) {
+                // Nếu ngày vào làm sau tháng đang tính thì không có ngày công nào
+                return 0;
+            }
+        }
+
         $end = $this->resolveExpectedWorkdayWindowEnd($month, $year);
 
         if ($end->lessThan($start)) {
@@ -952,15 +970,25 @@ class SalaryController extends Controller
         $start = Carbon::create($year, $month, 1, 0, 0, 0, self::TIMEZONE)->startOfMonth();
         $end = $start->copy()->endOfMonth();
 
-        // 1. Fetch custom holidays from database (e.g. Lunar New Year, Hung King's Day)
+        // 1. Fetch custom holidays from database
         $map = Holiday::query()
-            ->whereBetween('holiday_date', [$start->toDateString(), $end->toDateString()])
+            ->where(function (Builder $query) use ($start, $end, $month) {
+                // Lấy ngày lễ đúng trong khoảng ngày
+                $query->whereBetween('holiday_date', [$start->toDateString(), $end->toDateString()])
+                    // HOẶC lấy ngày lễ lặp lại (recurring) có cùng tháng
+                    ->orWhere(function (Builder $sub) use ($month) {
+                        $sub->where('is_recurring', true)
+                            ->whereMonth('holiday_date', $month);
+                    });
+            })
             ->get(['holiday_date', 'holiday_name', 'holiday_type', 'is_paid_leave'])
-            ->mapWithKeys(function (Holiday $holiday) {
-                $date = Carbon::parse($holiday->holiday_date, self::TIMEZONE)->toDateString();
+            ->mapWithKeys(function (Holiday $holiday) use ($year) {
+                // Nếu là ngày lễ lặp lại từ năm khác, ta gán lại năm hiện tại để map đúng
+                $date = Carbon::parse($holiday->holiday_date, self::TIMEZONE);
+                $dateStr = $date->year($year)->toDateString();
 
-                return [$date => [
-                    'holiday_name' => $holiday->holiday_name,
+                return [$dateStr => [
+                    'holiday_name' => $holiday->display_name,
                     'holiday_type' => $holiday->holiday_type,
                     'is_paid_leave' => (bool) $holiday->is_paid_leave,
                 ]];
@@ -1011,6 +1039,9 @@ class SalaryController extends Controller
         $resolvedHolidays = [];
         $usedCompDates = []; 
 
+        $today = Carbon::now(self::TIMEZONE)->startOfDay();
+        $hireDate = $profile->hire_date ? $profile->hire_date->copy()->setTimezone(self::TIMEZONE)->startOfDay() : null;
+
         foreach ($holidayMap as $dateStr => $holiday) {
             if (!($holiday['is_paid_leave'] ?? false)) {
                 continue;
@@ -1018,6 +1049,16 @@ class SalaryController extends Controller
 
             $date = Carbon::parse($dateStr, self::TIMEZONE);
             
+            // Không tính ngày lễ trước ngày vào làm
+            if ($hireDate && $date->lessThan($hireDate)) {
+                continue;
+            }
+
+            // Không tính ngày lễ trong tương lai nếu đang xem tháng hiện tại
+            if ($date->greaterThan($today)) {
+                continue;
+            }
+
             // Case 1: Holiday falls on a working day
             if ($this->isExpectedWorkingDate($profile, $date, $shiftAssignments)) {
                 $resolvedHolidays[$dateStr] = $holiday;
@@ -1029,6 +1070,15 @@ class SalaryController extends Controller
                 for ($i = 0; $i < 7; $i++) {
                     $compDateStr = $compDate->toDateString();
                     
+                    // Nghỉ bù cũng không được vượt quá ngày hiện tại hoặc trước ngày vào làm
+                    if ($hireDate && $compDate->lessThan($hireDate)) {
+                        $compDate->addDay();
+                        continue;
+                    }
+                    if ($compDate->greaterThan($today)) {
+                        break;
+                    }
+
                     // Must be a working day, not already a holiday, and not already used for compensation
                     $isWorkingDay = $this->isExpectedWorkingDate($profile, $compDate, $shiftAssignments);
                     $isAlreadyHoliday = isset($holidayMap[$compDateStr]);
@@ -1222,18 +1272,41 @@ class SalaryController extends Controller
 
     private function resolveOvertimeAmount(AttendanceRecord $record, float $hourlyRate, array $holidayMap): float
     {
-        $overtimeMinutes = $this->resolveApprovedOvertimeMinutes($record);
-        if ($overtimeMinutes === 0) {
+        $breakdown = $this->resolveApprovedOvertimeBreakdown($record);
+        $dayMinutes = $breakdown['day'];
+        $nightMinutes = $breakdown['night'];
+
+        if ($dayMinutes + $nightMinutes === 0) {
             return 0.0;
         }
 
         $configuredHourlyRate = $this->resolveOvertimeHourlyRate($record);
 
         if ($configuredHourlyRate > 0) {
-            return $configuredHourlyRate * ($overtimeMinutes / 60);
+            return $configuredHourlyRate * (($dayMinutes + $nightMinutes) / 60);
         }
 
-        return $hourlyRate * ($overtimeMinutes / 60) * $this->resolveOvertimeMultiplier($record, $holidayMap);
+        $dayPay = $hourlyRate * ($dayMinutes / 60) * $this->resolveOvertimeMultiplier($record, $holidayMap);
+        $nightPay = $hourlyRate * ($nightMinutes / 60) * $this->resolveNightOvertimeMultiplier($record, $holidayMap);
+
+        return $dayPay + $nightPay;
+    }
+
+    private function resolveNightOvertimeMultiplier(AttendanceRecord $record, array $holidayMap): float
+    {
+        $workDate = optional($record->work_date)?->format('Y-m-d');
+        if (!$workDate) {
+            return self::OVERTIME_WEEKDAY_NIGHT_MULTIPLIER;
+        }
+
+        if (isset($holidayMap[$workDate])) {
+            return self::OVERTIME_HOLIDAY_NIGHT_MULTIPLIER;
+        }
+
+        $date = Carbon::parse($workDate, self::TIMEZONE);
+        return $date->isWeekend()
+            ? self::OVERTIME_WEEKEND_NIGHT_MULTIPLIER
+            : self::OVERTIME_WEEKDAY_NIGHT_MULTIPLIER;
     }
 
     private function resolveOvertimeHourlyRate(AttendanceRecord $record): float
@@ -1245,42 +1318,76 @@ class SalaryController extends Controller
 
     private function resolveApprovedOvertimeMinutes(AttendanceRecord $record): int
     {
+        $breakdown = $this->resolveApprovedOvertimeBreakdown($record);
+        return $breakdown['day'] + $breakdown['night'];
+    }
+
+    private function resolveApprovedOvertimeBreakdown(AttendanceRecord $record): array
+    {
         $workDate = optional($record->work_date)?->format('Y-m-d');
 
         if (!$workDate) {
-            return 0;
+            return ['day' => 0, 'night' => 0];
         }
 
         $snapshot = $this->resolveShiftSnapshot($record);
 
         if (array_key_exists('allows_overtime', $snapshot) && !((bool) $snapshot['allows_overtime'])) {
-            return 0;
+            return ['day' => 0, 'night' => 0];
         }
 
         $overtimeWindow = $this->resolveOvertimeWindow($record, $snapshot);
-        if (!$overtimeWindow) {
-            return $this->sumApprovedOvertimeMinutesForRecordDate($record);
-        }
+        $overtimeStart = $overtimeWindow ? $overtimeWindow[0] : null;
+        $overtimeEnd = $overtimeWindow ? $overtimeWindow[1] : null;
 
-        [$overtimeStart, $overtimeEnd] = $overtimeWindow;
-
-        return (int) OvertimeRequest::query()
+        $requests = OvertimeRequest::query()
             ->where('employee_profile_id', (int) $record->employee_profile_id)
             ->whereDate('work_date', $workDate)
             ->where('status', 'approved')
-            ->get(['approved_minutes', 'start_at', 'end_at'])
-            ->sum(function (OvertimeRequest $request) use ($overtimeStart, $overtimeEnd, $snapshot) {
-                $approvedMinutes = max(0, (int) ($request->approved_minutes ?? 0));
-                if ($approvedMinutes === 0 || !$request->start_at || !$request->end_at) {
-                    return 0;
+            ->get(['approved_minutes', 'start_at', 'end_at']);
+
+        $dayTotal = 0;
+        $nightTotal = 0;
+
+        foreach ($requests as $request) {
+            $approvedMinutes = max(0, (int) ($request->approved_minutes ?? 0));
+            if ($approvedMinutes === 0 || !$request->start_at || !$request->end_at) {
+                continue;
+            }
+
+            $requestStart = Carbon::parse($request->start_at, self::TIMEZONE);
+            $requestEnd = Carbon::parse($request->end_at, self::TIMEZONE);
+
+            // Calculate overlap with catalog window
+            $catalogMinutes = $this->calculatePaidOvertimeMinutes($requestStart, $requestEnd, $overtimeStart, $overtimeEnd, $snapshot);
+            $payableMinutes = min($approvedMinutes, $catalogMinutes);
+
+            if ($payableMinutes > 0) {
+                // If we have a catalog window, we need to split only the overlapping part
+                $calcStart = $requestStart->copy();
+                $calcEnd = $requestEnd->copy();
+                
+                if ($overtimeStart && $overtimeEnd) {
+                    $calcStart = $calcStart->max($overtimeStart);
+                    $calcEnd = $calcEnd->min($overtimeEnd);
                 }
 
-                $requestStart = Carbon::parse($request->start_at, self::TIMEZONE);
-                $requestEnd = Carbon::parse($request->end_at, self::TIMEZONE);
-                $catalogMinutes = $this->calculatePaidOvertimeMinutes($requestStart, $requestEnd, $overtimeStart, $overtimeEnd, $snapshot);
+                [$day, $night] = $this->splitDayNightMinutes($calcStart, $calcEnd);
+                
+                // Adjust for approved minutes cap
+                $totalInWindow = $day + $night;
+                if ($totalInWindow > $payableMinutes && $totalInWindow > 0) {
+                    $ratio = $payableMinutes / $totalInWindow;
+                    $dayTotal += (int) round($day * $ratio);
+                    $nightTotal += (int) round($night * $ratio);
+                } else {
+                    $dayTotal += $day;
+                    $nightTotal += $night;
+                }
+            }
+        }
 
-                return min($approvedMinutes, $catalogMinutes);
-            });
+        return ['day' => $dayTotal, 'night' => $nightTotal];
     }
 
     private function resolveWorkedMinutes(AttendanceRecord $record): int
@@ -1531,8 +1638,12 @@ class SalaryController extends Controller
         return max(0, (int) $start->diffInMinutes($end, false));
     }
 
-    private function calculatePaidOvertimeMinutes(Carbon $rangeStart, Carbon $rangeEnd, Carbon $windowStart, Carbon $windowEnd, array $snapshot): int
+    private function calculatePaidOvertimeMinutes(Carbon $rangeStart, Carbon $rangeEnd, ?Carbon $windowStart, ?Carbon $windowEnd, array $snapshot): int
     {
+        if (!$windowStart || !$windowEnd) {
+            return max(0, (int) $rangeStart->diffInMinutes($rangeEnd, false));
+        }
+
         return $this->calculateOverlapMinutes($rangeStart, $rangeEnd, $windowStart, $windowEnd);
     }
 
@@ -1542,6 +1653,26 @@ class SalaryController extends Controller
         $point = $baseDate->copy()->startOfDay()->setTime($hour, $minute);
 
         return $nextDay ? $point->addDay() : $point;
+    }
+
+    private function splitDayNightMinutes(Carbon $start, Carbon $end): array
+    {
+        $dayMinutes = 0;
+        $nightMinutes = 0;
+
+        $temp = $start->copy();
+        while ($temp->lessThan($end)) {
+            $hour = (int) $temp->hour;
+            // Ban đêm tính từ 22:00 đến 06:00 sáng hôm sau
+            if ($hour >= 22 || $hour < 6) {
+                $nightMinutes++;
+            } else {
+                $dayMinutes++;
+            }
+            $temp->addMinute();
+        }
+
+        return [$dayMinutes, $nightMinutes];
     }
 
     private function minutesOfDay(string $time): int

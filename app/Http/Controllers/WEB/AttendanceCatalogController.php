@@ -52,7 +52,7 @@ class AttendanceCatalogController extends Controller
                 ->map(fn (Holiday $holiday) => [
                     'id' => $holiday->id,
                     'holiday_date' => optional($holiday->holiday_date)->format('Y-m-d'),
-                    'holiday_name' => $holiday->holiday_name,
+                    'holiday_name' => $holiday->display_name,
                     'holiday_type' => $holiday->holiday_type,
                     'is_paid_leave' => (bool) $holiday->is_paid_leave,
                     'is_recurring' => (bool) $holiday->is_recurring,
@@ -423,9 +423,19 @@ class AttendanceCatalogController extends Controller
 
     private function holidayPayload(array $validated): array
     {
+        $name = trim($validated['holiday_name']);
+
+        // Detect Lunar holidays: "Tết Nguyên Đán", "Giỗ tổ Hùng Vương", "Tết Âm"
+        $isLunar = preg_match('/Tết (Nguyên Đán|Âm)|Giỗ tổ Hùng Vương/i', $name);
+
+        if (!$isLunar) {
+            // Remove year at the end (e.g., " 2026")
+            $name = preg_replace('/\s+\d{4}$/', '', $name);
+        }
+
         return [
             'holiday_date' => $validated['holiday_date'],
-            'holiday_name' => trim($validated['holiday_name']),
+            'holiday_name' => $name,
             'holiday_type' => $validated['holiday_type'],
             'is_paid_leave' => (bool) ($validated['is_paid_leave'] ?? true),
             'is_recurring' => (bool) ($validated['is_recurring'] ?? false),

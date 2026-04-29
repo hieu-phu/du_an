@@ -237,14 +237,17 @@ class AttendanceService extends BaseService
                 : null;
 
             if ($requiresApprovedRequest && !$approvedRequest) {
-                $record->update([
-                    'is_confirmed' => false,
-                    'approval_status' => 'pending',
-                    'confirmed_by' => null,
-                    'confirmed_at' => null,
-                ]);
+                $systemNote = 'Duyệt thủ công (Có vi phạm)';
+                $currentNote = $note ?: $record->note;
 
-                throw new \RuntimeException('Bản ghi thiếu check-in/check-out, đi muộn hoặc về sớm chỉ được duyệt khi đã có đơn chấm công được phê duyệt hoặc admin bổ sung giờ ra hợp lệ.');
+                if (!str_contains((string) $currentNote, $systemNote)) {
+                    $note = trim(collect(array_filter([
+                        $currentNote,
+                        $systemNote,
+                    ]))->implode(' | '));
+                } else {
+                    $note = $currentNote;
+                }
             }
 
             if ($record->is_confirmed) {
@@ -1331,10 +1334,16 @@ class AttendanceService extends BaseService
         $records = AttendanceRecord::query()
             ->with(['employeeProfile.user', 'employeeProfile.position', 'rejecter'])
             ->whereDate('work_date', '<=', $cutoffDate)
-            ->where('attendance_status', 'absent')
-            ->where('day_status', 'absent')
             ->where('approval_status', 'pending')
             ->where('is_confirmed', false)
+            ->where(function ($query) {
+                $query->where('attendance_status', 'absent')
+                    ->orWhere('day_status', 'absent')
+                    ->orWhere('late_minutes', '>', 0)
+                    ->orWhere('early_leave_minutes', '>', 0)
+                    ->orWhere('missing_check_in', true)
+                    ->orWhere('missing_check_out', true);
+            })
             ->orderBy('id')
             ->get();
 
@@ -1344,7 +1353,7 @@ class AttendanceService extends BaseService
             }
 
             $reviewNote = sprintf(
-                'Hệ thống không duyệt công sau %d ngày vì chưa có đơn giải trình hợp lệ.',
+                'Hệ thống tự động đánh vi phạm sau %d ngày vì chưa có đơn giải trình hoặc đề nghị bổ sung được phê duyệt.',
                 $resolvedDays
             );
 
@@ -1499,17 +1508,6 @@ class AttendanceService extends BaseService
                 $violationCount++;
             }
 
-            if ($displayApprovalStatus === 'needs_verification') {
-                $needsVerificationCount++;
-
-                if (in_array($violationStatus, ['missing_check_in', 'missing_check_out'], true)) {
-                    $needsVerificationMissingCheckCount++;
-                } elseif ($violationStatus === 'missing_attendance') {
-                    $needsVerificationMissingAttendanceCount++;
-                } elseif (in_array($violationStatus, ['late', 'early_leave', 'late_early'], true)) {
-                    $needsVerificationTimeViolationCount++;
-                }
-            }
         }
 
         return [
@@ -1527,10 +1525,6 @@ class AttendanceService extends BaseService
             'day_off_records' => $dayOffCount,
             'missing_check_records' => $missingCheckCount,
             'action_required_records' => $actionRequiredCount,
-            'needs_verification_records' => $needsVerificationCount,
-            'needs_verification_missing_check_records' => $needsVerificationMissingCheckCount,
-            'needs_verification_missing_attendance_records' => $needsVerificationMissingAttendanceCount,
-            'needs_verification_time_violation_records' => $needsVerificationTimeViolationCount,
             'violation_records' => $violationCount,
             'total_worked_minutes' => $totalMinutes,
             'total_actual_worked_minutes' => $resolvedMinutes,
@@ -1976,14 +1970,12 @@ class AttendanceService extends BaseService
             }
 
             $requiresApprovedRequest = $this->requiresApprovedRequestForConfirmation($record, $lateMinutes, $earlyLeaveMinutes);
+            // DO NOT auto-reset to pending if it was already approved/confirmed (respect manual override)
             if (
                 $requiresApprovedRequest
                 && !$approvedRequest
                 && !$approvedAdjustment
-                && (
-                    ($record->approval_status ?? 'pending') === 'approved'
-                    || (bool) $record->is_confirmed
-                )
+                && false // Disable the auto-reset for violations
             ) {
                 $record->approval_status = 'pending';
                 $record->is_confirmed = false;
@@ -2004,14 +1996,7 @@ class AttendanceService extends BaseService
             }
 
             if ((bool) $record->is_confirmed && ($record->approval_status ?? 'pending') !== 'approved') {
-                if (!$requiresApprovedRequest || $approvedRequest) {
-                    $record->approval_status = 'approved';
-                } else {
-                    $record->approval_status = 'pending';
-                    $record->is_confirmed = false;
-                    $record->confirmed_by = null;
-                    $record->confirmed_at = null;
-                }
+                $record->approval_status = 'approved';
                 $dirty = true;
             }
 
@@ -2071,7 +2056,7 @@ class AttendanceService extends BaseService
     {
         $hasPendingAttendanceRequest = AttendanceRequest::query()
             ->where('employee_profile_id', $employeeProfileId)
-            ->where('status', 'pending')
+            ->whereIn('status', ['pending', 'approved'])
             ->where(function (Builder $query) use ($workDate) {
                 $query
                     ->whereDate('request_date', $workDate)
@@ -2091,7 +2076,7 @@ class AttendanceService extends BaseService
 
         return OvertimeRequest::query()
             ->where('employee_profile_id', $employeeProfileId)
-            ->where('status', 'pending')
+            ->whereIn('status', ['pending', 'approved'])
             ->whereDate('work_date', $workDate)
             ->exists();
     }
@@ -2444,13 +2429,7 @@ class AttendanceService extends BaseService
 
     private function resolveDisplayApprovalStatus(AttendanceRecord $record, ?string $violationStatus = null): string
     {
-        $approvalStatus = (string) ($record->approval_status ?: ((bool) $record->is_confirmed ? 'approved' : 'pending'));
-
-        if ($approvalStatus === 'pending' && $violationStatus !== null) {
-            return 'needs_verification';
-        }
-
-        return $approvalStatus;
+        return (string) ($record->approval_status ?: ((bool) $record->is_confirmed ? 'approved' : 'pending'));
     }
 
     private function shouldSuppressOpenShiftViolation(AttendanceRecord $record, string $dayStatus): bool
@@ -2561,17 +2540,19 @@ class AttendanceService extends BaseService
         }
 
         $workedMinutes = $this->resolveWorkedMinutes($record);
+        $shiftConfig = $this->resolveShiftConfig($record);
+        $standardMinutes = $this->resolveStandardMinutesFromShiftConfig($shiftConfig);
 
-        if (
-            $record->check_in_at
-            && $record->check_out_at
-            && max(0, (int) ($record->late_minutes ?? 0)) === 0
-            && max(0, (int) ($record->early_leave_minutes ?? 0)) === 0
-            && $this->normalizeAttendanceStatus($record->attendance_status) !== 'absent'
-        ) {
-            $shiftConfig = $this->resolveShiftConfig($record);
-            $standardMinutes = (int) (($shiftConfig['standard_minutes'] ?? null) ?? self::FULL_WORK_UNIT_MINUTES);
-            $workedMinutes = max($workedMinutes, $standardMinutes > 0 ? $standardMinutes : self::FULL_WORK_UNIT_MINUTES);
+        // If approved by admin OR has no violations, allow rounding up to 1.0 if worked minutes are sufficient
+        $isManuallyApproved = ($record->approval_status === 'approved' && (bool) $record->is_confirmed);
+        $hasNoViolations = max(0, (int) ($record->late_minutes ?? 0)) === 0 && max(0, (int) ($record->early_leave_minutes ?? 0)) === 0;
+
+        if ($record->check_in_at && $record->check_out_at && ($isManuallyApproved || $hasNoViolations)) {
+            // Threshold for full day is standard minutes or a slightly lower grace threshold (e.g. 7 hours)
+            $fullDayThreshold = min($standardMinutes, 420); // 420 mins = 7 hours
+            if ($workedMinutes >= $fullDayThreshold) {
+                $workedMinutes = max($workedMinutes, $standardMinutes);
+            }
         }
 
         return $this->resolveWorkUnitByMinutes($workedMinutes);
